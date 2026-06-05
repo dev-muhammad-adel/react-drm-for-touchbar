@@ -1,0 +1,12 @@
+{
+  "name": "react-drm-example",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev":   "tsx index.tsx /dev/dri/card2",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "react-drm": "file:../"
+  }
+}
