@@ -163,12 +163,22 @@ function watchPointer(onActivity: () => void): () => void {
 // ── Keyboard watcher ──────────────────────────────────────────────────────────
 // Reads evdev events from all devices with a kbd handler.  EV_KEY (type=1)
 // key-down (value=1) counts as user activity.
+//
+// Many devices claim the "kbd" handler (Power Button, Sleep Button, PC Speaker,
+// Video Bus) but have only 1-2 keys.  We skip them by requiring ≥3 non-zero
+// words in the KEY= bitmap — real keyboards have 5-12, virtual keyboards 8+.
+function hasRichKeymap(block: string): boolean {
+  const m = block.match(/^B: KEY=(.+)$/m);
+  if (!m) return false;
+  return m[1].trim().split(/\s+/).filter(w => !/^0+$/.test(w)).length >= 3;
+}
 
 function watchKeyboard(onActivity: () => void): () => void {
   const devices: string[] = [];
   try {
     for (const block of fs.readFileSync('/proc/bus/input/devices', 'utf8').trim().split(/\n\n+/)) {
       if (!/\bkbd\b/.test(block)) continue;
+      if (!hasRichKeymap(block)) continue;
       const m = block.match(/Handlers=.*?\b(event\d+)\b/);
       if (m) devices.push(`/dev/input/${m[1]}`);
     }
