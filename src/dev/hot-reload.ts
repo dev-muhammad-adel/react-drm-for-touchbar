@@ -83,18 +83,38 @@ export function renderHot(
     return React.createElement(App, { width: display.width, height: display.height });
   }
 
-  const result = render(load(), display, options);
+  const initialEl = load();
+  const result = render(initialEl, display, options);
+  let lastGood: React.ReactNode = initialEl;
+
+  // React's concurrent scheduler can surface render errors as uncaught exceptions
+  // (after updateContainer returns). Survive them so hot-reload keeps working.
+  const uncaughtHandler = (err: unknown) => {
+    console.error('[hot-reload] uncaught exception (process survived):', err);
+    try { result.update(lastGood); } catch { /* best-effort restore */ }
+  };
+  process.on('uncaughtException', uncaughtHandler);
+  process.on('unhandledRejection', uncaughtHandler);
 
   const dir = findWatchRoot(path.dirname(appModulePath));
   console.log(`[hot-reload] watching ${dir}`);
 
   watchDir(dir, () => {
     clearProjectCache();
+    let el: React.ReactNode;
     try {
-      result.update(load());
+      el = load();
+    } catch (err) {
+      console.error('[hot-reload] load failed:', err);
+      return; // keep showing last good render
+    }
+    try {
+      result.update(el);
+      lastGood = el;
       process.stdout.write('\r[hot-reload] reloaded\n');
     } catch (err) {
-      console.error('[hot-reload] reload failed:', err);
+      console.error('[hot-reload] update failed:', err);
+      try { result.update(lastGood); } catch { /* best-effort restore */ }
     }
   });
 

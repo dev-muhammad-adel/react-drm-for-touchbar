@@ -1,8 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { spawn } from 'child_process';
 import fs from 'fs';
-import { Box, Text } from 'react-drm';
-import { TouchReader } from '../src/native/input';
+import { Box, Text, useGestureRegion } from 'react-drm';
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -166,14 +165,12 @@ export function Piano({ width, height }: { width: number; height: number }) {
     touchMidi.current = null;
   }, [noteOff]);
 
-  useEffect(() => {
-    let reader: TouchReader | undefined;
-    try {
-      reader = new TouchReader();
-      reader.startWithGestures({ onTouchStart: press, onTouchMove: slide, onTouchEnd: release });
-    } catch { /* no touch device */ }
-    return () => reader?.stop();
-  }, [press, slide, release]);
+  useGestureRegion({
+    x: 0, y: 0, width, height,
+    onTouchStart: press,
+    onTouchMove:  slide,
+    onTouchEnd:   release,
+  });
 
   useEffect(() => () => {
     if (decayTimer.current) clearTimeout(decayTimer.current);

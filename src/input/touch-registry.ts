@@ -1,5 +1,16 @@
 import { createContext } from 'react';
 
+export interface GestureRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  onClick?:      () => void;
+  onTouchStart?: (x: number, y: number) => void;
+  onTouchMove?:  (x: number, y: number) => void;
+  onTouchEnd?:   (x: number, y: number) => void;
+}
+
 export interface TapRegion {
   x: number;
   y: number;
@@ -19,25 +30,34 @@ export interface SwipeRegion {
   threshold?: number;
 }
 
-// Kept as alias so Button.tsx doesn't need changes
+// Kept as alias so existing code doesn't need changes
 export type Region = TapRegion;
 
 export class TouchRegistry {
-  private tapRegions   = new Map<symbol, TapRegion>();
+  private regions      = new Map<symbol, GestureRegion>();
   private swipeRegions = new Map<symbol, SwipeRegion>();
 
-  // Track the active touch for swipe detection
-  private activeTouchStart: { x: number; y: number } | null = null;
+  private activeRegion:  GestureRegion | null = null;
+  private touchOrigin:   { x: number; y: number } | null = null;
 
-  // ── Tap regions ────────────────────────────────────────────────────────────
+  // ── Tap regions (backward compat) ──────────────────────────────────────────
 
   register(id: symbol, region: TapRegion): void {
-    this.tapRegions.set(id, region);
+    this.regions.set(id, {
+      x: region.x, y: region.y, width: region.width, height: region.height,
+      onClick: region.handler,
+    });
   }
 
-  unregister(id: symbol): void {
-    this.tapRegions.delete(id);
+  unregister(id: symbol): void { this.regions.delete(id); }
+
+  // ── Gesture regions ────────────────────────────────────────────────────────
+
+  registerGesture(id: symbol, region: GestureRegion): void {
+    this.regions.set(id, region);
   }
+
+  unregisterGesture(id: symbol): void { this.regions.delete(id); }
 
   // ── Swipe regions ──────────────────────────────────────────────────────────
 
@@ -45,36 +65,38 @@ export class TouchRegistry {
     this.swipeRegions.set(id, region);
   }
 
-  unregisterSwipe(id: symbol): void {
-    this.swipeRegions.delete(id);
-  }
+  unregisterSwipe(id: symbol): void { this.swipeRegions.delete(id); }
 
   // ── Touch lifecycle ────────────────────────────────────────────────────────
 
-  /**
-   * Call when a finger touches down.
-   * Also fires tap handlers immediately (same behavior as the old hitTest).
-   */
   touchStart(x: number, y: number): void {
-    this.activeTouchStart = { x, y };
-    this._hitTestTap(x, y);
+    this.touchOrigin  = { x, y };
+    this.activeRegion = null;
+
+for (const r of this.regions.values()) {
+      if (x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) {
+        this.activeRegion = r;
+        r.onTouchStart?.(x, y);
+        r.onClick?.();
+        break;
+      }
+    }
   }
 
-  /** Call when the finger moves. */
-  touchMove(_x: number, _y: number): void {
-    // Available for future drag/pan support.
+  touchMove(x: number, y: number): void {
+    this.activeRegion?.onTouchMove?.(x, y);
   }
 
-  /** Call when the finger lifts — detects swipes for registered regions. */
   touchEnd(x: number, y: number): void {
-    if (!this.activeTouchStart) return;
-    const { x: sx, y: sy } = this.activeTouchStart;
-    this.activeTouchStart = null;
+    this.activeRegion?.onTouchEnd?.(x, y);
+    this.activeRegion = null;
 
+    if (!this.touchOrigin) return;
+    const { x: sx, y: sy } = this.touchOrigin;
+    this.touchOrigin = null;
     const dx = x - sx;
 
     for (const r of this.swipeRegions.values()) {
-      // Swipe must start inside this region
       if (sx < r.x || sx >= r.x + r.width || sy < r.y || sy >= r.y + r.height) continue;
       const threshold = r.threshold ?? 80;
       if (Math.abs(dx) < threshold) continue;
@@ -83,21 +105,9 @@ export class TouchRegistry {
     }
   }
 
-  /**
-   * Legacy one-shot hit-test (tap only, no swipe awareness).
-   * Still works if you feed raw single-event touch coordinates.
-   */
+  /** Legacy one-shot hit-test — fires tap/onClick only, no gesture tracking. */
   hitTest(x: number, y: number): void {
-    this._hitTestTap(x, y);
-  }
-
-  private _hitTestTap(x: number, y: number): void {
-    for (const r of this.tapRegions.values()) {
-      if (x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) {
-        r.handler();
-        return;
-      }
-    }
+    this.touchStart(x, y);
   }
 }
 

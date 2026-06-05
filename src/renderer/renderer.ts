@@ -7,6 +7,7 @@ import type { DrawCommand } from '../scene/serialize';
 import { computeLayout } from '../scene/layout';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
+import { TouchReader } from '../native/input';
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
 import type { DrmDisplay } from '../native/binding';
@@ -103,7 +104,7 @@ function openEvdevStream(
     if (msg instanceof ArrayBuffer) onData(Buffer.from(msg));
     else onError(new Error((msg as { error: string }).error));
   });
-  worker.on('error', (err) => { if (active) onError(err); });
+  worker.on('error', (err: Error) => { if (active) onError(err); });
   worker.on('exit', (code) => {
     if (active && code !== 0) onError(new Error(`evdev worker for ${dev} exited: ${code}`));
   });
@@ -364,7 +365,7 @@ export function render(
   };
 
   const root = reconciler.createContainer(
-    container, 1, null, false, null, 'react-drm',
+    container, 0, null, false, null, 'react-drm',
     (err: Error) => console.error('[react-drm] recoverable error:', err),
     null,
   );
@@ -382,6 +383,20 @@ export function render(
   const stopPointer  = dimMs > 0 ? watchPointer(wake)  : () => {};
   const stopKeyboard = dimMs > 0 ? watchKeyboard(wake) : () => {};
 
+  let stopTouch = (): void => {};
+  try {
+    const touchDevice = new TouchReader();
+    touchDevice.startWithGestures({
+      onTouchStart: (x, y) => { wake(); registry.touchStart(x, y); },
+      onTouchMove:  (x, y) => { registry.touchMove(x, y); },
+      onTouchEnd:   (x, y) => { registry.touchEnd(x, y); },
+    });
+    stopTouch = () => touchDevice.stop();
+    console.log('[react-drm] touch device ready');
+  } catch (e) {
+    console.warn('[react-drm] no touch device:', (e as Error).message ?? e);
+  }
+
   return {
     unmount: () => {
       reconciler.updateContainer(null, root, null, null);
@@ -389,6 +404,7 @@ export function render(
       if (shiftTimer) clearInterval(shiftTimer);
       stopPointer();
       stopKeyboard();
+      stopTouch();
     },
     update: doUpdate,
     hitTest:    (x, y) => registry.hitTest(x, y),

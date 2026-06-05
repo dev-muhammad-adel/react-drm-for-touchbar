@@ -15,6 +15,8 @@ export { TouchReader, KeyInjector, FKEY_CODES } from './native/input';
 export type { GestureOptions } from './native/input';
 export { useTouchGesture } from './input/use-touch-gesture';
 export type { TouchGestureOptions } from './input/use-touch-gesture';
+export { useGestureRegion } from './input/use-gesture-region';
+export type { GestureRegion } from './input/touch-registry';
 export { parseColor, serializeScene } from './scene/serialize';
 export type { DrawCommand } from './scene/serialize';
 export type { SceneNode, BoxNode, TextNode, SvgNode, RootContainer } from './scene/types';

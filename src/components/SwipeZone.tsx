@@ -24,14 +24,7 @@ export interface SwipeZoneProps {
 /**
  * A hit zone that fires onSwipeLeft / onSwipeRight.
  * Works correctly inside flex/grid containers.
- *
- * Wire up the renderer touch events from your TouchReader:
- *   const rendered = render(<App />, display);
- *   reader.startWithGestures({
- *     onTouchStart: rendered.touchStart,
- *     onTouchMove:  rendered.touchMove,
- *     onTouchEnd:   rendered.touchEnd,
- *   });
+ * The renderer opens the touch device automatically — no manual wiring needed.
  */
 export function SwipeZone({
   x = 0,
