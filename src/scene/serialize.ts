@@ -5,7 +5,7 @@ import type { LayoutBox } from './layout';
 export type DrawCommand =
   | { cmd: 'clear'; r: number; g: number; b: number }
   | { cmd: 'fill_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number }
-  | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number; lineWidth: number }
+  | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number; lineWidth: number; borderStyle: string }
   | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number }
   | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'clip_pop' }
@@ -87,9 +87,12 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
       const [r, g, b] = parseColor(bgColor);
       cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl });
     }
-    if (node.borderColor && node.borderWidth && node.borderWidth > 0) {
-      const [r, g, b] = parseColor(node.borderColor);
-      cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl, lineWidth: node.borderWidth });
+    const borderColor = node.style?.borderColor ?? node.borderColor;
+    const borderWidth = node.style?.borderWidth ?? node.borderWidth;
+    const borderStyle = node.style?.borderStyle ?? 'solid';
+    if (borderColor && borderWidth && borderWidth > 0) {
+      const [r, g, b] = parseColor(borderColor);
+      cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl, lineWidth: borderWidth, borderStyle });
     }
     const clip = node.style?.overflow === 'hidden';
     if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });

@@ -177,14 +177,25 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       double lw = numProp(cmd, "lineWidth");
       double tl = numProp(cmd, "tl"), tr = numProp(cmd, "tr");
       double br = numProp(cmd, "br"), bl = numProp(cmd, "bl");
+      std::string bstyle = strProp(cmd, "borderStyle");
       // Inset by lw/2 so the stroke stays fully inside the rect bounds.
       double ins = lw / 2.0;
       cairo_set_source_rgba(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"), a);
       cairo_set_line_width(cr, lw);
+      if (bstyle == "dashed") {
+        double d[] = { lw * 4, lw * 2 };
+        cairo_set_dash(cr, d, 2, 0);
+      } else if (bstyle == "dotted") {
+        double d[] = { lw, lw * 2 };
+        cairo_set_dash(cr, d, 2, 0);
+      } else {
+        cairo_set_dash(cr, nullptr, 0, 0);
+      }
       rounded_rect(cr, x + ins, y + ins, w - 2*ins, h - 2*ins,
                    fmax(0.0, tl - ins), fmax(0.0, tr - ins),
                    fmax(0.0, br - ins), fmax(0.0, bl - ins));
       cairo_stroke(cr);
+      cairo_set_dash(cr, nullptr, 0, 0);
 
     } else if (type == "clip_push") {
       double x = numProp(cmd, "x"), y = numProp(cmd, "y");

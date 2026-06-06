@@ -59,6 +59,9 @@ export interface Style {
   marginLeft?: number;
 
   backgroundColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  borderStyle?: 'solid' | 'dashed' | 'dotted';
 
   // Text
   color?: string;
