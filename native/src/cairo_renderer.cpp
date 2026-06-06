@@ -228,10 +228,15 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
           drawX = containerX + containerW - te.width - te.x_bearing;
       }
 
-      // Measure ascent so that `y` is the top of the text bounding box.
       cairo_font_extents_t fe;
       cairo_font_extents(cr, &fe);
-      cairo_move_to(cr, drawX, y + fe.ascent);
+      double lineH = numProp(cmd, "lineHeight");
+      // With lineHeight: center text vertically within the line box.
+      // Without: y is the top of the text bounding box (ascent offset only).
+      double drawY = (lineH > 0)
+        ? y + (lineH - (fe.ascent + fe.descent)) / 2.0 + fe.ascent
+        : y + fe.ascent;
+      cairo_move_to(cr, drawX, drawY);
       cairo_show_text(cr, text.c_str());
     } else if (type == "overlay") {
       // Semi-transparent black veil — used for screen-saver dim step.
