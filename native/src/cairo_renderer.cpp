@@ -208,16 +208,30 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       bool bold   = cmd.Get("bold").ToBoolean().Value();
       bool italic = cmd.Get("italic").ToBoolean().Value();
 
+      std::string align  = strProp(cmd, "align");
+      double containerX  = numProp(cmd, "containerX");
+      double containerW  = numProp(cmd, "containerW");
+
       cairo_set_source_rgba(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"), a);
       cairo_select_font_face(cr, family.c_str(),
                              italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
                              bold   ? CAIRO_FONT_WEIGHT_BOLD  : CAIRO_FONT_WEIGHT_NORMAL);
       cairo_set_font_size(cr, size);
 
+      double drawX = x;
+      if (containerW > 0 && align != "left") {
+        cairo_text_extents_t te;
+        cairo_text_extents(cr, text.c_str(), &te);
+        if (align == "center")
+          drawX = containerX + (containerW - te.width) / 2.0 - te.x_bearing;
+        else if (align == "right")
+          drawX = containerX + containerW - te.width - te.x_bearing;
+      }
+
       // Measure ascent so that `y` is the top of the text bounding box.
       cairo_font_extents_t fe;
       cairo_font_extents(cr, &fe);
-      cairo_move_to(cr, x, y + fe.ascent);
+      cairo_move_to(cr, drawX, y + fe.ascent);
       cairo_show_text(cr, text.c_str());
     } else if (type == "overlay") {
       // Semi-transparent black veil — used for screen-saver dim step.

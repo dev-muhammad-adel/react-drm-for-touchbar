@@ -9,7 +9,7 @@ export type DrawCommand =
   | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number }
   | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'clip_pop' }
-  | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string; bold: boolean; italic: boolean }
+  | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string; bold: boolean; italic: boolean; align: string; containerX: number; containerW: number }
   | { cmd: 'draw_svg'; x: number; y: number; w: number; h: number; src: string }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
 
@@ -60,7 +60,7 @@ function resolveCornerRadii(s: import('./style').Style | undefined): [number, nu
   ];
 }
 
-function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<SceneNode, LayoutBox>): void {
+function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<SceneNode, LayoutBox>, parentLb?: LayoutBox): void {
   if (node.type === 'box') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
     const a  = node.style?.opacity ?? 1;
@@ -88,7 +88,7 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     }
     const clip = node.style?.overflow === 'hidden';
     if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
-    for (const child of node.children) emitNode(child, cmds, layout);
+    for (const child of node.children) emitNode(child, cmds, layout, lb);
     if (clip) cmds.push({ cmd: 'clip_pop' });
   } else if (node.type === 'text') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
@@ -96,10 +96,13 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const a = node.style?.opacity ?? 1;
     const size   = node.style?.fontSize   ?? node.fontSize;
     const family = node.style?.fontFamily ?? node.fontFamily;
-    const fw     = node.style?.fontWeight;
-    const bold   = fw === 'bold' || (fw !== undefined && parseInt(fw, 10) >= 700);
-    const italic = node.style?.fontStyle === 'italic';
-    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic });
+    const fw         = node.style?.fontWeight;
+    const bold       = fw === 'bold' || (fw !== undefined && parseInt(fw, 10) >= 700);
+    const italic     = node.style?.fontStyle === 'italic';
+    const align      = node.style?.textAlign ?? 'left';
+    const containerX = parentLb?.x ?? lb.x;
+    const containerW = parentLb?.w ?? 0;
+    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic, align, containerX, containerW });
   } else if (node.type === 'svg_image') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
     cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: node.src });
