@@ -92,9 +92,11 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     if (clip) cmds.push({ cmd: 'clip_pop' });
   } else if (node.type === 'text') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
-    const [r, g, b] = parseColor(node.color);
+    const [r, g, b] = parseColor(node.style?.color ?? node.color);
     const a = node.style?.opacity ?? 1;
-    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size: node.fontSize, family: node.fontFamily, text: node.text });
+    const size   = node.style?.fontSize   ?? node.fontSize;
+    const family = node.style?.fontFamily ?? node.fontFamily;
+    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text });
   } else if (node.type === 'svg_image') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
     cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: node.src });

@@ -58,6 +58,11 @@ export interface Style {
   marginBottom?: number;
   marginLeft?: number;
 
+  // Text
+  color?: string;
+  fontSize?: number;
+  fontFamily?: string;
+
   // Visual
   overflow?: 'visible' | 'hidden';
   opacity?: number;
