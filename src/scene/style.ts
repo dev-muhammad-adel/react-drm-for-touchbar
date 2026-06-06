@@ -58,6 +58,8 @@ export interface Style {
   marginBottom?: number;
   marginLeft?: number;
 
+  backgroundColor?: string;
+
   // Text
   color?: string;
   fontSize?: number;

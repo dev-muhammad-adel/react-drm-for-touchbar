@@ -82,8 +82,9 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
         blur: node.style.shadowRadius ?? 0,
       });
     }
-    if (node.color !== 'transparent') {
-      const [r, g, b] = parseColor(node.color);
+    const bgColor = node.style?.backgroundColor ?? node.color;
+    if (bgColor !== 'transparent') {
+      const [r, g, b] = parseColor(bgColor);
       cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl });
     }
     if (node.borderColor && node.borderWidth && node.borderWidth > 0) {
