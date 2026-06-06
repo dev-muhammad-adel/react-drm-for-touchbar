@@ -50,6 +50,10 @@ export function parseColor(color: string): [number, number, number] {
   return [1, 1, 1];
 }
 
+function zIndexOf(node: SceneNode): number {
+  return node.style?.zIndex ?? 0;
+}
+
 function resolveCornerRadii(s: import('./style').Style | undefined): [number, number, number, number] {
   const base = s?.borderRadius ?? 0;
   return [
@@ -88,7 +92,18 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     }
     const clip = node.style?.overflow === 'hidden';
     if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
-    for (const child of node.children) emitNode(child, cmds, layout, lb);
+
+    const isAbsolute = (n: SceneNode) =>
+      n.style?.position === 'absolute' || n.x !== undefined || n.y !== undefined;
+
+    // Negative-zIndex absolutes → flow children (tree order) → non-negative absolutes
+    const absNeg  = node.children.filter(c => isAbsolute(c) && zIndexOf(c) < 0)
+                                  .sort((a, b) => zIndexOf(a) - zIndexOf(b));
+    const flow    = node.children.filter(c => !isAbsolute(c));
+    const absPos  = node.children.filter(c => isAbsolute(c) && zIndexOf(c) >= 0)
+                                  .sort((a, b) => zIndexOf(a) - zIndexOf(b));
+
+    for (const child of [...absNeg, ...flow, ...absPos]) emitNode(child, cmds, layout, lb);
     if (clip) cmds.push({ cmd: 'clip_pop' });
   } else if (node.type === 'text') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };

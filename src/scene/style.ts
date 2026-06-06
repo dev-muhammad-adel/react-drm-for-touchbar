@@ -67,6 +67,8 @@ export interface Style {
   textAlign?: 'left' | 'center' | 'right';
   lineHeight?: number;
 
+  zIndex?: number;
+
   // Visual
   overflow?: 'visible' | 'hidden';
   opacity?: number;
