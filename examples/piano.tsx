@@ -183,7 +183,7 @@ export function Piano({ width, height }: { width: number; height: number }) {
 
       {WHITE_KEYS.map(k => {
         const on = active.has(k.midi);
-        const lx = (sz: number) => k.x + Math.max(2, Math.floor((k.w - k.label.length * sz) / 2));
+        const lx = (sz: number) => Math.max(2, Math.floor((k.w - k.label.length * sz) / 2));
         return (
           <Box
             key={k.label}
@@ -195,7 +195,7 @@ export function Piano({ width, height }: { width: number; height: number }) {
           >
             <Text
               x={lx(on ? 10 : 8)}
-              y={on ? KEY_Y + Math.floor(KEY_H / 2) - 9 : KEY_Y + KEY_H - 16}
+              y={on ? Math.floor(KEY_H / 2) - 9 : KEY_H - 16}
               color={on ? '#7c2d12' : '#6b7280'}
               fontSize={on ? 16 : 13}
               fontFamily="monospace"
@@ -208,7 +208,6 @@ export function Piano({ width, height }: { width: number; height: number }) {
 
       {BLACK_KEYS.map(k => {
         const on = active.has(k.midi);
-        const lx = k.x + Math.max(1, Math.floor((k.w - k.label.length * 6.5) / 2));
         return (
           <React.Fragment key={k.label}>
             <Box
@@ -224,7 +223,7 @@ export function Piano({ width, height }: { width: number; height: number }) {
               color={on ? '#9d4ff7' : '#1e1e2e'}
             />
             <Text
-              x={lx}
+              x={k.x + Math.max(1, Math.floor((k.w - k.label.length * 6.5) / 2))}
               y={KEY_Y + BK_H - 13}
               color={on ? '#e9d5ff' : '#4a4a80'}
               fontSize={11}

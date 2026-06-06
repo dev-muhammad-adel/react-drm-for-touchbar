@@ -4,9 +4,9 @@ import type { LayoutBox } from './layout';
 
 export type DrawCommand =
   | { cmd: 'clear'; r: number; g: number; b: number }
-  | { cmd: 'fill_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number }
-  | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; lineWidth: number }
-  | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; size: number; family: string; text: string }
+  | { cmd: 'fill_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number }
+  | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number; lineWidth: number }
+  | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string }
   | { cmd: 'draw_svg'; x: number; y: number; w: number; h: number; src: string }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
 
@@ -47,23 +47,37 @@ export function parseColor(color: string): [number, number, number] {
   return [1, 1, 1];
 }
 
+function resolveCornerRadii(s: import('./style').Style | undefined): [number, number, number, number] {
+  const base = s?.borderRadius ?? 0;
+  return [
+    s?.borderTopLeftRadius     ?? base,
+    s?.borderTopRightRadius    ?? base,
+    s?.borderBottomRightRadius ?? base,
+    s?.borderBottomLeftRadius  ?? base,
+  ];
+}
+
 function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<SceneNode, LayoutBox>): void {
   if (node.type === 'box') {
-    const lb = layout.get(node) ?? { x: node.x, y: node.y, w: node.width, h: node.height };
+    const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
+    const a  = node.style?.opacity ?? 1;
+    const [tl, tr, br, bl] = resolveCornerRadii(node.style);
     if (node.color !== 'transparent') {
       const [r, g, b] = parseColor(node.color);
-      cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b });
+      cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl });
     }
     if (node.borderColor && node.borderWidth && node.borderWidth > 0) {
       const [r, g, b] = parseColor(node.borderColor);
-      cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, lineWidth: node.borderWidth });
+      cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl, lineWidth: node.borderWidth });
     }
     for (const child of node.children) emitNode(child, cmds, layout);
   } else if (node.type === 'text') {
+    const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
     const [r, g, b] = parseColor(node.color);
-    cmds.push({ cmd: 'text', x: node.x, y: node.y, r, g, b, size: node.fontSize, family: node.fontFamily, text: node.text });
+    const a = node.style?.opacity ?? 1;
+    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size: node.fontSize, family: node.fontFamily, text: node.text });
   } else if (node.type === 'svg_image') {
-    const lb = layout.get(node) ?? { x: node.x, y: node.y, w: node.width, h: node.height };
+    const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
     cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: node.src });
   }
 }

@@ -21,6 +21,9 @@ export interface ButtonProps {
   borderColor?: string;
   activeBorderColor?: string;
   borderWidth?: number;
+  opacity?: number;
+  activeOpacity?: number;
+  borderRadius?: number;
   style?: Style;
   activeStyle?: Style;
   children?: React.ReactNode;
@@ -31,8 +34,8 @@ export interface ButtonProps {
 }
 
 export function Button({
-  x = 0,
-  y = 0,
+  x,
+  y,
   width = 0,
   height = 0,
   color = '#2a2a3e',
@@ -40,6 +43,9 @@ export function Button({
   borderColor,
   activeBorderColor,
   borderWidth,
+  opacity,
+  activeOpacity,
+  borderRadius,
   style,
   activeStyle,
   onClick,
@@ -58,21 +64,22 @@ export function Button({
 setActive(true);
     onClick?.();
     setTimeout(() => setActive(false), 120);
-  }, [onClick, x, y]);
+  }, [onClick]);
 
   useLayoutEffect(() => {
     if (!registry) return;
     const key  = id.current;
     const node = nodeRef.current;
 
-    const lb = node ? layoutCtx.current.get(node) : undefined;
-    const rx = lb?.x ?? x;
-    const ry = lb?.y ?? y;
-    const rw = lb?.w ?? width;
-    const rh = lb?.h ?? height;
-
     registry.registerGesture(key, {
-      x: rx, y: ry, width: rw, height: rh,
+      x: 0, y: 0, width: 0, height: 0,
+      // Called at touch time — layout is already current so flex positions are correct.
+      getBounds: () => {
+        const lb = node ? layoutCtx.current.get(node) : undefined;
+        return lb
+          ? { x: lb.x, y: lb.y, width: lb.w, height: lb.h }
+          : { x: x ?? 0, y: y ?? 0, width, height };
+      },
       onClick:      handleTap,
       onTouchStart,
       onTouchMove,
@@ -80,6 +87,13 @@ setActive(true);
     });
     return () => registry.unregisterGesture(key);
   });
+
+  const baseStyle = active && activeStyle ? activeStyle : style;
+  const effectiveStyle: Style = {
+    ...(borderRadius !== undefined && { borderRadius }),
+    ...(opacity !== undefined && { opacity: active && activeOpacity !== undefined ? activeOpacity : opacity }),
+    ...baseStyle,
+  };
 
   return (
     <Box
@@ -89,7 +103,7 @@ setActive(true);
       color={active ? activeColor : color}
       borderColor={active && activeBorderColor ? activeBorderColor : borderColor}
       borderWidth={borderWidth}
-      style={active && activeStyle ? activeStyle : style}
+      style={effectiveStyle}
     >
       {children}
     </Box>

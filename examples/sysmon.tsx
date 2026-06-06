@@ -172,13 +172,13 @@ function CpuSection({ x, cores }: { x: number; cores: number[] }) {
 
   return (
     <Box x={x} y={0} width={CPU_W} height={60} color={BG}>
-      <Text x={x + pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">
+      <Text x={pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">
         {`CPU ×${cores.length}`}
       </Text>
 
       {/* Per-core vertical bars */}
       {cores.map((usage, i) => {
-        const bx     = x + pad + i * (barW + gap);
+        const bx     = pad + i * (barW + gap);
         const fillH  = Math.max(1, Math.round(BAR_H * usage / 100));
         const emptyH = BAR_H - fillH;
         const color  = loadColor(usage);
@@ -187,13 +187,10 @@ function CpuSection({ x, cores }: { x: number; cores: number[] }) {
         const pctX    = bx + Math.max(1, Math.floor((barW - pctStr.length * 6) / 2));
         return (
           <React.Fragment key={i}>
-            {/* Empty (top portion of bar slot) */}
             {emptyH > 0 && (
               <Box x={bx} y={BAR_TOP} width={barW} height={emptyH} color="#111820" />
             )}
-            {/* Fill */}
             <Box x={bx} y={BAR_TOP + emptyH} width={barW} height={fillH} color={color} />
-            {/* Usage label inside fill */}
             {showPct && (
               <Text x={pctX} y={BAR_BOT - 12} color="#0a0a0a" fontSize={10} fontFamily="monospace">
                 {pctStr}
@@ -204,13 +201,7 @@ function CpuSection({ x, cores }: { x: number; cores: number[] }) {
       })}
 
       {/* Overall % (large, right-aligned) */}
-      <Text
-        x={x + CPU_W - pctW + 4}
-        y={18}
-        color={loadColor(avg)}
-        fontSize={24}
-        fontFamily="monospace"
-      >
+      <Text x={CPU_W - pctW + 4} y={18} color={loadColor(avg)} fontSize={24} fontFamily="monospace">
         {`${avg}%`}
       </Text>
     </Box>
@@ -226,30 +217,20 @@ function MemSection({ x, used, total }: { x: number; used: number; total: number
 
   return (
     <Box x={x} y={0} width={MEM_W} height={60} color={BG}>
-      <Text x={x + pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">MEM</Text>
+      <Text x={pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">MEM</Text>
 
-      {/* Bar track */}
-      <Box x={x + pad} y={BAR_TOP} width={barW} height={BAR_H} color="#111820" />
-      {/* Fill */}
+      <Box x={pad} y={BAR_TOP} width={barW} height={BAR_H} color="#111820" />
       {fillW > 0 && (
-        <Box x={x + pad} y={BAR_TOP} width={fillW} height={BAR_H} color={loadColor(pctN)} />
+        <Box x={pad} y={BAR_TOP} width={fillW} height={BAR_H} color={loadColor(pctN)} />
       )}
-      {/* Segment marks at 25% / 50% / 75% */}
       {[1, 2, 3].map(q => (
-        <Box key={q} x={x + pad + Math.round(barW * q / 4)} y={BAR_TOP} width={1} height={BAR_H} color="#0d1117" />
+        <Box key={q} x={pad + Math.round(barW * q / 4)} y={BAR_TOP} width={1} height={BAR_H} color="#0d1117" />
       ))}
 
-      {/* Labels */}
-      <Text x={x + pad} y={BAR_BOT - 11} color="#94a3b8" fontSize={11} fontFamily="monospace">
+      <Text x={pad} y={BAR_BOT - 11} color="#94a3b8" fontSize={11} fontFamily="monospace">
         {`${fmtGiB(used)} / ${fmtGiB(total)}`}
       </Text>
-      <Text
-        x={x + MEM_W - pad - 36}
-        y={BAR_BOT - 11}
-        color={loadColor(pctN)}
-        fontSize={11}
-        fontFamily="monospace"
-      >
+      <Text x={MEM_W - pad - 36} y={BAR_BOT - 11} color={loadColor(pctN)} fontSize={11} fontFamily="monospace">
         {`${pctN}%`}
       </Text>
     </Box>
@@ -262,19 +243,14 @@ function TempSection({ x, temp }: { x: number; temp: number | null }) {
   const label = temp !== null ? `${temp}°` : 'N/A';
   const sub   = temp !== null ? 'C' : '';
 
-  // Mini thermometer bar (vertical fill)
-  const barX  = x + TEMP_W - pad - 14;
+  const barX  = TEMP_W - pad - 14;
   const fillH = temp !== null ? Math.round(BAR_H * Math.max(0, Math.min(1, (temp - 20) / 90))) : 0;
 
   return (
     <Box x={x} y={0} width={TEMP_W} height={60} color={BG}>
-      <Text x={x + pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">TEMP</Text>
-
-      {/* Big value */}
-      <Text x={x + pad} y={16} color={color} fontSize={28} fontFamily="monospace">{label}</Text>
-      <Text x={x + pad + label.length * 17} y={24} color={color} fontSize={14} fontFamily="monospace">{sub}</Text>
-
-      {/* Thermometer bar */}
+      <Text x={pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">TEMP</Text>
+      <Text x={pad} y={16} color={color} fontSize={28} fontFamily="monospace">{label}</Text>
+      <Text x={pad + label.length * 17} y={24} color={color} fontSize={14} fontFamily="monospace">{sub}</Text>
       <Box x={barX} y={BAR_TOP} width={10} height={BAR_H} color="#111820" />
       {fillH > 0 && (
         <Box x={barX} y={BAR_BOT - fillH} width={10} height={fillH} color={color} />
@@ -284,26 +260,17 @@ function TempSection({ x, temp }: { x: number; temp: number | null }) {
 }
 
 function NetSection({ x, rx, tx, iface }: { x: number; rx: number; tx: number; iface: string }) {
-  const pad  = 10;
-  const mid  = 30; // y midpoint between rows
+  const pad = 10;
 
   return (
     <Box x={x} y={0} width={NET_W} height={60} color={BG}>
-      <Text x={x + pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">
+      <Text x={pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">
         {`NET  ${iface}`}
       </Text>
-
-      {/* Download */}
-      <Text x={x + pad} y={15} color="#64748b" fontSize={11} fontFamily="monospace">{'↓'}</Text>
-      <Text x={x + pad + 14} y={15} color="#38bdf8" fontSize={15} fontFamily="monospace">
-        {fmtRate(rx)}
-      </Text>
-
-      {/* Upload */}
-      <Text x={x + pad} y={37} color="#64748b" fontSize={11} fontFamily="monospace">{'↑'}</Text>
-      <Text x={x + pad + 14} y={37} color="#fb923c" fontSize={15} fontFamily="monospace">
-        {fmtRate(tx)}
-      </Text>
+      <Text x={pad} y={15} color="#64748b" fontSize={11} fontFamily="monospace">{'↓'}</Text>
+      <Text x={pad + 14} y={15} color="#38bdf8" fontSize={15} fontFamily="monospace">{fmtRate(rx)}</Text>
+      <Text x={pad} y={37} color="#64748b" fontSize={11} fontFamily="monospace">{'↑'}</Text>
+      <Text x={pad + 14} y={37} color="#fb923c" fontSize={15} fontFamily="monospace">{fmtRate(tx)}</Text>
     </Box>
   );
 }
@@ -317,20 +284,15 @@ function BatSection({ x, bat }: { x: number; bat: { pct: number; charging: boole
 
   return (
     <Box x={x} y={0} width={BAT_W} height={60} color={BG}>
-      <Text x={x + pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">
+      <Text x={pad} y={LABEL_Y} color={LABEL_COLOR} fontSize={LABEL_SZ} fontFamily="monospace">
         {bat.charging ? 'BAT  charging' : 'BAT'}
       </Text>
-
-      {/* Bar */}
-      <Box x={x + pad} y={BAR_TOP} width={barW} height={BAR_H} color="#111820" />
+      <Box x={pad} y={BAR_TOP} width={barW} height={BAR_H} color="#111820" />
       {fillW > 0 && (
-        <Box x={x + pad} y={BAR_TOP} width={fillW} height={BAR_H} color={color} />
+        <Box x={pad} y={BAR_TOP} width={fillW} height={BAR_H} color={color} />
       )}
-      {/* Nub on right */}
-      <Box x={x + pad + barW} y={BAR_TOP + 14} width={4} height={15} color="#1e293b" />
-
-      {/* Percentage */}
-      <Text x={x + pad} y={BAR_BOT - 11} color={color} fontSize={13} fontFamily="monospace">
+      <Box x={pad + barW} y={BAR_TOP + 14} width={4} height={15} color="#1e293b" />
+      <Text x={pad} y={BAR_BOT - 11} color={color} fontSize={13} fontFamily="monospace">
         {`${bat.pct}%  ${bat.charging ? '▲' : '▼'}`}
       </Text>
     </Box>

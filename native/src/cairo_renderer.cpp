@@ -5,6 +5,27 @@
 #include <stdexcept>
 #include <string>
 
+// Per-corner rounded rect: tl=top-left, tr=top-right, br=bottom-right, bl=bottom-left
+static void rounded_rect(cairo_t* cr, double x, double y, double w, double h,
+                          double tl, double tr, double br, double bl) {
+  double maxR = fmin(w / 2.0, h / 2.0);
+  tl = fmin(fmax(tl, 0.0), maxR);
+  tr = fmin(fmax(tr, 0.0), maxR);
+  br = fmin(fmax(br, 0.0), maxR);
+  bl = fmin(fmax(bl, 0.0), maxR);
+
+  cairo_move_to(cr, x + tl, y);
+  cairo_line_to(cr, x + w - tr, y);
+  if (tr > 0) cairo_arc(cr, x + w - tr, y + tr,     tr, -M_PI / 2, 0);
+  cairo_line_to(cr, x + w, y + h - br);
+  if (br > 0) cairo_arc(cr, x + w - br, y + h - br, br,  0,        M_PI / 2);
+  cairo_line_to(cr, x + bl, y + h);
+  if (bl > 0) cairo_arc(cr, x + bl,     y + h - bl, bl,  M_PI / 2, M_PI);
+  cairo_line_to(cr, x, y + tl);
+  if (tl > 0) cairo_arc(cr, x + tl,     y + tl,     tl,  M_PI,     3 * M_PI / 2);
+  cairo_close_path(cr);
+}
+
 CairoRenderer::CairoRenderer(uint8_t* buf, uint32_t fb_w, uint32_t fb_h, uint32_t stride, bool rotate90)
   : buf_(buf), fb_w_(fb_w), fb_h_(fb_h), stride_(stride), rotate90_(rotate90) {}
 
@@ -60,26 +81,38 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
     } else if (type == "fill_rect") {
       double x = numProp(cmd, "x"), y = numProp(cmd, "y");
       double w = numProp(cmd, "w"), h = numProp(cmd, "h");
-      cairo_set_source_rgb(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"));
-      cairo_rectangle(cr, x, y, w, h);
+      double a = numProp(cmd, "a"); if (a <= 0) a = 1.0;
+      double tl = numProp(cmd, "tl"), tr = numProp(cmd, "tr");
+      double br = numProp(cmd, "br"), bl = numProp(cmd, "bl");
+      cairo_set_source_rgba(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"), a);
+      rounded_rect(cr, x, y, w, h, tl, tr, br, bl);
       cairo_fill(cr);
 
     } else if (type == "stroke_rect") {
       double x = numProp(cmd, "x"), y = numProp(cmd, "y");
       double w = numProp(cmd, "w"), h = numProp(cmd, "h");
-      cairo_set_source_rgb(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"));
-      cairo_set_line_width(cr, numProp(cmd, "lineWidth"));
-      cairo_rectangle(cr, x, y, w, h);
+      double a = numProp(cmd, "a"); if (a <= 0) a = 1.0;
+      double lw = numProp(cmd, "lineWidth");
+      double tl = numProp(cmd, "tl"), tr = numProp(cmd, "tr");
+      double br = numProp(cmd, "br"), bl = numProp(cmd, "bl");
+      // Inset by lw/2 so the stroke stays fully inside the rect bounds.
+      double ins = lw / 2.0;
+      cairo_set_source_rgba(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"), a);
+      cairo_set_line_width(cr, lw);
+      rounded_rect(cr, x + ins, y + ins, w - 2*ins, h - 2*ins,
+                   fmax(0.0, tl - ins), fmax(0.0, tr - ins),
+                   fmax(0.0, br - ins), fmax(0.0, bl - ins));
       cairo_stroke(cr);
 
     } else if (type == "text") {
       double x    = numProp(cmd, "x");
       double y    = numProp(cmd, "y");
       double size = numProp(cmd, "size");
+      double a    = numProp(cmd, "a"); if (a <= 0) a = 1.0;
       std::string family = strProp(cmd, "family");
       std::string text   = strProp(cmd, "text");
 
-      cairo_set_source_rgb(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"));
+      cairo_set_source_rgba(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"), a);
       cairo_select_font_face(cr, family.c_str(),
                              CAIRO_FONT_SLANT_NORMAL,
                              CAIRO_FONT_WEIGHT_NORMAL);

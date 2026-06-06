@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Style } from '../scene/style';
 
 export interface TextProps {
   x?: number;
@@ -6,6 +7,7 @@ export interface TextProps {
   color?: string;
   fontSize?: number;
   fontFamily?: string;
+  style?: Style;
   children?: string | number;
 }
 

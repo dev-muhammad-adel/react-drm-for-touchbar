@@ -4,8 +4,8 @@ export type Color = string;
 
 export interface BoxNode {
   type: 'box';
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   width: number;
   height: number;
   color: Color;
@@ -17,12 +17,13 @@ export interface BoxNode {
 
 export interface TextNode {
   type: 'text';
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   color: Color;
   fontSize: number;
   fontFamily: string;
   text: string;
+  style?: Style;
   children: SceneNode[];
 }
 
@@ -34,8 +35,8 @@ export interface TextLeafNode {
 
 export interface SvgNode {
   type: 'svg_image';
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   width: number;
   height: number;
   src: string;

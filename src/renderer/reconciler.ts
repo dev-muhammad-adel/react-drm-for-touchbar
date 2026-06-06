@@ -7,8 +7,8 @@ function nodeFromProps(type: string, props: Record<string, unknown>): SceneNode 
   if (type === 'box') {
     return {
       type: 'box',
-      x: (props.x as number) ?? 0,
-      y: (props.y as number) ?? 0,
+      x: props.x as number | undefined,
+      y: props.y as number | undefined,
       width: (props.width as number) ?? 0,
       height: (props.height as number) ?? 0,
       color: (props.color as string) ?? 'transparent',
@@ -26,20 +26,21 @@ function nodeFromProps(type: string, props: Record<string, unknown>): SceneNode 
       Array.isArray(children) ? children.join('') : '';
     return {
       type: 'text',
-      x: (props.x as number) ?? 0,
-      y: (props.y as number) ?? 0,
+      x: props.x as number | undefined,
+      y: props.y as number | undefined,
       color: (props.color as string) ?? 'white',
       fontSize: (props.fontSize as number) ?? 16,
       fontFamily: (props.fontFamily as string) ?? 'sans-serif',
       text,
+      style: props.style as Style | undefined,
       children: [],
     } as TextNode;
   }
   if (type === 'svg_image') {
     return {
       type: 'svg_image',
-      x: (props.x as number) ?? 0,
-      y: (props.y as number) ?? 0,
+      x: props.x as number | undefined,
+      y: props.y as number | undefined,
       width: (props.width as number) ?? 0,
       height: (props.height as number) ?? 0,
       src: (props.src as string) ?? '',

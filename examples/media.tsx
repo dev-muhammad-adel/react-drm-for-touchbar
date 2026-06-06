@@ -285,13 +285,13 @@ function MediaBar({ width, height }: { width: number; height: number }) {
       <Text x={12} y={30} color="#93c5fd" fontSize={16} fontFamily="monospace">{track.artist}</Text>
 
       <Box x={ui.prevX} y={ui.btnY} width={ui.btnW} height={ui.btnH} color={btnColor('prev', '#111827', '#0f766e')}>
-        <Text x={ui.prevX + 24} y={20} color="#d1fae5" fontSize={20} fontFamily="monospace">{'<<'}</Text>
+        <Text x={24} y={20} color="#d1fae5" fontSize={20} fontFamily="monospace">{'<<'}</Text>
       </Box>
       <Box x={ui.playX} y={ui.btnY} width={ui.btnW} height={ui.btnH} color={btnColor('play', '#111827', '#a855f7')}>
-        <Text x={ui.playX + 30} y={20} color="#f5d0fe" fontSize={20} fontFamily="monospace">{playGlyph}</Text>
+        <Text x={30} y={20} color="#f5d0fe" fontSize={20} fontFamily="monospace">{playGlyph}</Text>
       </Box>
       <Box x={ui.nextX} y={ui.btnY} width={ui.btnW} height={ui.btnH} color={btnColor('next', '#111827', '#0f766e')}>
-        <Text x={ui.nextX + 24} y={20} color="#d1fae5" fontSize={20} fontFamily="monospace">{'>>'}</Text>
+        <Text x={24} y={20} color="#d1fae5" fontSize={20} fontFamily="monospace">{'>>'}</Text>
       </Box>
 
       {/* Timeline */}
@@ -317,10 +317,10 @@ function MediaBar({ width, height }: { width: number; height: number }) {
       <Box x={ui.rightX + 10} y={34} width={Math.round(150 * (volume / 100))} height={10} color="#fb7185" />
 
       <Box x={ui.volDownX} y={ui.volY} width={ui.volBtnW} height={ui.volBtnH} color={btnColor('vol_down', '#1f2937', '#7c2d12')}>
-        <Text x={ui.volDownX + 30} y={20} color="#ffedd5" fontSize={22} fontFamily="monospace">-</Text>
+        <Text x={30} y={20} color="#ffedd5" fontSize={22} fontFamily="monospace">-</Text>
       </Box>
       <Box x={ui.volUpX} y={ui.volY} width={ui.volBtnW} height={ui.volBtnH} color={btnColor('vol_up', '#1f2937', '#166534')}>
-        <Text x={ui.volUpX + 30} y={20} color="#dcfce7" fontSize={22} fontFamily="monospace">+</Text>
+        <Text x={30} y={20} color="#dcfce7" fontSize={22} fontFamily="monospace">+</Text>
       </Box>
 
     </Box>

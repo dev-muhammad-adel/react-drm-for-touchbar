@@ -5,6 +5,8 @@ export interface GestureRegion {
   y: number;
   width: number;
   height: number;
+  /** Called at touch time to get current bounds — use this for flex-positioned elements. */
+  getBounds?: () => { x: number; y: number; width: number; height: number };
   onClick?:      () => void;
   onTouchStart?: (x: number, y: number) => void;
   onTouchMove?:  (x: number, y: number) => void;
@@ -73,8 +75,10 @@ export class TouchRegistry {
     this.touchOrigin  = { x, y };
     this.activeRegion = null;
 
-for (const r of this.regions.values()) {
-      if (x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height) {
+    for (const r of this.regions.values()) {
+      const b = r.getBounds?.() ?? r;
+      // Y is always 0 on Touch Bar hardware (1D device) — match on x range only.
+      if (x >= b.x && x < b.x + b.width) {
         this.activeRegion = r;
         r.onTouchStart?.(x, y);
         r.onClick?.();
@@ -97,7 +101,8 @@ for (const r of this.regions.values()) {
     const dx = x - sx;
 
     for (const r of this.swipeRegions.values()) {
-      if (sx < r.x || sx >= r.x + r.width || sy < r.y || sy >= r.y + r.height) continue;
+      // Y is always 0 on Touch Bar hardware — match on x range only.
+      if (sx < r.x || sx >= r.x + r.width) continue;
       const threshold = r.threshold ?? 80;
       if (Math.abs(dx) < threshold) continue;
       if (dx < 0) r.onSwipeLeft?.(Math.abs(dx));
