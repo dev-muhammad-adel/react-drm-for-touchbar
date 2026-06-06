@@ -9,7 +9,7 @@ export type DrawCommand =
   | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number }
   | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'clip_pop' }
-  | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string }
+  | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string; bold: boolean; italic: boolean }
   | { cmd: 'draw_svg'; x: number; y: number; w: number; h: number; src: string }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
 
@@ -96,7 +96,10 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const a = node.style?.opacity ?? 1;
     const size   = node.style?.fontSize   ?? node.fontSize;
     const family = node.style?.fontFamily ?? node.fontFamily;
-    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text });
+    const fw     = node.style?.fontWeight;
+    const bold   = fw === 'bold' || (fw !== undefined && parseInt(fw, 10) >= 700);
+    const italic = node.style?.fontStyle === 'italic';
+    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic });
   } else if (node.type === 'svg_image') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
     cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: node.src });

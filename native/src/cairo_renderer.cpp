@@ -205,11 +205,13 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       double a    = numProp(cmd, "a"); if (a <= 0) a = 1.0;
       std::string family = strProp(cmd, "family");
       std::string text   = strProp(cmd, "text");
+      bool bold   = cmd.Get("bold").ToBoolean().Value();
+      bool italic = cmd.Get("italic").ToBoolean().Value();
 
       cairo_set_source_rgba(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"), a);
       cairo_select_font_face(cr, family.c_str(),
-                             CAIRO_FONT_SLANT_NORMAL,
-                             CAIRO_FONT_WEIGHT_NORMAL);
+                             italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
+                             bold   ? CAIRO_FONT_WEIGHT_BOLD  : CAIRO_FONT_WEIGHT_NORMAL);
       cairo_set_font_size(cr, size);
 
       // Measure ascent so that `y` is the top of the text bounding box.
