@@ -80,7 +80,6 @@ export class TouchRegistry {
     for (const r of this.regions.values()) {
       const b    = r.getBounds?.() ?? r;
       const slop = r.hitSlop ?? 8;
-      // Y is always 0 on Touch Bar hardware (1D device) — match on x range only.
       if (x >= b.x - slop && x < b.x + b.width + slop) {
         this.activeRegion = r;
         r.onTouchStart?.(x, y);
@@ -114,7 +113,6 @@ export class TouchRegistry {
     const dx = x - sx;
 
     for (const r of this.swipeRegions.values()) {
-      // Y is always 0 on Touch Bar hardware — match on x range only.
       if (sx < r.x || sx >= r.x + r.width) continue;
       const threshold = r.threshold ?? 80;
       if (Math.abs(dx) < threshold) continue;

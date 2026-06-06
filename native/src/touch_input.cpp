@@ -84,7 +84,8 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
   struct input_event ev;
   int32_t cur_x = 0, cur_y = 0;
   bool touch_active = false;
-  bool pos_dirty = false; // position changed since last sync
+  bool touch_starting = false; // deferred start: emit at SYN_REPORT so X/Y are populated
+  bool pos_dirty = false;
 
   // Emit (type, x, y): type 0=start  1=move  2=end
   auto emit = [&](int type, int32_t x, int32_t y) {
@@ -118,15 +119,17 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
     }
     if (ev.type == EV_ABS && ev.code == TB_ABS_MT_POSITION_Y) {
       cur_y = ev.value;
+      if (touch_active) pos_dirty = true;
     }
 
     if (ev.type == EV_KEY && ev.code == TB_BTN_TOUCH) {
       if (ev.value == 1 && !touch_active) {
         touch_active = true;
+        touch_starting = true;
         pos_dirty = false;
-        emit(0, cur_x, cur_y); // start
       } else if (ev.value == 0 && touch_active) {
         touch_active = false;
+        touch_starting = false;
         pos_dirty = false;
         emit(2, cur_x, cur_y); // end
       }
@@ -135,19 +138,26 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
     if (ev.type == EV_ABS && ev.code == TB_ABS_MT_TRACKING_ID) {
       if (ev.value >= 0 && !touch_active) {
         touch_active = true;
+        touch_starting = true; // defer start until SYN_REPORT so X/Y arrive first
         pos_dirty = false;
-        emit(0, cur_x, cur_y); // start
       } else if (ev.value < 0 && touch_active) {
         touch_active = false;
+        touch_starting = false;
         pos_dirty = false;
         emit(2, cur_x, cur_y); // end
       }
     }
 
-    // SYN_REPORT: flush accumulated position into a move event
-    if (ev.type == EV_SYN && ev.code == 0 && touch_active && pos_dirty) {
-      emit(1, cur_x, cur_y); // move
-      pos_dirty = false;
+    // SYN_REPORT: flush accumulated position
+    if (ev.type == EV_SYN && ev.code == 0) {
+      if (touch_starting) {
+        emit(0, cur_x, cur_y); // start — X and Y are now populated
+        touch_starting = false;
+        pos_dirty = false;
+      } else if (touch_active && pos_dirty) {
+        emit(1, cur_x, cur_y); // move
+        pos_dirty = false;
+      }
     }
   }
   tsfn_.Release();
