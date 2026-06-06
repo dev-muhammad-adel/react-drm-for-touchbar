@@ -6,6 +6,8 @@ export type DrawCommand =
   | { cmd: 'clear'; r: number; g: number; b: number }
   | { cmd: 'fill_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number; lineWidth: number }
+  | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
+  | { cmd: 'clip_pop' }
   | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string }
   | { cmd: 'draw_svg'; x: number; y: number; w: number; h: number; src: string }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
@@ -70,7 +72,10 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
       const [r, g, b] = parseColor(node.borderColor);
       cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl, lineWidth: node.borderWidth });
     }
+    const clip = node.style?.overflow === 'hidden';
+    if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
     for (const child of node.children) emitNode(child, cmds, layout);
+    if (clip) cmds.push({ cmd: 'clip_pop' });
   } else if (node.type === 'text') {
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
     const [r, g, b] = parseColor(node.color);

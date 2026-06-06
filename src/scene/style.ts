@@ -59,6 +59,7 @@ export interface Style {
   marginLeft?: number;
 
   // Visual
+  overflow?: 'visible' | 'hidden';
   opacity?: number;
   borderRadius?: number;
   borderTopLeftRadius?: number;

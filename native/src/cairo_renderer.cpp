@@ -104,6 +104,18 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
                    fmax(0.0, br - ins), fmax(0.0, bl - ins));
       cairo_stroke(cr);
 
+    } else if (type == "clip_push") {
+      double x = numProp(cmd, "x"), y = numProp(cmd, "y");
+      double w = numProp(cmd, "w"), h = numProp(cmd, "h");
+      double tl = numProp(cmd, "tl"), tr = numProp(cmd, "tr");
+      double br = numProp(cmd, "br"), bl = numProp(cmd, "bl");
+      cairo_save(cr);
+      rounded_rect(cr, x, y, w, h, tl, tr, br, bl);
+      cairo_clip(cr);
+
+    } else if (type == "clip_pop") {
+      cairo_restore(cr);
+
     } else if (type == "text") {
       double x    = numProp(cmd, "x");
       double y    = numProp(cmd, "y");

@@ -264,6 +264,7 @@ function shiftCmds(cmds: DrawCommand[], dx: number, dy: number): DrawCommand[] {
     switch (cmd.cmd) {
       case 'clear':
       case 'overlay':
+      case 'clip_pop':
         return cmd;           // no coordinates to shift
       default:
         return { ...cmd, x: cmd.x + dx, y: cmd.y + dy };
