@@ -61,6 +61,11 @@ export interface Style {
   // Visual
   overflow?: 'visible' | 'hidden';
   opacity?: number;
+  shadowColor?: string;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
+  shadowOpacity?: number;
+  shadowRadius?: number;
   borderRadius?: number;
   borderTopLeftRadius?: number;
   borderTopRightRadius?: number;

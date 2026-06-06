@@ -6,6 +6,7 @@ export type DrawCommand =
   | { cmd: 'clear'; r: number; g: number; b: number }
   | { cmd: 'fill_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number; lineWidth: number }
+  | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number }
   | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'clip_pop' }
   | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string }
@@ -64,6 +65,19 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width, h: node.height };
     const a  = node.style?.opacity ?? 1;
     const [tl, tr, br, bl] = resolveCornerRadii(node.style);
+    const shadowOpacity = node.style?.shadowOpacity ?? 1;
+    if (node.style?.shadowColor && shadowOpacity > 0) {
+      const [sr, sg, sb] = parseColor(node.style.shadowColor);
+      cmds.push({
+        cmd: 'shadow',
+        x: lb.x, y: lb.y, w: lb.w, h: lb.h,
+        tl, tr, br, bl,
+        r: sr, g: sg, b: sb, a: shadowOpacity,
+        dx: node.style.shadowOffsetX ?? 0,
+        dy: node.style.shadowOffsetY ?? 0,
+        blur: node.style.shadowRadius ?? 0,
+      });
+    }
     if (node.color !== 'transparent') {
       const [r, g, b] = parseColor(node.color);
       cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a, tl, tr, br, bl });

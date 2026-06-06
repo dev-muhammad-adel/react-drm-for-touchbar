@@ -1,9 +1,12 @@
 #include "cairo_renderer.h"
 #include <cairo/cairo.h>
 #include <librsvg/rsvg.h>
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 // Per-corner rounded rect: tl=top-left, tr=top-right, br=bottom-right, bl=bottom-left
 static void rounded_rect(cairo_t* cr, double x, double y, double w, double h,
@@ -24,6 +27,75 @@ static void rounded_rect(cairo_t* cr, double x, double y, double w, double h,
   cairo_line_to(cr, x, y + tl);
   if (tl > 0) cairo_arc(cr, x + tl,     y + tl,     tl,  M_PI,     3 * M_PI / 2);
   cairo_close_path(cr);
+}
+
+// Separable box blur on an A8 surface (O(w*h) regardless of radius).
+// Two passes (H then V) approximate a Gaussian well enough for shadows.
+static void box_blur_h(const uint8_t* src, uint8_t* dst, int w, int h, int stride, int r) {
+  for (int y = 0; y < h; y++) {
+    const uint8_t* s = src + y * stride;
+    uint8_t*       d = dst + y * stride;
+    int sum = 0, ksize = 2 * r + 1;
+    for (int k = -r; k <= r; k++) sum += s[std::max(0, std::min(k, w - 1))];
+    for (int x = 0; x < w; x++) {
+      d[x] = (uint8_t)(sum / ksize);
+      sum -= s[std::max(0, x - r)];
+      sum += s[std::min(w - 1, x + r + 1)];
+    }
+  }
+}
+
+static void box_blur_v(const uint8_t* src, uint8_t* dst, int w, int h, int stride, int r) {
+  for (int x = 0; x < w; x++) {
+    int sum = 0, ksize = 2 * r + 1;
+    for (int k = -r; k <= r; k++) sum += src[std::max(0, std::min(k, h - 1)) * stride + x];
+    for (int y = 0; y < h; y++) {
+      dst[y * stride + x] = (uint8_t)(sum / ksize);
+      sum -= src[std::max(0, y - r) * stride + x];
+      sum += src[std::min(h - 1, y + r + 1) * stride + x];
+    }
+  }
+}
+
+static void blur_a8(uint8_t* data, int w, int h, int stride, int r) {
+  if (r <= 0) return;
+  std::vector<uint8_t> tmp((size_t)h * stride);
+  // Two box-blur passes (H+V each) closely approximates a Gaussian.
+  box_blur_h(data,      tmp.data(), w, h, stride, r);
+  box_blur_v(tmp.data(), data,      w, h, stride, r);
+  box_blur_h(data,      tmp.data(), w, h, stride, r);
+  box_blur_v(tmp.data(), data,      w, h, stride, r);
+}
+
+static void draw_shadow(cairo_t* cr,
+                        double x, double y, double w, double h,
+                        double tl, double tr, double br, double bl,
+                        double dx, double dy, double blur,
+                        double sr, double sg, double sb, double sa) {
+  if (sa <= 0 || w <= 0 || h <= 0) return;
+  int pad = (int)std::ceil(blur);
+  int sw  = (int)std::ceil(w) + 2 * pad;
+  int sh  = (int)std::ceil(h) + 2 * pad;
+
+  cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_A8, sw, sh);
+  cairo_t* scr = cairo_create(surf);
+  rounded_rect(scr, pad, pad, w, h, tl, tr, br, bl);
+  cairo_set_source_rgba(scr, 0, 0, 0, 1);
+  cairo_fill(scr);
+  cairo_destroy(scr);
+  cairo_surface_flush(surf);
+
+  uint8_t* data   = cairo_image_surface_get_data(surf);
+  int      stride = cairo_image_surface_get_stride(surf);
+  blur_a8(data, sw, sh, stride, pad);
+  cairo_surface_mark_dirty(surf);
+
+  cairo_save(cr);
+  cairo_set_source_rgba(cr, sr, sg, sb, sa);
+  cairo_mask_surface(cr, surf, x + dx - pad, y + dy - pad);
+  cairo_restore(cr);
+
+  cairo_surface_destroy(surf);
 }
 
 CairoRenderer::CairoRenderer(uint8_t* buf, uint32_t fb_w, uint32_t fb_h, uint32_t stride, bool rotate90)
@@ -77,6 +149,16 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
     if (type == "clear") {
       cairo_set_source_rgb(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"));
       cairo_paint(cr);
+
+    } else if (type == "shadow") {
+      double x = numProp(cmd, "x"), y = numProp(cmd, "y");
+      double w = numProp(cmd, "w"), h = numProp(cmd, "h");
+      double tl = numProp(cmd, "tl"), tr = numProp(cmd, "tr");
+      double br = numProp(cmd, "br"), bl = numProp(cmd, "bl");
+      double a  = numProp(cmd, "a");
+      draw_shadow(cr, x, y, w, h, tl, tr, br, bl,
+                  numProp(cmd, "dx"), numProp(cmd, "dy"), numProp(cmd, "blur"),
+                  numProp(cmd, "r"),  numProp(cmd, "g"),  numProp(cmd, "b"), a);
 
     } else if (type == "fill_rect") {
       double x = numProp(cmd, "x"), y = numProp(cmd, "y");
