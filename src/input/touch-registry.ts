@@ -7,6 +7,8 @@ export interface GestureRegion {
   height: number;
   /** Called at touch time to get current bounds — use this for flex-positioned elements. */
   getBounds?: () => { x: number; y: number; width: number; height: number };
+  /** Extra pixels to expand the hit area on each side. */
+  hitSlop?: number;
   onClick?:      () => void;
   onTouchStart?: (x: number, y: number) => void;
   onTouchMove?:  (x: number, y: number) => void;
@@ -76,12 +78,12 @@ export class TouchRegistry {
     this.activeRegion = null;
 
     for (const r of this.regions.values()) {
-      const b = r.getBounds?.() ?? r;
+      const b    = r.getBounds?.() ?? r;
+      const slop = r.hitSlop ?? 8;
       // Y is always 0 on Touch Bar hardware (1D device) — match on x range only.
-      if (x >= b.x && x < b.x + b.width) {
+      if (x >= b.x - slop && x < b.x + b.width + slop) {
         this.activeRegion = r;
         r.onTouchStart?.(x, y);
-        r.onClick?.();
         break;
       }
     }
@@ -92,11 +94,22 @@ export class TouchRegistry {
   }
 
   touchEnd(x: number, y: number): void {
-    this.activeRegion?.onTouchEnd?.(x, y);
+    const region = this.activeRegion;
+    region?.onTouchEnd?.(x, y);
     this.activeRegion = null;
 
+    // Fire tap only if the finger lifted within the button's bounds — prevents
+    // accidental triggers when sliding across the bar.
+    if (region) {
+      const b    = region.getBounds?.() ?? region;
+      const slop = region.hitSlop ?? 8;
+      if (x >= b.x - slop && x < b.x + b.width + slop) {
+        region.onClick?.();
+      }
+    }
+
     if (!this.touchOrigin) return;
-    const { x: sx, y: sy } = this.touchOrigin;
+    const { x: sx } = this.touchOrigin;
     this.touchOrigin = null;
     const dx = x - sx;
 

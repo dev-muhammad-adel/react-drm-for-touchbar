@@ -24,6 +24,8 @@ export interface ButtonProps {
   opacity?: number;
   activeOpacity?: number;
   borderRadius?: number;
+  /** Extra pixels to expand the tap hit area on each side. */
+  hitSlop?: number;
   style?: Style;
   activeStyle?: Style;
   children?: React.ReactNode;
@@ -46,6 +48,7 @@ export function Button({
   opacity,
   activeOpacity,
   borderRadius,
+  hitSlop,
   style,
   activeStyle,
   onClick,
@@ -60,12 +63,6 @@ export function Button({
   const id      = useRef(Symbol());
   const nodeRef = useRef<BoxNode | null>(null);
 
-  const handleTap = useCallback(() => {
-setActive(true);
-    onClick?.();
-    setTimeout(() => setActive(false), 120);
-  }, [onClick]);
-
   useLayoutEffect(() => {
     if (!registry) return;
     const key  = id.current;
@@ -73,6 +70,7 @@ setActive(true);
 
     registry.registerGesture(key, {
       x: 0, y: 0, width: 0, height: 0,
+      hitSlop,
       // Called at touch time — layout is already current so flex positions are correct.
       getBounds: () => {
         const lb = node ? layoutCtx.current.get(node) : undefined;
@@ -80,10 +78,13 @@ setActive(true);
           ? { x: lb.x, y: lb.y, width: lb.w, height: lb.h }
           : { x: x ?? 0, y: y ?? 0, width, height };
       },
-      onClick:      handleTap,
-      onTouchStart,
+      // Highlight immediately on touch-down for instant visual feedback.
+      onTouchStart: (tx, ty) => { setActive(true); onTouchStart?.(tx, ty); },
+      // Fire the action when the finger lifts (registry checks bounds before calling).
+      onClick: () => { onClick?.(); },
       onTouchMove,
-      onTouchEnd,
+      // Reset highlight shortly after lift whether or not the tap fired.
+      onTouchEnd: (tx, ty) => { setTimeout(() => setActive(false), 100); onTouchEnd?.(tx, ty); },
     });
     return () => registry.unregisterGesture(key);
   });
