@@ -14,7 +14,7 @@ const PW_ENV: NodeJS.ProcessEnv = {
 // ── Backend detection ─────────────────────────────────────────────────────────
 
 function hasWpctl(): boolean {
-  try { execFileSync('wpctl', ['--version'], { encoding: 'utf8', env: PW_ENV }); return true; }
+  try { execFileSync('wpctl', ['--help'], { encoding: 'utf8', env: PW_ENV }); return true; }
   catch { return false; }
 }
 
