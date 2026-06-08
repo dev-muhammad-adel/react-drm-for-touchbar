@@ -53,7 +53,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
   return (
     <Box style={{ flex: 1,gap: 30 }}>
 
-      <BackButton />
+      <BackButton animation="slide-right" />
 
 
 

@@ -67,7 +67,7 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
 
   return (
     <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <BackButton to="splitted" />
+      <BackButton to="splitted" animation="slide-down" />
       <Sep />
 
       <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

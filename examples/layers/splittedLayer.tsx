@@ -111,10 +111,10 @@ export function SplittedLayer({ width, height }: { width: number; height: number
           activeColor={ idx === MEDIA_BTNS.length - 1 ? "#2a4a2a":"#666666"}
 
             onClick={
-              idx === 0 ? () => go('media') :
-              idx === 1 ? () => go('systembar') :
-              idx === 2 ? () => go('audio-slider') :
-              idx === 3 ? () => go('brightness-slider') :
+              idx === 0 ? () => go('media', 'slide-left') :
+              idx === 1 ? () => go('systembar', 'slide-up') :
+              idx === 2 ? () => go('audio-slider', 'slide-up') :
+              idx === 3 ? () => go('brightness-slider', 'slide-up') :
               idx === MEDIA_BTNS.length - 1 ? () => go('games', 'slide-left') :
               () => playerctl(btn.cmd as MediaCmd)
             }

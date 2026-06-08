@@ -436,7 +436,7 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
 
       {/* Back button */}
      
-     <BackButton/>
+     <BackButton animation="slide-down" />
       <Sep />
 
       <PomodoroSection />
