@@ -1,5 +1,5 @@
 import React from 'react';
-import { KeyboardReader } from 'react-drm';
+import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
 import { SafeArea } from './components/SafeArea';
@@ -11,13 +11,16 @@ import { BackgroundServices } from './layers/backgroundServices';
 import { SystemBar } from './layers/systemBar';
 import { AudioSliderLayer } from './layers/audioSlider';
 import { BrightnessSliderLayer } from './layers/brightnessSlider';
+import { GamesLayer } from './layers/gamesLayer';
+import { DinoLayer } from './layers/dino';
+import { PianoLayer } from './layers/piano';
+import { PongLayer } from './layers/pong';
 import { useBootSequence } from './hooks/useBootSequence';
-const keyboard = new KeyboardReader(); // auto-detects kbd device via /proc/bus/input/devices
 
-export function App({ width, height }: { width: number; height: number }) {
+export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
   const { booted, opacity } = useBootSequence();
 
-  // if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
+  if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
 
   return (
     <SafeArea width={width} height={height}>
@@ -33,6 +36,10 @@ export function App({ width, height }: { width: number; height: number }) {
             { name: 'fnkeys',            component: FnKeys,                  leaving: { outAnim: 'fade', duration: 0 }, entering: { inAnim: 'fade', duration: 0 } },
             { name: 'services',          component: BackgroundServices,      leaving: { outAnim: 'slide-up'    }, entering: { inAnim: 'slide-up'     } },
             { name: 'systembar',         component: SystemBar,               leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-down'   } },
+            { name: 'games',             component: GamesLayer,              leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-left'   } },
+            { name: 'dino',              component: DinoLayer,               leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-left'   } },
+            { name: 'piano',             component: PianoLayer,              leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-left'   } },
+            { name: 'pong',              component: PongLayer,               leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-left'   } },
           ]}
           width={w}
           height={h}

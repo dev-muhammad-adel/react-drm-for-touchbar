@@ -1,169 +1,94 @@
-/**
- * Chrome Dinosaur game — runs directly on the Touch Bar (DRM) display.
- *
- * Run with:
- *   sudo npx tsx examples/dino.tsx
- *
- * Controls:
- *   - Touch anywhere on the Touch Bar to jump / start / restart
- *   - Any keyboard key also works if stdin is a TTY
- *   - Ctrl+C to quit
- */
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { render, Box, Text, Svg, DrmDisplay } from 'react-drm';
-import { TouchReader } from '../src/native/input';
+import { Box, Text, Svg, TouchReader, useKeyPressed } from 'react-drm';
+import { FaTruckMonster } from 'react-icons/fa6';
 
-// ── SVG art ─────────────────────────────────────────────────────────────────
-// Pixel-art dinosaur — 16×18 viewBox, drawn as rectangles.
-function dinoSvg(fill: string, eyeFill: string): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 18">
-  <!-- body -->
-  <rect x="2" y="4" width="12" height="10" rx="1" fill="${fill}"/>
-  <!-- head -->
-  <rect x="6" y="0" width="8" height="7" rx="1" fill="${fill}"/>
-  <!-- tail -->
-  <rect x="0" y="8" width="4" height="3" rx="1" fill="${fill}"/>
-  <!-- legs -->
-  <rect x="4" y="13" width="3" height="5" rx="1" fill="${fill}"/>
-  <rect x="9" y="13" width="3" height="5" rx="1" fill="${fill}"/>
-  <!-- eye -->
-  <rect x="11" y="1" width="2" height="2" rx="0.5" fill="${eyeFill}"/>
-  <!-- mouth -->
-  <rect x="13" y="5" width="2" height="1" fill="${fill}"/>
-</svg>`;
-}
+// ── SVG assets ───────────────────────────────────────────────────────────────
 
-// Cactus — 22×30 viewBox with layered branches.
-const CACTUS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 30">
-  <rect x="8" y="4" width="6" height="26" rx="2" fill="#16a34a"/>
-  <rect x="2" y="10" width="5" height="10" rx="2" fill="#16a34a"/>
-  <rect x="15" y="8" width="5" height="12" rx="2" fill="#16a34a"/>
-  <rect x="3" y="10" width="3" height="7" rx="1" fill="#22c55e"/>
-  <rect x="16" y="8" width="3" height="8" rx="1" fill="#22c55e"/>
-  <rect x="10" y="5" width="2" height="24" rx="1" fill="#22c55e"/>
+const BOULDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 22">
+  <ellipse cx="13" cy="16" rx="11" ry="5.5" fill="#1e293b"/>
+  <ellipse cx="8"  cy="12" rx="7"  ry="5.5" fill="#334155"/>
+  <ellipse cx="17" cy="13" rx="6"  ry="4.5" fill="#2d3f52"/>
+  <ellipse cx="13" cy="11" rx="5"  ry="4"   fill="#475569"/>
+  <ellipse cx="9"  cy="10" rx="3"  ry="2.5" fill="#64748b"/>
+  <ellipse cx="16" cy="11" rx="2.5" ry="2"  fill="#64748b"/>
+  <ellipse cx="13" cy="8.5" rx="2" ry="1.5" fill="#94a3b8"/>
 </svg>`;
 
-const SUN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26">
-  <circle cx="13" cy="13" r="8" fill="#fbbf24"/>
-  <circle cx="13" cy="13" r="4.5" fill="#fde68a"/>
-</svg>`;
+// ── Layout constants ──────────────────────────────────────────────────────────
 
-const CLOUD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 46 16">
-  <ellipse cx="12" cy="9" rx="10" ry="6" fill="#cbd5e1"/>
-  <ellipse cx="24" cy="7" rx="12" ry="7" fill="#e2e8f0"/>
-  <ellipse cx="35" cy="9" rx="9" ry="6" fill="#cbd5e1"/>
-</svg>`;
+const FPS         = 30;
+const TICK_MS     = 1000 / FPS;
 
-const HILL_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 24">
-  <path d="M0 24 L20 17 L38 19 L55 10 L72 13 L90 8 L112 12 L132 9 L140 24 Z" fill="#334155"/>
-  <path d="M0 24 L24 20 L44 21 L63 15 L84 17 L106 13 L126 15 L140 24 Z" fill="#475569"/>
-</svg>`;
+const GROUND_Y    = 50;
+const GROUND_H    = 10;
 
-// ── Layout constants (px) ────────────────────────────────────────────────────
+const TRUCK_X     = 85;
+const TRUCK_W     = 38;
+const TRUCK_H     = 22;
+const TRUCK_FLOOR = GROUND_Y - TRUCK_H;   // 28
 
-const FPS          = 30;
-const TICK_MS      = 1000 / FPS;
+const OBS_W       = 26;
+const OBS_H       = 20;
+const OBS_FLOOR   = GROUND_Y - OBS_H;    // 30
 
-// Vertical layout (total height = 60)
-const GROUND_Y     = 54;   // top edge of ground strip
-const GROUND_H     = 6;    // thickness of ground
+const JUMP_VEL    = -21;
+const GRAVITY     = 2.5;
+const SPAWN_MIN   = 38;
+const SPAWN_RANGE = 42;
+const SPEED_INIT  = 7.2;
+const SPEED_ACCEL = 0.005;
 
-// Dinosaur (larger SVG)
-const DINO_X       = 88;
-const DINO_W       = 24;
-const DINO_H       = 26;
-const DINO_FLOOR   = GROUND_Y - DINO_H;
+// ── Starfield (deterministic pattern) ────────────────────────────────────────
 
-// Obstacle / cactus (larger)
-const CACTUS_W      = 22;
-const CACTUS_H      = 30;
-const CACTUS_FLOOR  = GROUND_Y - CACTUS_H;
+const STARS = Array.from({ length: 52 }, (_, i) => ({
+  x: (i * 47 + i * i * 3) % 1900 + 20,
+  y: 1 + (i * 23 + i * 7) % 22,
+  w: i % 6 === 0 ? 2 : 1,
+}));
 
-// Physics
-const JUMP_VEL     = -21;
-const GRAVITY      =   2.5;
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-// Obstacle spawning
-const SPAWN_MIN    = 38;     // hard mode: shorter minimum gap
-const SPAWN_RANGE  = 42;     // hard mode: tighter random spread
-
-// Speed
-const SPEED_INIT   = 7.2;    // hard mode: faster start
-const SPEED_ACCEL  = 0.005;  // hard mode: faster ramp
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
-interface Cactus {
-  id: number;
-  x: number;
-}
+interface Obstacle { id: number; x: number; }
 
 interface State {
   running:     boolean;
   dead:        boolean;
   score:       number;
-  dinoY:       number;
+  truckY:      number;
   velY:        number;
   speed:       number;
   tick:        number;
   nextSpawnAt: number;
-  cacti:       Cactus[];
+  obstacles:   Obstacle[];
 }
 
 function initialState(): State {
   return {
-    running:     false,
-    dead:        false,
-    score:       0,
-    dinoY:       DINO_FLOOR,
-    velY:        0,
-    speed:       SPEED_INIT,
-    tick:        0,
+    running: false, dead: false, score: 0,
+    truckY: TRUCK_FLOOR, velY: 0, speed: SPEED_INIT, tick: 0,
     nextSpawnAt: SPAWN_MIN + Math.floor(Math.random() * SPAWN_RANGE),
-    cacti:       [],
+    obstacles: [],
   };
 }
 
-// ── Game component ───────────────────────────────────────────────────────────
+// ── Component ─────────────────────────────────────────────────────────────────
 
-function DinoGame({ width, height }: { width: number; height: number }) {
+export function DinoGame({ width, height }: { width: number; height: number }) {
   const [state, setState] = useState<State>(initialState);
-
-  // Keep a ref so event handlers always see the latest state
   const stateRef = useRef(state);
   stateRef.current = state;
+  const nextId = useRef(1);
 
-  // Monotonically increasing cactus ID
-  const nextIdRef = useRef(1);
-
-  // ── jump / start / restart ────────────────────────────────────────────────
   const handleInput = useCallback(() => {
     const s = stateRef.current;
-
-    if (s.dead) {
-      // Restart
-      nextIdRef.current = 1;
-      setState(initialState());
-      return;
-    }
-
-    if (!s.running) {
-      // Start
-      setState(prev => ({ ...prev, running: true }));
-      return;
-    }
-
-    // Jump — only when the dino is on the ground
-    if (s.dinoY >= DINO_FLOOR) {
-      setState(prev => ({ ...prev, velY: JUMP_VEL }));
-    }
+    if (s.dead)     { nextId.current = 1; setState(initialState()); return; }
+    if (!s.running) { setState(prev => ({ ...prev, running: true })); return; }
+    if (s.truckY >= TRUCK_FLOOR) setState(prev => ({ ...prev, velY: JUMP_VEL }));
   }, []);
 
   // ── Game loop ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!state.running) return;
-
     const id = setInterval(() => {
       setState(prev => {
         if (!prev.running || prev.dead) return prev;
@@ -171,216 +96,122 @@ function DinoGame({ width, height }: { width: number; height: number }) {
         const tick  = prev.tick + 1;
         const speed = prev.speed + SPEED_ACCEL;
 
-        // Physics
-        let velY  = prev.velY + GRAVITY;
-        let dinoY = prev.dinoY + velY;
-        if (dinoY >= DINO_FLOOR) {
-          dinoY = DINO_FLOOR;
-          velY  = 0;
-        }
+        let velY   = prev.velY + GRAVITY;
+        let truckY = prev.truckY + velY;
+        if (truckY >= TRUCK_FLOOR) { truckY = TRUCK_FLOOR; velY = 0; }
 
-        // Move cacti
-        let cacti = prev.cacti.map(c => ({ ...c, x: c.x - speed }));
-        cacti = cacti.filter(c => c.x + CACTUS_W > 0);
+        let obstacles = prev.obstacles.map(o => ({ ...o, x: o.x - speed }));
+        obstacles = obstacles.filter(o => o.x + OBS_W > 0);
 
-        // Spawn
         let nextSpawnAt = prev.nextSpawnAt;
         if (tick >= prev.nextSpawnAt) {
-          cacti = [...cacti, { id: nextIdRef.current++, x: width }];
+          obstacles = [...obstacles, { id: nextId.current++, x: width }];
           nextSpawnAt = tick + SPAWN_MIN + Math.floor(Math.random() * SPAWN_RANGE);
         }
 
-        // Collision
-        const dL = DINO_X + 3,      dR = DINO_X + DINO_W - 3;
-        const dT = dinoY + 3,       dB = dinoY + DINO_H;
-        const hit = cacti.some(c => {
-          const cL = c.x + 2,       cR = c.x + CACTUS_W - 2;
-          const cT = CACTUS_FLOOR,  cB = CACTUS_FLOOR + CACTUS_H;
-          return dR > cL && dL < cR && dB > cT && dT < cB;
+        // Collision (shrunk hit-boxes)
+        const tL = TRUCK_X + 5,  tR = TRUCK_X + TRUCK_W - 5;
+        const tT = truckY + 4,   tB = truckY + TRUCK_H - 2;
+        const hit = obstacles.some(o => {
+          const oL = o.x + 3,   oR = o.x + OBS_W - 3;
+          const oT = OBS_FLOOR, oB = OBS_FLOOR + OBS_H;
+          return tR > oL && tL < oR && tB > oT && tT < oB;
         });
 
-        if (hit) {
-          return { ...prev, dead: true, running: false, dinoY, velY: 0, cacti };
-        }
+        if (hit) return { ...prev, dead: true, running: false, truckY, velY: 0, obstacles };
 
-        const score = Math.floor(tick / 6);
-        return { ...prev, tick, speed, velY, dinoY, cacti, nextSpawnAt, score };
+        return { ...prev, tick, speed, velY, truckY, obstacles, nextSpawnAt, score: Math.floor(tick / 6) };
       });
     }, TICK_MS);
-
     return () => clearInterval(id);
   }, [state.running, width]);
 
   // ── Touch input ───────────────────────────────────────────────────────────
   useEffect(() => {
     let reader: TouchReader | undefined;
-    try {
-      reader = new TouchReader();
-      reader.start(() => handleInput());
-    } catch (_) {
-      // Touch device unavailable — keyboard only
-    }
+    try { reader = new TouchReader(); reader.start(() => handleInput()); }
+    catch (_) {}
     return () => reader?.stop();
   }, [handleInput]);
 
-  // ── Keyboard input (when stdin is a TTY) ──────────────────────────────────
+  // ── Keyboard input (evdev — works regardless of terminal focus) ───────────
+  const spaceHeld = useKeyPressed('space');
+  const prevSpace = useRef(false);
   useEffect(() => {
-    if (!process.stdin.isTTY) return;
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    const handler = (chunk: Buffer) => {
-      if (chunk[0] === 3) process.exit(0); // Ctrl+C
-      handleInput();
-    };
-    process.stdin.on('data', handler);
-    return () => { process.stdin.off('data', handler); };
-  }, [handleInput]);
+    if (spaceHeld && !prevSpace.current) handleInput();
+    prevSpace.current = spaceHeld;
+  }, [spaceHeld, handleInput]);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const { dinoY, cacti, score, dead, running, tick } = state;
+  const { truckY, obstacles, score, dead, running, tick } = state;
 
-  // Dino flashes red on death
-  const dinoColor = dead ? '#ef4444' : '#4ade80';
+  const truckColor = dead ? '#ef4444' : '#f59e0b';
+  const dashScroll = Math.round(tick * 6) % 120;
 
-  // Scrolling ground dots and parallax offsets
-  const groundDots: number[] = [];
-  for (let x = 20; x < width; x += 60) groundDots.push(x);
-  const hillShift = Math.round((tick * 0.8) % 140);
-  const cloudShift = Math.round((tick * 0.35) % (width + 90));
+  const roadDashes: number[] = [];
+  for (let x = -dashScroll; x < width + 120; x += 120) {
+    if (x + 50 > 0 && x < width) roadDashes.push(x);
+  }
+
+  const mid = Math.floor(width / 2);
 
   return (
-    <Box x={0} y={0} width={width} height={height} color="#0f172a">
+    <Box x={0} y={0} width={width} height={height} color="#05050c">
 
-      {/* Sky layers */}
-      <Box x={0} y={0} width={width} height={18} color="#1e293b" />
-      <Box x={0} y={18} width={width} height={16} color="#1f314b" />
-      <Box x={0} y={34} width={width} height={20} color="#213752" />
+      {/* Night sky */}
+      <Box x={0} y={0} width={width} height={30} color="#080815" />
 
-      {/* Sun + clouds */}
-      <Svg x={width - 58} y={2} width={26} height={26} src={SUN_SVG} />
-      <Svg x={width - cloudShift} y={6} width={46} height={16} src={CLOUD_SVG} />
-      <Svg x={width - cloudShift - 420} y={11} width={40} height={14} src={CLOUD_SVG} />
-
-      {/* Distant hills */}
-      <Svg x={-hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={140 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={280 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={420 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={560 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={700 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={840 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={980 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1120 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1260 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1400 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1540 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1680 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1820 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-      <Svg x={1960 - hillShift} y={30} width={140} height={24} src={HILL_SVG} />
-
-      {/* ── Ground ── */}
-      <Box x={0} y={GROUND_Y} width={width} height={GROUND_H} color="#374151" />
-      <Box x={0} y={GROUND_Y - 2} width={width} height={2} color="#94a3b8" />
-
-      {/* Ground tick marks */}
-      {groundDots.map(x => (
-        <Box key={x} x={x} y={GROUND_Y} width={4} height={3} color="#4b5563" />
+      {/* Stars */}
+      {STARS.filter(s => s.x < width).map((s, i) => (
+        <Box key={i} x={s.x} y={s.y} width={s.w} height={s.w} color="#cbd5e1" />
       ))}
 
-      {/* ── Dinosaur ── */}
-      <Svg
-        x={DINO_X}
-        y={Math.round(dinoY)}
-        width={DINO_W}
-        height={DINO_H}
-        src={dinoSvg(dinoColor, '#111827')}
-      />
+      {/* Horizon glow */}
+      <Box x={0} y={27} width={width} height={5}  color="#130920" />
+      <Box x={0} y={32} width={width} height={4}  color="#1a0c2e" />
+      <Box x={0} y={36} width={width} height={4}  color="#120820" />
 
-      {/* ── Cacti ── */}
-      {cacti.map(c => {
-        const cx = Math.round(c.x);
-        return (
-          <Svg
-            key={c.id}
-            x={cx}
-            y={CACTUS_FLOOR}
-            width={CACTUS_W}
-            height={CACTUS_H}
-            src={CACTUS_SVG}
-          />
-        );
-      })}
+      {/* Road surface */}
+      <Box x={0} y={GROUND_Y}     width={width} height={GROUND_H} color="#0e0e16" />
 
-      {/* ── Score ── */}
-      <Text
-        x={width - 236}
-        y={8}
-        color="#e2e8f0"
-        fontSize={26}
-        fontFamily="monospace"
-      >
-        {`SCORE ${String(score).padStart(5, '0')}`}
+      {/* Amber road edge */}
+      <Box x={0} y={GROUND_Y - 2} width={width} height={2}        color="#92400e" />
+
+      {/* Scrolling center dashes */}
+      {roadDashes.map(x => (
+        <Box key={x} x={x} y={GROUND_Y + 4} width={50} height={2} color="#1e1e30" />
+      ))}
+
+      {/* Monster Truck */}
+      <Box x={TRUCK_X} y={Math.round(truckY)} width={TRUCK_W} height={TRUCK_H}>
+        <FaTruckMonster style={{ width: TRUCK_W, height: TRUCK_H }} fill={truckColor} stroke="none" />
+      </Box>
+
+      {/* Obstacles (boulders) */}
+      {obstacles.map(o => (
+        <Svg key={o.id} x={Math.round(o.x)} y={OBS_FLOOR} width={OBS_W} height={OBS_H} src={BOULDER_SVG} />
+      ))}
+
+      {/* Score */}
+      <Text x={width - 190} y={9} color="#f59e0b" fontSize={22} fontFamily="monospace">
+        {`${String(score).padStart(5, '0')} m`}
       </Text>
 
-      {/* ── Overlay messages ── */}
+      {/* Start message */}
       {!running && !dead && (
-        <Text
-          x={Math.floor(width / 2) - 260}
-          y={7}
-          color="#facc15"
-          fontSize={28}
-          fontFamily="monospace"
-        >
-          {'TOUCH / PRESS ANY KEY TO START'}
+        <Text x={mid - 230} y={9} color="#a78bfa" fontSize={26} fontFamily="monospace">
+          {'TAP OR PRESS ANY KEY TO START'}
         </Text>
       )}
 
+      {/* Crash screen */}
       {dead && (
         <>
-          <Text
-            x={Math.floor(width / 2) - 110}
-            y={7}
-            color="#ef4444"
-            fontSize={28}
-            fontFamily="monospace"
-          >
-            {'GAME OVER'}
-          </Text>
-          <Text
-            x={Math.floor(width / 2) + 20}
-            y={7}
-            color="#9ca3af"
-            fontSize={24}
-            fontFamily="monospace"
-          >
-            {'— TAP TO RESTART'}
-          </Text>
+          <Text x={mid - 95} y={9} color="#ef4444" fontSize={26} fontFamily="monospace">CRASHED!</Text>
+          <Text x={mid + 35} y={9} color="#64748b" fontSize={22} fontFamily="monospace">— TAP TO RETRY</Text>
         </>
       )}
 
     </Box>
   );
 }
-
-// ── Entry point ───────────────────────────────────────────────────────────────
-
-const device = process.argv[2] ?? '/dev/dri/card1';
-
-let display: DrmDisplay;
-try {
-  display = new DrmDisplay(device);
-} catch (err) {
-  console.error(`[dino] Failed to open display: ${(err as Error).message}`);
-  process.exit(1);
-}
-
-const rendered = render(
-  <DinoGame width={display.width} height={display.height} />,
-  display,
-);
-
-process.on('SIGINT', () => {
-  rendered.unmount();
-  display.close();
-  process.exit(0);
-});

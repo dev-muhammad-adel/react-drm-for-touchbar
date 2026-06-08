@@ -8,6 +8,7 @@ import { computeLayout } from '../scene/layout';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
 import { TouchReader } from '../native/input';
+import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
 import type { DrmDisplay } from '../native/binding';
@@ -30,6 +31,22 @@ export interface RenderOptions {
    * wear.  Value = seconds per orbit step (default: 60 s).  0 = disabled.
    */
   pixelShiftSecs?: number;
+  /**
+   * If provided, the renderer subscribes to this KeyboardReader for idle
+   * activity detection instead of opening the keyboard device a second time.
+   */
+  keyboardReader?: KeyboardReader;
+  /**
+   * Scale Touch Bar brightness to match the main display brightness.
+   * Default: false.
+   */
+  adaptiveBrightness?: boolean;
+  /**
+   * Fixed brightness level when adaptiveBrightness is false.
+   * Hardware supports exactly 3 levels: 0 (off), 1 (half), 2 (full).
+   * Default: 2 (full brightness).
+   */
+  activeBrightness?: 0 | 1 | 2;
 }
 
 export interface RenderResult {
@@ -80,17 +97,20 @@ function openEvdevStream(
 ): () => void {
   let active = true;
 
+  let workerFd: number | null = null;
+
   const worker = new Worker(`
     const { workerData, parentPort } = require('worker_threads');
     const fs = require('fs');
     let fd;
     try { fd = fs.openSync(workerData.dev, 'r'); }
     catch (e) { parentPort.postMessage({ error: e.message }); process.exit(0); }
+    parentPort.postMessage({ fd });
     const buf = Buffer.alloc(24);
     for (;;) {
       let n;
       try { n = fs.readSync(fd, buf, 0, 24, null); }
-      catch (e) { parentPort.postMessage({ error: e.message }); break; }
+      catch { break; }
       if (n !== 24) break;
       const ab = new ArrayBuffer(24);
       new Uint8Array(ab).set(buf);
@@ -99,17 +119,25 @@ function openEvdevStream(
     try { fs.closeSync(fd); } catch {}
   `, { eval: true, workerData: { dev } });
 
-  worker.on('message', (msg: ArrayBuffer | { error: string }) => {
+  worker.on('message', (msg: ArrayBuffer | { fd: number } | { error: string }) => {
     if (!active) return;
-    if (msg instanceof ArrayBuffer) onData(Buffer.from(msg));
-    else onError(new Error((msg as { error: string }).error));
+    if (msg instanceof ArrayBuffer) { onData(Buffer.from(msg)); return; }
+    if (typeof msg === 'object' && 'fd' in msg) { workerFd = (msg as { fd: number }).fd; return; }
+    onError(new Error((msg as { error: string }).error));
   });
   worker.on('error', (err: Error) => { if (active) onError(err); });
   worker.on('exit', (code) => {
     if (active && code !== 0) onError(new Error(`evdev worker for ${dev} exited: ${code}`));
   });
 
-  return () => { active = false; worker.terminate(); };
+  return () => {
+    active = false;
+    // Close the fd from the main thread — workers share the process fd table,
+    // so this unblocks the readSync with EBADF and lets the worker exit cleanly.
+    // Without this, process.exit() hangs waiting for the blocked worker threads.
+    if (workerFd !== null) { try { fs.closeSync(workerFd); } catch {} workerFd = null; }
+    worker.terminate();
+  };
 }
 
 function parseEvdev(
@@ -127,20 +155,12 @@ function parseEvdev(
 }
 
 // ── Pointer watcher ───────────────────────────────────────────────────────────
-// Reads evdev events from all devices with a mouse handler (e.g. event7, event8
-// on Apple MacBook — the trackpad and Touch Bar).  Any non-SYN event (type≠0)
-// counts as user activity.  Absolute-only devices like these never send data to
-// /dev/input/mice, so we must read their eventN files directly.
+// Reads evdev events from all pointer devices (touchpad, touchscreen, mouse)
+// across all seats. Any non-SYN event counts as user activity.
 
 function watchPointer(onActivity: () => void): () => void {
-  const devices: string[] = [];
-  try {
-    for (const block of fs.readFileSync('/proc/bus/input/devices', 'utf8').trim().split(/\n\n+/)) {
-      if (!/\bmouse\d+\b/.test(block)) continue;
-      const m = block.match(/Handlers=.*?\b(event\d+)\b/);
-      if (m) devices.push(`/dev/input/${m[1]}`);
-    }
-  } catch { /**/ }
+  let devices: string[] = [];
+  try { devices = findPointerDevices(); } catch { /**/ }
 
   if (devices.length === 0) {
     console.warn('[react-drm] watchPointer: no pointer devices found');
@@ -162,28 +182,12 @@ function watchPointer(onActivity: () => void): () => void {
 }
 
 // ── Keyboard watcher ──────────────────────────────────────────────────────────
-// Reads evdev events from all devices with a kbd handler.  EV_KEY (type=1)
-// key-down (value=1) counts as user activity.
-//
-// Many devices claim the "kbd" handler (Power Button, Sleep Button, PC Speaker,
-// Video Bus) but have only 1-2 keys.  We skip them by requiring ≥3 non-zero
-// words in the KEY= bitmap — real keyboards have 5-12, virtual keyboards 8+.
-function hasRichKeymap(block: string): boolean {
-  const m = block.match(/^B: KEY=(.+)$/m);
-  if (!m) return false;
-  return m[1].trim().split(/\s+/).filter(w => !/^0+$/.test(w)).length >= 3;
-}
+// Reads evdev events from all seat0 keyboards. EV_KEY key-down counts as
+// user activity. udev ID_INPUT_KEYBOARD=1 already excludes power buttons etc.
 
 function watchKeyboard(onActivity: () => void): () => void {
-  const devices: string[] = [];
-  try {
-    for (const block of fs.readFileSync('/proc/bus/input/devices', 'utf8').trim().split(/\n\n+/)) {
-      if (!/\bkbd\b/.test(block)) continue;
-      if (!hasRichKeymap(block)) continue;
-      const m = block.match(/Handlers=.*?\b(event\d+)\b/);
-      if (m) devices.push(`/dev/input/${m[1]}`);
-    }
-  } catch { /**/ }
+  let devices: string[] = [];
+  try { devices = findKeyboardDevices(); } catch { /**/ }
 
   if (devices.length === 0) {
     console.warn('[react-drm] watchKeyboard: no keyboard devices found');
@@ -204,39 +208,100 @@ function watchKeyboard(onActivity: () => void): () => void {
   return () => stops.forEach(s => s());
 }
 
+// ── Lid switch watcher ────────────────────────────────────────────────────────
+// EV_SW=5, SW_LID=0: value 1 = closed, 0 = open.
+
+function watchLid(onLid: (closed: boolean) => void): () => void {
+  let dev: string;
+  try { dev = findLidDevice(); } catch { return () => {}; }
+
+  const carry = { buf: Buffer.alloc(0) };
+  return openEvdevStream(
+    dev,
+    chunk => parseEvdev(carry, chunk, (type, code, value) => {
+      if (type === 5 && code === 0) onLid(value === 1); // EV_SW + SW_LID
+    }),
+    err => console.warn(`[react-drm] watchLid: ${err.message}`),
+  );
+}
+
 // ── Backlight control ─────────────────────────────────────────────────────────
 // Controls the Touch Bar backlight via sysfs so the "off" state actually turns
 // the panel off and wake from off reliably restores it.
 
+const TB_BACKLIGHT_NAMES  = ['display-pipe', 'appletb_backlight'];
+const DISP_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
+
+function findBacklightDir(candidates: string[]): string | null {
+  try {
+    const base = '/sys/class/backlight';
+    const name = fs.readdirSync(base).find(n => candidates.some(c => n.includes(c)));
+    return name ? `${base}/${name}` : null;
+  } catch { return null; }
+}
+
+function readInt(path: string): number {
+  try { return parseInt(fs.readFileSync(path, 'utf8').trim(), 10) || 0; } catch { return 0; }
+}
+
 class Backlight {
-  private readonly file: string | null = null;
-  private readonly max: number = 0;
-  private saved: number = 0;
+  private readonly tbFile:   string | null;
+  private readonly tbMax:    number;
+  private readonly dispFile: string | null;
+  private readonly dispMax:  number;
+  private lidClosed = false;
+  private activeHwLevel = 2; // raw level currently written while active
 
   constructor() {
-    try {
-      const base = '/sys/class/backlight';
-      const names = fs.readdirSync(base);
-      const name = names.find(n => n.includes('display-pipe') || n.includes('appletb_backlight'));
-      if (!name) return;
-      const dir = `${base}/${name}`;
-      this.file  = `${dir}/brightness`;
-      this.max   = parseInt(fs.readFileSync(`${dir}/max_brightness`, 'utf8').trim(), 10);
-      this.saved = parseInt(fs.readFileSync(this.file, 'utf8').trim(), 10) || this.max;
-    } catch { /**/ }
+    const tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
+    const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
+    this.tbFile   = tbDir   ? `${tbDir}/brightness`   : null;
+    this.tbMax    = tbDir   ? readInt(`${tbDir}/max_brightness`)   : 0;
+    this.dispFile = dispDir ? `${dispDir}/brightness` : null;
+    this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
+  }
+
+  private write(value: number): void {
+    if (!this.tbFile) return;
+    try { fs.writeFileSync(this.tbFile, String(Math.round(value))); } catch (e) {
+      console.warn('[react-drm] backlight write failed (need root?):', (e as NodeJS.ErrnoException).code);
+    }
+  }
+
+  // Scale display brightness to Touch Bar brightness (sqrt for perceptual linearity)
+  private adaptiveLevel(): number {
+    if (!this.dispFile || !this.dispMax || !this.tbMax) return this.tbMax;
+    const normalized = readInt(this.dispFile) / this.dispMax;
+    return Math.min(this.tbMax, Math.round(Math.sqrt(normalized) * this.tbMax) + 1);
+  }
+
+  setLid(closed: boolean): void {
+    this.lidClosed = closed;
+    if (closed) this.write(0);
+  }
+
+  // level: 0 | 1 | 2 — raw hardware level (3 states only)
+  on(adaptive: boolean, level: 0 | 1 | 2 = 2): void {
+    if (this.lidClosed) return;
+    const target = adaptive ? this.adaptiveLevel() : level;
+    this.activeHwLevel = Math.max(1, Math.min(this.tbMax || 2, target));
+    this.write(this.activeHwLevel);
+  }
+
+  /**
+   * Dim via hardware LED to level 1. Returns false (no-op) when activeBrightness
+   * is already at or below the dim level so the user's chosen level is respected.
+   */
+  dim(): boolean {
+    if (this.lidClosed) return false;
+    const dimLevel = Math.max(1, Math.round((this.tbMax || 2) * 0.2)); // = 1 for tbMax=2
+    if (this.activeHwLevel <= dimLevel) return false; // already at or below dim level
+    this.write(dimLevel);
+    return true;
   }
 
   off(): void {
-    if (!this.file) return;
-    try {
-      this.saved = parseInt(fs.readFileSync(this.file, 'utf8').trim(), 10) || this.max;
-      fs.writeFileSync(this.file, '0');
-    } catch { /**/ }
-  }
-
-  on(): void {
-    if (!this.file) return;
-    try { fs.writeFileSync(this.file, String(this.saved || this.max)); } catch { /**/ }
+    this.write(0);
   }
 }
 
@@ -283,7 +348,9 @@ export function render(
   const dimMs = ((options.dimSecs ?? options.screenSaverSecs) ?? 0) * 1000;
   const offMs = ((options.offSecs ?? options.dimSecs ?? options.screenSaverSecs) ?? 0) * 1000;
 
-  const backlight = dimMs > 0 ? new Backlight() : null;
+  const adaptive    = options.adaptiveBrightness ?? false;
+  const activeLevel = options.activeBrightness ?? 2;
+  const backlight = new Backlight();
 
   const registry  = new TouchRegistry();
   const layoutRef: { current: Map<SceneNode, LayoutBox> } = { current: new Map() };
@@ -319,13 +386,9 @@ export function render(
   let dimTimer:  ReturnType<typeof setTimeout> | null = null;
   let offTimer:  ReturnType<typeof setTimeout> | null = null;
 
-  const DIM_OVERLAY: DrawCommand = { cmd: 'overlay', a: 0.65 }; // ~35% brightness
-
   function renderCurrent(): void {
-    const shifted = shiftCmds(lastCmds, shiftX, shiftY);
-    if      (state === 'active') display.render(shifted);
-    else if (state === 'dim')    display.render([...shifted, DIM_OVERLAY]);
-    // 'off': display stays black — no call needed
+    if (state === 'off') return; // screen stays on the black frame already rendered
+    display.render(shiftCmds(lastCmds, shiftX, shiftY));
   }
 
   function clearTimers(): void {
@@ -339,11 +402,14 @@ export function render(
 
     dimTimer = setTimeout(() => {
       state = 'dim';
-      display.render([...lastCmds, DIM_OVERLAY]);
+      // Dim via hardware LED only — content unchanged on screen.
+      // backlight.dim() is a no-op (returns false) when activeBrightness is
+      // already at or below the dim level, so the user's chosen level is respected.
+      backlight.dim();
 
       offTimer = setTimeout(() => {
         state = 'off';
-        backlight?.off();
+        backlight.off();
         display.render([{ cmd: 'clear', r: 0, g: 0, b: 0 }]);
       }, offMs);
     }, dimMs);
@@ -354,11 +420,23 @@ export function render(
     const wasOff = state === 'off';
     state = 'active';
     clearTimers();
-    if (wasOff) backlight?.on();
+    if (wasOff || wasInactive) backlight.on(adaptive, activeLevel);
     if (wasInactive) display.render(lastCmds);
     startIdleTimers();
   }
 
+  function onLid(closed: boolean): void {
+    backlight.setLid(closed);
+    if (closed) {
+      // Lid closed — blank screen, keep idle timers running
+      display.render([{ cmd: 'clear', r: 0, g: 0, b: 0 }]);
+    } else {
+      // Lid opened — treat as activity
+      wake();
+    }
+  }
+
+  backlight.on(adaptive, activeLevel);
   if (dimMs > 0) startIdleTimers();
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -386,8 +464,20 @@ export function render(
 
   doUpdate(element);
 
-  const stopPointer  = dimMs > 0 ? watchPointer(wake)  : () => {};
-  const stopKeyboard = dimMs > 0 ? watchKeyboard(wake) : () => {};
+  const stopLid     = watchLid(onLid);
+  const stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
+  let stopKeyboard  = () => {};
+  if (dimMs > 0) {
+    if (options.keyboardReader) {
+      // Reuse the caller's KeyboardReader — no second fd open.
+      const unsub = options.keyboardReader.onKey((_code, value) => {
+        if (value === 1) wake(); // key-down = activity
+      });
+      stopKeyboard = unsub;
+    } else {
+      stopKeyboard = watchKeyboard(wake);
+    }
+  }
 
   let stopTouch = (): void => {};
   try {
@@ -408,6 +498,7 @@ export function render(
       reconciler.updateContainer(null, root, null, null);
       clearTimers();
       if (shiftTimer) clearInterval(shiftTimer);
+      stopLid();
       stopPointer();
       stopKeyboard();
       stopTouch();
