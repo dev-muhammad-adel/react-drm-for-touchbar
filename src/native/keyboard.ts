@@ -1,7 +1,12 @@
-import fs from 'fs';
 import path from 'path';
 
-function loadNative(): { KeyboardReader: new (devicePath: string) => NativeKeyboardReader } {
+function loadNative(): {
+  KeyboardReader: new (devicePath: string) => NativeKeyboardReader;
+  findKeyboardDevice:  () => string;
+  findKeyboardDevices: () => string[];
+  findPointerDevices:  () => string[];
+  findLidDevice:       () => string;
+} {
   const candidates = [
     path.join(__dirname, '../../build/Release/drm_backend.node'),
     path.join(__dirname, '../../build/Debug/drm_backend.node'),
@@ -52,29 +57,48 @@ export function resolveKeyCode(key: KeyId): number {
   return found;
 }
 
-function findKeyboardDevice(): string {
-  try {
-    const data = fs.readFileSync('/proc/bus/input/devices', 'utf8');
-    for (const block of data.trim().split(/\n\n+/)) {
-      // Must expose a 'kbd' handler (indicates real keyboard, not mice/joysticks)
-      if (!/ kbd /.test(block)) continue;
-      const m = block.match(/H:.*\b(event\d+)\b/);
-      if (m) return `/dev/input/${m[1]}`;
-    }
-  } catch (_) { /* fall through */ }
-  return '/dev/input/event0';
-}
+export function findKeyboardDevices(): string[] { return loadNative().findKeyboardDevices(); }
+export function findPointerDevices(): string[]  { return loadNative().findPointerDevices(); }
+export function findLidDevice(): string         { return loadNative().findLidDevice(); }
 
 export class KeyboardReader {
   private handle: NativeKeyboardReader;
   private listeners = new Set<(code: number, value: number) => void>();
+  private readonly explicitPath?: string;
+  private stopped = false;
 
   constructor(devicePath?: string) {
+    this.explicitPath = devicePath;
+    this.handle = this.openHandle();
+    this.startHandle();
+  }
+
+  private openHandle(): NativeKeyboardReader {
     const native = loadNative();
-    this.handle = new native.KeyboardReader(devicePath ?? findKeyboardDevice());
+    return new native.KeyboardReader(this.explicitPath ?? native.findKeyboardDevice());
+  }
+
+  private startHandle(): void {
     this.handle.start((code, value) => {
+      if (code === -1) {
+        this.scheduleReconnect();
+        return;
+      }
       this.listeners.forEach(l => l(code, value));
     });
+  }
+
+  private scheduleReconnect(): void {
+    if (this.stopped) return;
+    setTimeout(() => {
+      if (this.stopped) return;
+      try {
+        this.handle = this.openHandle();
+        this.startHandle();
+      } catch (_) {
+        this.scheduleReconnect(); // device not back yet — retry in 1 s
+      }
+    }, 1000);
   }
 
   /** Subscribe to raw key events. Returns an unsubscribe function. */
@@ -92,6 +116,7 @@ export class KeyboardReader {
   }
 
   stop(): void {
+    this.stopped = true;
     this.handle.stop();
     this.listeners.clear();
   }

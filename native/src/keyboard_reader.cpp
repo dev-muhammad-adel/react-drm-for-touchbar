@@ -69,21 +69,24 @@ Napi::Value KeyboardReader::Stop(const Napi::CallbackInfo& info) {
 
 // Emits (code, value) for every EV_KEY event.
 // value: 0 = released, 1 = pressed, 2 = repeat (still held)
+// code=-1, value=-1 signals device disconnect so TypeScript can reconnect.
 void KeyboardReader::ReadLoop(int fd, int cancel_rfd) {
   struct input_event ev;
+  bool device_error = false;
 
   struct pollfd pfds[2];
-  pfds[0].fd = fd;           pfds[0].events = POLLIN;
+  pfds[0].fd = fd;          pfds[0].events = POLLIN;
   pfds[1].fd = cancel_rfd;  pfds[1].events = POLLIN;
 
   while (running_) {
     int ret = poll(pfds, 2, -1);
-    if (ret <= 0) break;
+    if (ret <= 0) { device_error = true; break; }
     if (pfds[1].revents & POLLIN) break;
+    if (pfds[0].revents & (POLLHUP | POLLERR)) { device_error = true; break; }
     if (!(pfds[0].revents & POLLIN)) continue;
 
     ssize_t n = read(fd, &ev, sizeof(ev));
-    if (n != (ssize_t)sizeof(ev)) break;
+    if (n != (ssize_t)sizeof(ev)) { device_error = true; break; }
 
     if (ev.type == EV_KEY) {
       uint16_t code  = ev.code;
@@ -95,6 +98,12 @@ void KeyboardReader::ReadLoop(int fd, int cancel_rfd) {
         });
       });
     }
+  }
+  if (device_error) {
+    tsfn_.NonBlockingCall([](Napi::Env env, Napi::Function cb) {
+      cb.Call({ Napi::Number::New(env, -1),
+                Napi::Number::New(env, -1) });
+    });
   }
   tsfn_.Release();
 }
