@@ -71,7 +71,7 @@ function watchDir(dir: string, onChange: () => void): () => void {
 export function renderHot(
   appModulePath: string,
   display: DrmDisplay,
-  options?: RenderOptions,
+  options?: RenderOptions & { appProps?: Record<string, unknown> },
 ): RenderResult {
   function load(): React.ReactNode {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -80,7 +80,7 @@ export function renderHot(
     if (typeof App !== 'function') {
       throw new Error(`[renderHot] ${appModulePath} must export App or a default component`);
     }
-    return React.createElement(App, { width: display.width, height: display.height });
+    return React.createElement(App, { width: display.width, height: display.height, ...options?.appProps });
   }
 
   const initialEl = load();

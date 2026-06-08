@@ -18,8 +18,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { render, Box, Text, DrmDisplay } from 'react-drm';
-import { TouchReader } from '../src/native/input';
+import { render, Box, Text, TouchReader } from 'react-drm';
 
 interface Track {
   title: string;
@@ -327,23 +326,3 @@ function MediaBar({ width, height }: { width: number; height: number }) {
   );
 }
 
-const device = process.argv[2] ?? '/dev/dri/card1';
-
-let display: DrmDisplay;
-try {
-  display = new DrmDisplay(device);
-} catch (err) {
-  console.error(`[media] Failed to open display: ${(err as Error).message}`);
-  process.exit(1);
-}
-
-const mounted = render(
-  <MediaBar width={display.width} height={display.height} />,
-  display,
-);
-
-process.on('SIGINT', () => {
-  mounted.unmount();
-  display.close();
-  process.exit(0);
-});

@@ -104,14 +104,17 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
   pfds[1].fd     = cancel_rfd;
   pfds[1].events = POLLIN;
 
+  bool device_error = false;
+
   while (running_) {
     int ret = poll(pfds, 2, -1);
-    if (ret <= 0) break;
+    if (ret <= 0) { device_error = true; break; }
     if (pfds[1].revents & POLLIN) break; // cancel pipe triggered by DoStop()
+    if (pfds[0].revents & (POLLHUP | POLLERR)) { device_error = true; break; }
     if (!(pfds[0].revents & POLLIN)) continue;
 
     ssize_t n = read(fd, &ev, sizeof(ev));
-    if (n != (ssize_t)sizeof(ev)) break;
+    if (n != (ssize_t)sizeof(ev)) { device_error = true; break; }
 
     if (ev.type == EV_ABS && ev.code == TB_ABS_MT_POSITION_X) {
       cur_x = ev.value;
@@ -159,6 +162,14 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
         pos_dirty = false;
       }
     }
+  }
+  // type=-1 signals device disconnect to TypeScript so it can reconnect
+  if (device_error) {
+    tsfn_.NonBlockingCall([](Napi::Env env, Napi::Function cb) {
+      cb.Call({ Napi::Number::New(env, -1),
+                Napi::Number::New(env, 0),
+                Napi::Number::New(env, 0) });
+    });
   }
   tsfn_.Release();
 }

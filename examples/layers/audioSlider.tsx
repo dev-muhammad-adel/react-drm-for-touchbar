@@ -4,18 +4,30 @@ import { Box, Text, Button } from 'react-drm';
 import { MdVolumeOff, MdVolumeDown, MdVolumeUp } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
 
+// When running as root the session socket isn't inherited — pass it explicitly.
+const PW_ENV: NodeJS.ProcessEnv = {
+  ...process.env,
+  XDG_RUNTIME_DIR:  process.env.XDG_RUNTIME_DIR  ?? '/run/user/1000',
+  PIPEWIRE_REMOTE:  process.env.PIPEWIRE_REMOTE   ?? '/run/user/1000/pipewire-0',
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function readVolume(): number {
   try {
-    const out = execFileSync('pactl', ['get-sink-volume', '@DEFAULT_SINK@'], { encoding: 'utf8' });
-    const m = out.match(/(\d+)%/);
-    return m ? Math.min(1, parseInt(m[1]) / 100) : 0.5;
+    const out = execFileSync('wpctl', ['get-volume', '@DEFAULT_AUDIO_SINK@'],
+      { encoding: 'utf8', env: PW_ENV });
+    // output: "Volume: 0.50" or "Volume: 0.50 [MUTED]"
+    const m = out.match(/Volume:\s*([\d.]+)/);
+    return m ? Math.min(1, parseFloat(m[1])) : 0.5;
   } catch { return 0.5; }
 }
 
 function applyVolume(pct: number): void {
-  execFile('pactl', ['set-sink-volume', '@DEFAULT_SINK@', `${Math.round(pct * 100)}%`], () => {});
+  execFile('wpctl', ['set-volume', '@DEFAULT_AUDIO_SINK@', pct.toFixed(2)],
+    { env: PW_ENV },
+    (err) => { if (err) console.error('[audioSlider] wpctl:', err.message); },
+  );
 }
 
 function Sep() {

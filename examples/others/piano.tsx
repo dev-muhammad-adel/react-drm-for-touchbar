@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, useContext } from 'react';
 import { spawn } from 'child_process';
 import fs from 'fs';
-import { Box, Text, useGestureRegion } from 'react-drm';
+import { Box, Button, Text, LayoutContext } from 'react-drm';
+import type { BoxNode } from 'react-drm';
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -54,22 +55,17 @@ const RELEASE_MS = 500;
 
 // ── Piano geometry ────────────────────────────────────────────────────────────
 //
-//  2008 px:  6 px margin │ 21 × 95 px = 1995 px │ 7 px margin
+//  Key dimensions scale to fill `width` across 21 white keys (local coordinates).
+//  White key:  keyW × 58 px  (KEY_Y=1 → 1px top/bottom strip)
+//  Black key:  bkW  × 36 px  (~40% of white key width)
 //
-//  White key:  95 × 58 px  (KEY_Y=1 → 1px top/bottom strip)
-//  Black key:  38 × 36 px  (thin — keeps white keys easy to hit)
-//
-//  Hit test:  y > KEY_Y+BK_H → white keys only
-//             y ≤ KEY_Y+BK_H → black keys have priority
+//  Hit test uses local coordinates (0-based from Piano's left edge).
 
 const OCT_START = 3;
-const OCT_COUNT = 3;     // C3 – B5  (21 white keys)
-const KEY_W     = 95;
+const OCT_COUNT = 3;  // C3 – B5  (21 white keys)
 const KEY_H     = 58;
 const KEY_Y     = 1;
-const BK_W      = 38;
 const BK_H      = 36;
-const PIANO_X   = Math.floor((2008 - 21 * KEY_W) / 2); // = 6
 
 const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 
@@ -87,7 +83,7 @@ interface PianoKey {
   h:     number;
 }
 
-function buildKeys(): PianoKey[] {
+function buildKeys(pianoX: number, keyW: number, bkW: number): PianoKey[] {
   const keys: PianoKey[] = [];
   for (let oct = OCT_START; oct < OCT_START + OCT_COUNT; oct++) {
     const wb = (oct - OCT_START) * 7;
@@ -97,35 +93,43 @@ function buildKeys(): PianoKey[] {
       const label = NOTE_NAMES[semi] + oct;
       if (white) {
         keys.push({ label, midi, white: true,
-          x: PIANO_X + (wb + wi) * KEY_W, w: KEY_W - 1, h: KEY_H });
+          x: pianoX + (wb + wi) * keyW, w: keyW - 1, h: KEY_H });
         wi++;
       } else {
-        const prevX = PIANO_X + (wb + wi - 1) * KEY_W;
+        const prevX = pianoX + (wb + wi - 1) * keyW;
         keys.push({ label, midi, white: false,
-          x: prevX + KEY_W - Math.floor(BK_W / 2), w: BK_W, h: BK_H });
+          x: prevX + keyW - Math.floor(bkW / 2), w: bkW, h: BK_H });
       }
     }
   }
   return keys;
 }
 
-const ALL_KEYS   = buildKeys();
-const WHITE_KEYS = ALL_KEYS.filter(k =>  k.white);
-const BLACK_KEYS = ALL_KEYS.filter(k => !k.white);
-
-function hitTest(x: number, y: number): PianoKey | null {
+function hitTest(whiteKeys: PianoKey[], blackKeys: PianoKey[], x: number, y: number): PianoKey | null {
   if (y > KEY_Y + BK_H) {
-    for (const k of WHITE_KEYS) if (x >= k.x && x < k.x + k.w) return k;
+    for (const k of whiteKeys) if (x >= k.x && x < k.x + k.w) return k;
     return null;
   }
-  for (const k of BLACK_KEYS) if (x >= k.x && x < k.x + k.w) return k;
-  for (const k of WHITE_KEYS) if (x >= k.x && x < k.x + k.w) return k;
+  for (const k of blackKeys) if (x >= k.x && x < k.x + k.w) return k;
+  for (const k of whiteKeys) if (x >= k.x && x < k.x + k.w) return k;
   return null;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Piano({ width, height }: { width: number; height: number }) {
+  const keyW    = Math.floor(width / 21);
+  const bkW     = Math.round(keyW * 0.4);
+  const pianoX  = Math.floor((width - 21 * keyW) / 2);
+
+  const allKeys   = useMemo(() => buildKeys(pianoX, keyW, bkW), [pianoX, keyW, bkW]);
+  const whiteKeys = useMemo(() => allKeys.filter(k =>  k.white), [allKeys]);
+  const blackKeys = useMemo(() => allKeys.filter(k => !k.white), [allKeys]);
+
+  // Used to convert screen touch coordinates → local (Piano-relative) coordinates.
+  const rootRef   = useRef<BoxNode | null>(null);
+  const layoutCtx = useContext(LayoutContext);
+
   const [active, setActive] = useState<ReadonlySet<number>>(new Set());
   const touchMidi  = useRef<number | null>(null);
   const decayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,32 +149,30 @@ export function Piano({ width, height }: { width: number; height: number }) {
     }, RELEASE_MS);
   }, []);
 
-  const press = useCallback((x: number, y: number) => {
-    const key = hitTest(x, y);
+  const toLocal = useCallback((screenX: number) => {
+    const lb = rootRef.current ? layoutCtx.current.get(rootRef.current) : null;
+    return screenX - (lb?.x ?? 0);
+  }, [layoutCtx]);
+
+  const press = useCallback((sx: number, y: number) => {
+    const key = hitTest(whiteKeys, blackKeys, toLocal(sx), y);
     if (!key) return;
     touchMidi.current = key.midi;
     noteOn(key.midi);
-  }, [noteOn]);
+  }, [whiteKeys, blackKeys, toLocal, noteOn]);
 
-  const slide = useCallback((x: number, y: number) => {
-    const key = hitTest(x, y);
+  const slide = useCallback((sx: number, y: number) => {
+    const key = hitTest(whiteKeys, blackKeys, toLocal(sx), y);
     if (!key || key.midi === touchMidi.current) return;
     if (touchMidi.current !== null) noteOff(touchMidi.current);
     touchMidi.current = key.midi;
     noteOn(key.midi);
-  }, [noteOn, noteOff]);
+  }, [whiteKeys, blackKeys, toLocal, noteOn, noteOff]);
 
   const release = useCallback(() => {
     if (touchMidi.current !== null) noteOff(touchMidi.current);
     touchMidi.current = null;
   }, [noteOff]);
-
-  useGestureRegion({
-    x: 0, y: 0, width, height,
-    onTouchStart: press,
-    onTouchMove:  slide,
-    onTouchEnd:   release,
-  });
 
   useEffect(() => () => {
     if (decayTimer.current) clearTimeout(decayTimer.current);
@@ -179,9 +181,9 @@ export function Piano({ width, height }: { width: number; height: number }) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <Box x={0} y={0} width={width} height={height} color="#080810">
+    <Box ref={rootRef} style={{ flex: 1 }} color="#080810">
 
-      {WHITE_KEYS.map(k => {
+      {whiteKeys.map(k => {
         const on = active.has(k.midi);
         const lx = (sz: number) => Math.max(2, Math.floor((k.w - k.label.length * sz) / 2));
         return (
@@ -206,7 +208,7 @@ export function Piano({ width, height }: { width: number; height: number }) {
         );
       })}
 
-      {BLACK_KEYS.map(k => {
+      {blackKeys.map(k => {
         const on = active.has(k.midi);
         return (
           <React.Fragment key={k.label}>
@@ -234,6 +236,16 @@ export function Piano({ width, height }: { width: number; height: number }) {
           </React.Fragment>
         );
       })}
+
+      {/* Transparent touch overlay — uses getBounds() for flex-aware hit-test */}
+      <Button
+        style={{ position: 'absolute', left: 0, top: 0 }}
+        width={width} height={height}
+        color="transparent" activeColor="transparent"
+        onTouchStart={press}
+        onTouchMove={slide}
+        onTouchEnd={release}
+      />
 
     </Box>
   );

@@ -28,6 +28,6 @@ export type { SceneNode, BoxNode, TextNode, SvgNode, SvgContainerNode, SvgElemen
 export type { Style } from './scene/style';
 export { LayoutContext } from './scene/layout-context';
 export type { LayoutRef } from './scene/layout-context';
-export { SAFE_INSET } from './scene/safe-area';
+export { SAFE_INSET, SAFE_INSET_X, SAFE_INSET_Y } from './scene/safe-area';
 export type { SafeAreaInsets } from './scene/safe-area';
 export { renderHot } from './dev/hot-reload';

@@ -10,7 +10,8 @@
         "native/src/cairo_renderer.cpp",
         "native/src/touch_input.cpp",
         "native/src/key_injector.cpp",
-        "native/src/keyboard_reader.cpp"
+        "native/src/keyboard_reader.cpp",
+        "native/src/udev_keyboard.cpp"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",
@@ -23,6 +24,7 @@
       "libraries": [
         "-ldrm",
         "-lcairo",
+        "-ludev",
         "<!@(pkg-config --libs librsvg-2.0)"
       ],
       "defines": ["NAPI_CPP_EXCEPTIONS"]

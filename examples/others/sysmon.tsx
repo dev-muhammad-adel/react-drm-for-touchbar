@@ -4,7 +4,6 @@
  * Sections: CPU cores | RAM | Temp | Network | Battery
  * Updates every second.
  *
- * Run: sudo npx tsx examples/sysmon.tsx [/dev/dri/card1]
  */
 
 import React, { useState, useEffect } from 'react';
@@ -366,34 +365,3 @@ function SysMonitor({ width, height }: { width: number; height: number }) {
   );
 }
 
-// ── Entry point ───────────────────────────────────────────────────────────────
-
-const device = process.argv[2] ?? '/dev/dri/card1';
-
-let display: DrmDisplay;
-try {
-  display = new DrmDisplay(device);
-} catch (err) {
-  console.error(`[sysmon] ${(err as Error).message}`);
-  process.exit(1);
-}
-
-const rendered = render(
-  <SysMonitor width={display.width} height={display.height} />,
-  display,
-  { dimSecs: 30, offSecs: 30 }, // dim at 30s, off at 60s
-);
-
-// Any keypress wakes the screen; Ctrl+C exits
-if (process.stdin.isTTY) {
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.on('data', (buf: Buffer) => {
-    if (buf[0] === 3) { rendered.unmount(); display.close(); process.exit(0); }
-    rendered.wake();
-  });
-}
-
-process.on('SIGINT', () => { rendered.unmount(); display.close(); process.exit(0); });
-
-console.log(`[sysmon] ${NUM_CORES} cores | ${HAS_BAT ? 'battery' : 'no battery'} — dim @30s, off @60s — any key/mouse to wake`);

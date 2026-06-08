@@ -62,16 +62,24 @@ function resolveTouchDevicePath(devicePath?: string): string {
     const inputDevices = fs.readFileSync('/proc/bus/input/devices', 'utf8');
     const blocks = inputDevices.trim().split(/\n\n+/);
 
+    // Known Touch Bar input names across MacBook models:
+    //   "Apple Inc. Touch Bar Display Touchpad"  — T2 MacBook Pro 2018-2021
+    //   "MacBookPro17,1 Touch Bar"               — M1 MacBook Pro 13" 2020
+    //   "Mac14,7 Touch Bar"                      — M2 MacBook Pro 13" 2022
+    // All contain "Touch Bar", so one pattern covers all models.
     for (const block of blocks) {
-      if (!/Touch Bar Display Touchpad|Touch Bar/i.test(block)) continue;
+      if (!/Touch Bar/i.test(block)) continue;
       const match = block.match(/Handlers=.*\b(event\d+)\b/);
       if (match) return `/dev/input/${match[1]}`;
     }
-  } catch (_) {
-    // Fall back below.
+  } catch (e) {
+    throw new Error(`react-drm: failed to read /proc/bus/input/devices: ${e}`);
   }
 
-  return '/dev/input/event9';
+  throw new Error(
+    'react-drm: Touch Bar touchpad not found in /proc/bus/input/devices.\n' +
+    'Is appletbdrm loaded? Try: lsmod | grep apple'
+  );
 }
 
 export interface GestureOptions {
@@ -88,10 +96,41 @@ export interface GestureOptions {
 
 export class TouchReader {
   private handle: NativeTouchReader;
+  private readonly explicitPath?: string;
+  private stopped = false;
 
   constructor(devicePath?: string) {
+    this.explicitPath = devicePath;
+    this.handle = this.openHandle();
+  }
+
+  private openHandle(): NativeTouchReader {
     const native = loadNative();
-    this.handle = new native.TouchReader(resolveTouchDevicePath(devicePath));
+    return new native.TouchReader(resolveTouchDevicePath(this.explicitPath));
+  }
+
+  // Wraps the native handle.start() — on disconnect (type=-1) reopens and restarts.
+  private startHandle(callback: (type: number, rawX: number, rawY: number) => void): void {
+    this.handle.start((type, rawX, rawY) => {
+      if (type === -1) {
+        this.scheduleReconnect(callback);
+        return;
+      }
+      callback(type, rawX, rawY);
+    });
+  }
+
+  private scheduleReconnect(callback: (type: number, rawX: number, rawY: number) => void): void {
+    if (this.stopped) return;
+    setTimeout(() => {
+      if (this.stopped) return;
+      try {
+        this.handle = this.openHandle();
+        this.startHandle(callback);
+      } catch (_) {
+        this.scheduleReconnect(callback); // device not back yet — try again in 1 s
+      }
+    }, 1000);
   }
 
   /**
@@ -99,7 +138,7 @@ export class TouchReader {
    * Callback receives touch position in logical display coordinates (0..W-1, 0..H-1).
    */
   start(onTap: (x: number, y: number) => void): void {
-    this.handle.start((type: number, rawX: number, rawY: number) => {
+    this.startHandle((type: number, rawX: number, rawY: number) => {
       if (type !== 0) return; // only fire on start (tap)
       const x = Math.round(rawX * (DISPLAY_W - 1) / TOUCH_MAX_X);
       const y = Math.round(rawY * (DISPLAY_H - 1) / TOUCH_MAX_Y);
@@ -115,7 +154,7 @@ export class TouchReader {
     const threshold = opts.swipeThreshold ?? 80;
     let startX = 0, startY = 0;
 
-    this.handle.start((type: number, rawX: number, rawY: number) => {
+    this.startHandle((type: number, rawX: number, rawY: number) => {
       const x = Math.round(rawX * (DISPLAY_W - 1) / TOUCH_MAX_X);
       const y = Math.round(rawY * (DISPLAY_H - 1) / TOUCH_MAX_Y);
 
@@ -136,6 +175,7 @@ export class TouchReader {
   }
 
   stop(): void {
+    this.stopped = true;
     this.handle.stop();
   }
 }

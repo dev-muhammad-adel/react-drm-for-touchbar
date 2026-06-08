@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx index.tsx /dev/dri/card1",
+    "dev": "tsx index.tsx ",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {

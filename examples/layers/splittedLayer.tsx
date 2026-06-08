@@ -3,7 +3,7 @@ import { execFile } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
 import { useLayers } from '.';
-import { MdChevronLeft, MdPlayArrow, MdSkipNext, MdVolumeUp, MdWbSunny } from 'react-icons/md';
+import { MdChevronLeft, MdPlayArrow, MdSkipNext, MdVolumeUp, MdWbSunny, MdSportsEsports } from 'react-icons/md';
 import { useActiveWindow } from '../useActiveWindow';
 
 // ── Media control ─────────────────────────────────────────────────────────────
@@ -23,12 +23,13 @@ const BTN_CONTAINER_X = 2008 - 3 * BTN_W - 2 * BTN_GAP - 10;
 
 const ICON_SIZE = 32;
 
-const MEDIA_BTNS: { icon: React.ReactElement; cmd: MediaCmd }[] = [
-  { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'previous'   },
-  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'previous'   },
-  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'play-pause' },
-  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'play-pause' },
-  { icon: <MdSkipNext     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'next'       },
+const MEDIA_BTNS: { icon: React.ReactElement; cmd?: MediaCmd  }[] = [
+  { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,   },
+  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,   },
+  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,  },
+  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,  },
+  { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'play-pause'       },
+  { icon: <MdSportsEsports     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#4ade80" stroke="none" />    },
 ];
 
 // ── Window accent colors ──────────────────────────────────────────────────────
@@ -84,23 +85,38 @@ export function SplittedLayer({ width, height }: { width: number; height: number
       </Box>
 
 
-      {/* ── Right: media buttons — flex row, no x/y on Button ── */}
+      {/* ── Right: games + media buttons ── */}
+      {/* <Box
+        style={{ flexDirection: 'row' ,gap:6}}
+      >
+        <Button
+          width={70}
+          color="#1a2e1a"
+          activeColor="#2a4a2a"
+          onClick={() => go('games', 'slide-left')}
+          style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
+        >
+          <MdSportsEsports style={{ width: 28, height: 28 }} fill="#4ade80" stroke="none" />
+        </Button>
+      </Box> */}
+
       <Box
         style={{ flexDirection: 'row' ,gap:2}}
       >
         {MEDIA_BTNS.map((btn, idx) => (
           <Button
             key={`${btn.cmd}-${idx}`}
-            width={idx===0?25:140}
-               color="#4f4b4f"
-          activeColor="#666666"
+            width={idx===0?25:idx===MEDIA_BTNS.length - 1 ? 100 : 130}
+               color={ idx === MEDIA_BTNS.length - 1 ? "#1a2e1a":"#4f4b4f"}
+          activeColor={ idx === MEDIA_BTNS.length - 1 ? "#2a4a2a":"#666666"}
 
             onClick={
               idx === 0 ? () => go('media') :
               idx === 1 ? () => go('systembar') :
               idx === 2 ? () => go('audio-slider') :
               idx === 3 ? () => go('brightness-slider') :
-              () => playerctl(btn.cmd)
+              idx === MEDIA_BTNS.length - 1 ? () => go('games', 'slide-left') :
+              () => playerctl(btn.cmd as MediaCmd)
             }
             style={{
               alignItems: 'center',

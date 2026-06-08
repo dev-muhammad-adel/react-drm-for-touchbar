@@ -27,8 +27,9 @@ export interface RenderOptions {
   /** @deprecated  Use dimSecs instead. */
   screenSaverSecs?: number;
   /**
-   * Shift the entire frame by ±2 px on a slow orbit to spread AMOLED pixel
-   * wear.  Value = seconds per orbit step (default: 60 s).  0 = disabled.
+   * Sweep the entire frame ±11 px horizontally (sinusoidal Y ±2 px) to spread
+   * AMOLED pixel wear.  Value = seconds for one direction sweep (default: 60 s).
+   * 0 = disabled.
    */
   pixelShiftSecs?: number;
   /**
@@ -306,22 +307,9 @@ class Backlight {
 }
 
 // ── Pixel shift (AMOLED burn-in protection) ───────────────────────────────────
-// 18-position circular orbit: center + ring at radius 1 + ring at radius 2.
-// Each step moves one position; the full cycle takes 18 × pixelShiftSecs.
-// Shift is ±2 px max — imperceptible, but spreads pixel stress over time.
-
-const ORBIT: ReadonlyArray<[number, number]> = [
-  [ 0,  0],
-  [ 1,  0], [ 2,  0],
-  [ 2,  1], [ 2,  2],
-  [ 1,  2], [ 0,  2],
-  [-1,  2], [-2,  2],
-  [-2,  1], [-2,  0],
-  [-2, -1], [-2, -2],
-  [-1, -2], [ 0, -2],
-  [ 1, -2], [ 2, -2],
-  [ 2, -1],
-];
+// Smooth bidirectional sweep: X travels ±11 px over pixelShiftSecs, Y follows a
+// sinusoidal path. Pauses ~1 s at each endpoint before reversing direction.
+// Larger range than a tight orbit — covers more pixel area with no visible jump.
 
 function shiftCmds(cmds: DrawCommand[], dx: number, dy: number): DrawCommand[] {
   if (dx === 0 && dy === 0) return cmds;
@@ -363,20 +351,48 @@ export function render(
   };
 
   // ── Pixel shift ───────────────────────────────────────────────────────────
-  // Max orbit radius is 2px in each direction. We add 1 extra pixel so that
-  // border strokes (whose outer edge aligns with the item boundary) also stay
-  // fully on-screen after the shift, avoiding Cairo antialiasing artefacts.
-  const SHIFT_RADIUS = 3;
-  const psMs = (options.pixelShiftSecs ?? 60) * 1000;
-  let orbitIdx = 0;
-  let [shiftX, shiftY] = ORBIT[0];
+  const MAX_X_SHIFT    = 11;
+  const MAX_Y_SHIFT    = 2;
+  const SWEEP_STEP_MS  = 50;
+  const SWEEP_PAUSE_MS = 1000;
+  const randPhaseY     = Math.random() * Math.PI * 2;
+  const psMs           = (options.pixelShiftSecs ?? 60) * 1000; // one-direction sweep duration
+
+  let sweepPhase   = 0.5;   // 0 = leftmost (−MAX_X), 1 = rightmost (+MAX_X)
+  let sweepDir     = 1;
+  let sweepPauseMs = 0;
+  let shiftX       = 0;
+  let shiftY       = 0;
+
+  function updateSweep(): boolean {
+    if (sweepPauseMs > 0) {
+      sweepPauseMs = Math.max(0, sweepPauseMs - SWEEP_STEP_MS);
+      return false;
+    }
+    sweepPhase += sweepDir * (SWEEP_STEP_MS / psMs);
+    if (sweepPhase >= 1.0) {
+      sweepPhase = 1.0;
+      sweepDir = -1;
+      sweepPauseMs = SWEEP_PAUSE_MS;
+    } else if (sweepPhase <= 0.0) {
+      sweepPhase = 0.0;
+      sweepDir = 1;
+      sweepPauseMs = SWEEP_PAUSE_MS;
+    }
+    const nx = Math.round((sweepPhase * 2 - 1) * MAX_X_SHIFT);
+    const ny = Math.round(Math.sin(sweepPhase * Math.PI * 4 + randPhaseY) * MAX_Y_SHIFT);
+    if (nx === shiftX && ny === shiftY) return false;
+    shiftX = nx;
+    shiftY = ny;
+    return true;
+  }
+
   const shiftTimer = psMs > 0
     ? setInterval(() => {
-        orbitIdx = (orbitIdx + 1) % ORBIT.length;
-        [shiftX, shiftY] = ORBIT[orbitIdx];
+        if (!updateSweep()) return;
         registry.setShift(shiftX, shiftY);
-        renderCurrent(); // re-render at new position
-      }, psMs)
+        renderCurrent();
+      }, SWEEP_STEP_MS)
     : null;
 
   // ── Screen-saver state ────────────────────────────────────────────────────
