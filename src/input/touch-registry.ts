@@ -43,11 +43,15 @@ export class TouchRegistry {
 
   private activeRegion:  GestureRegion | null = null;
   private touchOrigin:   { x: number; y: number } | null = null;
-  private shiftX = 0;
-  private shiftY = 0;
+  private shiftX  = 0;
+  private shiftY  = 0;
+  private locked  = false;
 
   /** Keep in sync with the pixel-shift orbit so hit-tests use layout coordinates. */
   setShift(dx: number, dy: number): void { this.shiftX = dx; this.shiftY = dy; }
+
+  /** Block new gesture starts (e.g. during layer transitions). */
+  setLocked(v: boolean): void { this.locked = v; }
 
   // ── Tap regions (backward compat) ──────────────────────────────────────────
 
@@ -79,6 +83,7 @@ export class TouchRegistry {
   // ── Touch lifecycle ────────────────────────────────────────────────────────
 
   touchStart(x: number, y: number): void {
+    if (this.locked) return;
     // Undo pixel shift so hit-test coordinates match unshifted layout positions.
     const lx = x - this.shiftX;
     const ly = y - this.shiftY;
@@ -118,9 +123,9 @@ export class TouchRegistry {
     }
 
     if (!this.touchOrigin) return;
-    const { x: sx } = this.touchOrigin;
+    const { x: sx } = this.touchOrigin;  // already corrected
     this.touchOrigin = null;
-    const dx = x - sx;
+    const dx = lx - sx;                  // both corrected — delta is accurate
 
     for (const r of this.swipeRegions.values()) {
       if (sx < r.x || sx >= r.x + r.width) continue;

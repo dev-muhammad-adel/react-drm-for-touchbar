@@ -18,6 +18,7 @@ export type { KeyId } from './native/keyboard';
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions } from './layers/types';
 export { KeyboardContext } from './input/keyboard-context';
 export { useKeyPressed } from './input/use-key-pressed';
+export { useTouchLock } from './input/use-touch-lock';
 export { useTouchGesture } from './input/use-touch-gesture';
 export type { TouchGestureOptions } from './input/use-touch-gesture';
 export { useGestureRegion } from './input/use-gesture-region';

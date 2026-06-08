@@ -390,8 +390,8 @@ export function render(
   const shiftTimer = psMs > 0
     ? setInterval(() => {
         if (!updateSweep()) return;
-        registry.setShift(shiftX, shiftY);
-        renderCurrent();
+        renderCurrent();           // update display first
+        registry.setShift(shiftX, shiftY); // then sync touch coords
       }, SWEEP_STEP_MS)
     : null;
 

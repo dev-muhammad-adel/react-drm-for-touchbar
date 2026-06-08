@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { Box, KeyboardContext, useKeyPressed } from 'react-drm';
+import { Box, KeyboardContext, useKeyPressed, useTouchLock } from 'react-drm';
 import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions } from 'react-drm';
 
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions };
@@ -120,6 +120,7 @@ function LayerHostInner({
   const [trans,     setTrans]     = useState<Trans | null>(null);
   const timer       = useRef<ReturnType<typeof setInterval> | null>(null);
   const t0Ref       = useRef(0);
+  const { lock, unlock } = useTouchLock();
   const beforeFnIdx = useRef(-1);
 
   const stableIdxRef = useRef(stableIdx);
@@ -154,6 +155,7 @@ function LayerHostInner({
       tOpts?.duration  ?? toLayer?.entering?.duration  ?? toLayer?.duration   ?? DEFAULT_DURATION;
 
     t0Ref.current = Date.now();
+    lock();
 
     setTrans({
       fromIdx: curIdx, toIdx: nextIdx,
@@ -173,6 +175,7 @@ function LayerHostInner({
         timer.current = null;
         setStableIdx(nextIdx);
         setTrans(null);
+        unlock();
       } else {
         setTrans(t => t ? { ...t, fromProgress: fromP, toProgress: toP } : t);
       }
