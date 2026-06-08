@@ -38,8 +38,8 @@ export interface ButtonProps {
 export function Button({
   x,
   y,
-  width = 0,
-  height = 0,
+  width,
+  height,
   color = '#2a2a3e',
   activeColor = '#4a90d9',
   borderColor,
@@ -76,7 +76,7 @@ export function Button({
         const lb = node ? layoutCtx.current.get(node) : undefined;
         return lb
           ? { x: lb.x, y: lb.y, width: lb.w, height: lb.h }
-          : { x: x ?? 0, y: y ?? 0, width, height };
+          : { x: x ?? 0, y: y ?? 0, width: width ?? 0, height: height ?? 0 };
       },
       // Highlight immediately on touch-down for instant visual feedback.
       onTouchStart: (tx, ty) => { setActive(true); onTouchStart?.(tx, ty); },

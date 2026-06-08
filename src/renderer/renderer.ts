@@ -296,6 +296,10 @@ export function render(
   };
 
   // ── Pixel shift ───────────────────────────────────────────────────────────
+  // Max orbit radius is 2px in each direction. We add 1 extra pixel so that
+  // border strokes (whose outer edge aligns with the item boundary) also stay
+  // fully on-screen after the shift, avoiding Cairo antialiasing artefacts.
+  const SHIFT_RADIUS = 3;
   const psMs = (options.pixelShiftSecs ?? 60) * 1000;
   let orbitIdx = 0;
   let [shiftX, shiftY] = ORBIT[0];
@@ -303,6 +307,7 @@ export function render(
     ? setInterval(() => {
         orbitIdx = (orbitIdx + 1) % ORBIT.length;
         [shiftX, shiftY] = ORBIT[orbitIdx];
+        registry.setShift(shiftX, shiftY);
         renderCurrent(); // re-render at new position
       }, psMs)
     : null;

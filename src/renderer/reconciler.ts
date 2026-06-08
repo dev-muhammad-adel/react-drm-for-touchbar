@@ -1,16 +1,86 @@
 import ReactReconciler from 'react-reconciler';
 import { DefaultEventPriority } from 'react-reconciler/constants';
-import type { RootContainer, SceneNode, BoxNode, TextNode, TextLeafNode, AnyNode, SvgNode } from '../scene/types';
+import type { RootContainer, SceneNode, BoxNode, TextNode, TextLeafNode, AnyNode, SvgNode, SvgContainerNode, SvgElementNode } from '../scene/types';
 import type { Style } from '../scene/style';
 
-function nodeFromProps(type: string, props: Record<string, unknown>): SceneNode {
+// JSX camelCase prop names → SVG XML attribute names
+const JSX_TO_SVG_ATTR: Record<string, string> = {
+  accentHeight: 'accent-height', alignmentBaseline: 'alignment-baseline',
+  baselineShift: 'baseline-shift', capHeight: 'cap-height',
+  className: 'class',
+  clipPath: 'clip-path', clipRule: 'clip-rule',
+  colorInterpolation: 'color-interpolation', colorInterpolationFilters: 'color-interpolation-filters',
+  colorRendering: 'color-rendering', dominantBaseline: 'dominant-baseline',
+  enableBackground: 'enable-background',
+  fillOpacity: 'fill-opacity', fillRule: 'fill-rule',
+  floodColor: 'flood-color', floodOpacity: 'flood-opacity',
+  fontFamily: 'font-family', fontSize: 'font-size', fontSizeAdjust: 'font-size-adjust',
+  fontStretch: 'font-stretch', fontStyle: 'font-style', fontVariant: 'font-variant',
+  fontWeight: 'font-weight',
+  glyphName: 'glyph-name',
+  glyphOrientationHorizontal: 'glyph-orientation-horizontal',
+  glyphOrientationVertical: 'glyph-orientation-vertical',
+  horizAdvX: 'horiz-adv-x', horizOriginX: 'horiz-origin-x',
+  imageRendering: 'image-rendering', letterSpacing: 'letter-spacing',
+  lightingColor: 'lighting-color',
+  markerEnd: 'marker-end', markerMid: 'marker-mid', markerStart: 'marker-start',
+  overlinePosition: 'overline-position', overlineThickness: 'overline-thickness',
+  paintOrder: 'paint-order', panose1: 'panose-1', pointerEvents: 'pointer-events',
+  renderingIntent: 'rendering-intent', shapeRendering: 'shape-rendering',
+  stopColor: 'stop-color', stopOpacity: 'stop-opacity',
+  strikethroughPosition: 'strikethrough-position', strikethroughThickness: 'strikethrough-thickness',
+  strokeDasharray: 'stroke-dasharray', strokeDashoffset: 'stroke-dashoffset',
+  strokeLinecap: 'stroke-linecap', strokeLinejoin: 'stroke-linejoin',
+  strokeMiterlimit: 'stroke-miterlimit', strokeOpacity: 'stroke-opacity',
+  strokeWidth: 'stroke-width',
+  textAnchor: 'text-anchor', textDecoration: 'text-decoration', textRendering: 'text-rendering',
+  underlinePosition: 'underline-position', underlineThickness: 'underline-thickness',
+  unicodeBidi: 'unicode-bidi', unicodeRange: 'unicode-range', unitsPerEm: 'units-per-em',
+  vectorEffect: 'vector-effect',
+  vertAdvY: 'vert-adv-y', vertOriginX: 'vert-origin-x', vertOriginY: 'vert-origin-y',
+  wordSpacing: 'word-spacing', writingMode: 'writing-mode', xHeight: 'x-height',
+  xlinkActuate: 'xlink:actuate', xlinkArcrole: 'xlink:arcrole',
+  xlinkHref: 'href',  // xlink:href is deprecated; use href
+  xlinkRole: 'xlink:role', xlinkShow: 'xlink:show',
+  xlinkTitle: 'xlink:title', xlinkType: 'xlink:type',
+  xmlBase: 'xml:base', xmlLang: 'xml:lang', xmlSpace: 'xml:space',
+};
+
+const SKIP_SVG_PROPS = new Set(['children', 'ref', 'key', 'xmlnsXlink', 'style']);
+
+// Inline SVG element tags (excludes 'svg' root and 'text' which is our custom element)
+const SVG_TAGS = new Set([
+  'animate', 'animateMotion', 'animateTransform',
+  'circle', 'clipPath', 'defs', 'desc', 'ellipse',
+  'feBlend', 'feColorMatrix', 'feComponentTransfer', 'feComposite', 'feConvolveMatrix',
+  'feDiffuseLighting', 'feDisplacementMap', 'feDistantLight', 'feDropShadow', 'feFlood',
+  'feFuncA', 'feFuncB', 'feFuncG', 'feFuncR', 'feGaussianBlur', 'feImage',
+  'feMerge', 'feMergeNode', 'feMorphology', 'feOffset', 'fePointLight',
+  'feSpecularLighting', 'feSpotLight', 'feTile', 'feTurbulence',
+  'filter', 'foreignObject', 'g', 'image', 'line', 'linearGradient',
+  'marker', 'mask', 'metadata', 'mpath', 'path', 'pattern',
+  'polygon', 'polyline', 'radialGradient', 'rect', 'set', 'stop',
+  'switch', 'symbol', 'textPath', 'title', 'tspan', 'use', 'view',
+]);
+
+function svgAttrsFromProps(props: Record<string, unknown>): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const [key, val] of Object.entries(props)) {
+    if (SKIP_SVG_PROPS.has(key)) continue;
+    if (val === undefined || val === null || val === false) continue;
+    attrs[JSX_TO_SVG_ATTR[key] ?? key] = String(val);
+  }
+  return attrs;
+}
+
+function nodeFromProps(type: string, props: Record<string, unknown>): AnyNode {
   if (type === 'box') {
     return {
       type: 'box',
       x: props.x as number | undefined,
       y: props.y as number | undefined,
-      width: (props.width as number) ?? 0,
-      height: (props.height as number) ?? 0,
+      width: props.width as number | undefined,
+      height: props.height as number | undefined,
       color: (props.color as string) ?? 'transparent',
       borderColor: props.borderColor as string | undefined,
       borderWidth: props.borderWidth as number | undefined,
@@ -48,6 +118,29 @@ function nodeFromProps(type: string, props: Record<string, unknown>): SceneNode 
       children: [],
     } as SvgNode;
   }
+  if (type === 'svg') {
+    const w = props.width;
+    const h = props.height;
+    return {
+      type: 'svg',
+      x: props.x as number | undefined,
+      y: props.y as number | undefined,
+      width: typeof w === 'number' ? w : 0,
+      height: typeof h === 'number' ? h : 0,
+      style: props.style as Style | undefined,
+      attrs: svgAttrsFromProps(props),
+      children: [],
+      svgChildren: [],
+    } as SvgContainerNode;
+  }
+  if (SVG_TAGS.has(type)) {
+    return {
+      type: 'svg_el',
+      tag: type,
+      attrs: svgAttrsFromProps(props),
+      children: [],
+    } as SvgElementNode;
+  }
   throw new Error(`react-drm: unknown element type "${type}". Use <Box>, <Text>, or <Svg>.`);
 }
 
@@ -81,6 +174,14 @@ export const reconciler = ReactReconciler({
       if (parent.type === 'text') (parent as TextNode).text = child.text;
       return;
     }
+    if (parent.type === 'svg') {
+      (parent as SvgContainerNode).svgChildren.push(child as SvgElementNode);
+      return;
+    }
+    if (parent.type === 'svg_el') {
+      (parent as SvgElementNode).children.push(child as SvgElementNode);
+      return;
+    }
     (parent as SceneNode).children.push(child as SceneNode);
   },
 
@@ -102,14 +203,15 @@ export const reconciler = ReactReconciler({
 
   // Container mutations
   appendChildToContainer: (container: RootContainer, child: AnyNode) => {
-    if (child.type !== 'text-leaf') container.children.push(child as SceneNode);
+    if (child.type !== 'text-leaf' && child.type !== 'svg_el') container.children.push(child as SceneNode);
   },
   insertInContainerBefore: (container: RootContainer, child: AnyNode, before: AnyNode) => {
-    if (child.type === 'text-leaf') return;
+    if (child.type === 'text-leaf' || child.type === 'svg_el') return;
     const idx = container.children.indexOf(before as SceneNode);
     container.children.splice(idx === -1 ? 0 : idx, 0, child as SceneNode);
   },
   removeChildFromContainer: (container: RootContainer, child: AnyNode) => {
+    if (child.type === 'svg_el') return;
     const idx = container.children.indexOf(child as SceneNode);
     if (idx !== -1) container.children.splice(idx, 1);
   },
@@ -117,16 +219,48 @@ export const reconciler = ReactReconciler({
   // Instance mutations
   appendChild: (parent: AnyNode, child: AnyNode) => {
     if (parent.type === 'text-leaf' || child.type === 'text-leaf') return;
+    if (parent.type === 'svg') {
+      (parent as SvgContainerNode).svgChildren.push(child as SvgElementNode);
+      return;
+    }
+    if (parent.type === 'svg_el') {
+      (parent as SvgElementNode).children.push(child as SvgElementNode);
+      return;
+    }
     (parent as SceneNode).children.push(child as SceneNode);
   },
   insertBefore: (parent: AnyNode, child: AnyNode, before: AnyNode) => {
     if (parent.type === 'text-leaf' || child.type === 'text-leaf') return;
+    if (parent.type === 'svg') {
+      const arr = (parent as SvgContainerNode).svgChildren;
+      const idx = arr.indexOf(before as SvgElementNode);
+      arr.splice(idx === -1 ? 0 : idx, 0, child as SvgElementNode);
+      return;
+    }
+    if (parent.type === 'svg_el') {
+      const arr = (parent as SvgElementNode).children;
+      const idx = arr.indexOf(before as SvgElementNode);
+      arr.splice(idx === -1 ? 0 : idx, 0, child as SvgElementNode);
+      return;
+    }
     const arr = (parent as SceneNode).children;
     const idx = arr.indexOf(before as SceneNode);
     arr.splice(idx === -1 ? 0 : idx, 0, child as SceneNode);
   },
   removeChild: (parent: AnyNode, child: AnyNode) => {
     if (parent.type === 'text-leaf') return;
+    if (parent.type === 'svg') {
+      const arr = (parent as SvgContainerNode).svgChildren;
+      const idx = arr.indexOf(child as SvgElementNode);
+      if (idx !== -1) arr.splice(idx, 1);
+      return;
+    }
+    if (parent.type === 'svg_el') {
+      const arr = (parent as SvgElementNode).children;
+      const idx = arr.indexOf(child as SvgElementNode);
+      if (idx !== -1) arr.splice(idx, 1);
+      return;
+    }
     const arr = (parent as SceneNode).children;
     const idx = arr.indexOf(child as SceneNode);
     if (idx !== -1) arr.splice(idx, 1);
@@ -138,6 +272,18 @@ export const reconciler = ReactReconciler({
     type: string,
   ) => {
     if (instance.type === 'text-leaf') return;
+    if (instance.type === 'svg_el') {
+      (instance as SvgElementNode).attrs = svgAttrsFromProps(updatePayload);
+      return;
+    }
+    if (instance.type === 'svg') {
+      const svgChildren = (instance as SvgContainerNode).svgChildren;
+      const updated = nodeFromProps(type, updatePayload) as SvgContainerNode;
+      Object.assign(instance, updated);
+      (instance as SvgContainerNode).svgChildren = svgChildren;
+      (instance as SvgContainerNode).children = [];
+      return;
+    }
     const updated = nodeFromProps(type, updatePayload);
     const children = (instance as SceneNode).children;
     Object.assign(instance, updated);

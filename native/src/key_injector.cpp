@@ -4,8 +4,19 @@
 #include <cstring>
 #include <linux/uinput.h>
 
-static constexpr int FKEY_FIRST = 59; // KEY_F1
-static constexpr int FKEY_LAST  = 67; // KEY_F9
+static constexpr int FKEY_FIRST = 59;  // KEY_F1
+static constexpr int FKEY_LAST  = 88;  // KEY_F12 (88)
+
+// Media / system keys to also register
+static const int EXTRA_KEYS[] = {
+  113, 114, 115,   // KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP
+  163, 164, 165,   // KEY_NEXTSONG, KEY_PLAYPAUSE, KEY_PREVIOUSSONG
+  125,             // KEY_LEFTMETA (super/app-grid)
+  217,             // KEY_SEARCH
+  224, 225,        // KEY_BRIGHTNESSDOWN, KEY_BRIGHTNESSUP
+  229, 230,        // KEY_KBDILLUMDOWN, KEY_KBDILLUMUP
+  248,             // KEY_MICMUTE
+};
 
 Napi::Object KeyInjector::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(env, "KeyInjector", {
@@ -27,6 +38,8 @@ KeyInjector::KeyInjector(const Napi::CallbackInfo& info)
   ioctl(fd_, UI_SET_EVBIT, EV_KEY);
   ioctl(fd_, UI_SET_EVBIT, EV_SYN);
   for (int k = FKEY_FIRST; k <= FKEY_LAST; ++k)
+    ioctl(fd_, UI_SET_KEYBIT, k);
+  for (int k : EXTRA_KEYS)
     ioctl(fd_, UI_SET_KEYBIT, k);
 
   struct uinput_setup usetup{};

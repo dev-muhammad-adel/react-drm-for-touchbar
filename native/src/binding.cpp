@@ -4,6 +4,7 @@
 #include "cairo_renderer.h"
 #include "touch_input.h"
 #include "key_injector.h"
+#include "keyboard_reader.h"
 
 class DrmDisplayWrapper : public Napi::ObjectWrap<DrmDisplayWrapper> {
 public:
@@ -83,6 +84,7 @@ Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   DrmDisplayWrapper::Init(env, exports);
   TouchReader::Init(env, exports);
   KeyInjector::Init(env, exports);
+  KeyboardReader::Init(env, exports);
   return exports;
 }
 

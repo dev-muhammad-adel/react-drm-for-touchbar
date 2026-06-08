@@ -43,6 +43,11 @@ export class TouchRegistry {
 
   private activeRegion:  GestureRegion | null = null;
   private touchOrigin:   { x: number; y: number } | null = null;
+  private shiftX = 0;
+  private shiftY = 0;
+
+  /** Keep in sync with the pixel-shift orbit so hit-tests use layout coordinates. */
+  setShift(dx: number, dy: number): void { this.shiftX = dx; this.shiftY = dy; }
 
   // ── Tap regions (backward compat) ──────────────────────────────────────────
 
@@ -74,27 +79,32 @@ export class TouchRegistry {
   // ── Touch lifecycle ────────────────────────────────────────────────────────
 
   touchStart(x: number, y: number): void {
-    this.touchOrigin  = { x, y };
+    // Undo pixel shift so hit-test coordinates match unshifted layout positions.
+    const lx = x - this.shiftX;
+    const ly = y - this.shiftY;
+    this.touchOrigin  = { x: lx, y: ly };
     this.activeRegion = null;
 
     for (const r of this.regions.values()) {
       const b    = r.getBounds?.() ?? r;
       const slop = r.hitSlop ?? 8;
-      if (x >= b.x - slop && x < b.x + b.width + slop) {
+      if (lx >= b.x - slop && lx < b.x + b.width + slop) {
         this.activeRegion = r;
-        r.onTouchStart?.(x, y);
+        r.onTouchStart?.(lx, ly);
         break;
       }
     }
   }
 
   touchMove(x: number, y: number): void {
-    this.activeRegion?.onTouchMove?.(x, y);
+    this.activeRegion?.onTouchMove?.(x - this.shiftX, y - this.shiftY);
   }
 
   touchEnd(x: number, y: number): void {
+    const lx = x - this.shiftX;
+    const ly = y - this.shiftY;
     const region = this.activeRegion;
-    region?.onTouchEnd?.(x, y);
+    region?.onTouchEnd?.(lx, ly);
     this.activeRegion = null;
 
     // Fire tap only if the finger lifted within the button's bounds — prevents
@@ -102,7 +112,7 @@ export class TouchRegistry {
     if (region) {
       const b    = region.getBounds?.() ?? region;
       const slop = region.hitSlop ?? 8;
-      if (x >= b.x - slop && x < b.x + b.width + slop) {
+      if (lx >= b.x - slop && lx < b.x + b.width + slop) {
         region.onClick?.();
       }
     }
@@ -127,4 +137,7 @@ export class TouchRegistry {
   }
 }
 
-export const TouchRegistryContext = createContext<TouchRegistry | null>(null);
+const _G = global as Record<string, unknown>;
+const _K = '__react_drm_TouchRegistryContext__';
+if (!_G[_K]) _G[_K] = createContext<TouchRegistry | null>(null);
+export const TouchRegistryContext = _G[_K] as import('react').Context<TouchRegistry | null>;

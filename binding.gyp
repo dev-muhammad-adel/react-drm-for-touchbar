@@ -9,7 +9,8 @@
         "native/src/drm.cpp",
         "native/src/cairo_renderer.cpp",
         "native/src/touch_input.cpp",
-        "native/src/key_injector.cpp"
+        "native/src/key_injector.cpp",
+        "native/src/keyboard_reader.cpp"
       ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")",

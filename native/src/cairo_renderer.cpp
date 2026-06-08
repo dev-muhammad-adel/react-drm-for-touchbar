@@ -133,9 +133,12 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
 
   if (rotate90_) {
     // appletbdrm applies 90° CCW to the framebuffer before scanout.
-    // To display content upright, map logical (lx,ly) → fb (fb_w-1-ly, lx).
+    // To display content upright, map logical (lx,ly) → fb (fb_w-ly, lx).
+    // m.x0 = fb_w_ (not fb_w_-1) so logical y=0 aligns to the right edge of
+    // the last pixel column, giving correct sub-pixel coverage for strokes at
+    // both the top (y=0.5 → fb_x=fb_w-0.5) and bottom (y=h-0.5 → fb_x=0.5).
     cairo_matrix_t m;
-    m.xx = 0;  m.xy = -1; m.x0 = (double)(fb_w_ - 1);
+    m.xx = 0;  m.xy = -1; m.x0 = (double)fb_w_;
     m.yx = 1;  m.yy = 0;  m.y0 = 0;
     cairo_set_matrix(cr, &m);
   }

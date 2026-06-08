@@ -1,4 +1,4 @@
-import type { SceneNode, BoxNode, SvgNode, RootContainer } from './types';
+import type { SceneNode, BoxNode, SvgNode, SvgContainerNode, RootContainer } from './types';
 import type { Style } from './style';
 
 export interface LayoutBox {
@@ -9,17 +9,45 @@ export interface LayoutBox {
 }
 
 function getStyle(node: SceneNode): Style {
-  if (node.type === 'box' || node.type === 'svg_image') {
-    return (node as BoxNode | SvgNode).style ?? {};
+  if (node.type === 'box' || node.type === 'svg_image' || node.type === 'svg') {
+    return (node as BoxNode | SvgNode | SvgContainerNode).style ?? {};
   }
   return {};
 }
 
+function hasExplicitWidth(node: SceneNode): boolean {
+  const s = getStyle(node);
+  if (s.width !== undefined) return true;
+  if (node.type === 'box') return (node as BoxNode).width !== undefined;
+  if (node.type === 'svg_image') return true;
+  if (node.type === 'svg') return true;
+  return false;
+}
+
+function hasExplicitHeight(node: SceneNode): boolean {
+  const s = getStyle(node);
+  if (s.height !== undefined) return true;
+  if (node.type === 'box') return (node as BoxNode).height !== undefined;
+  if (node.type === 'svg_image') return true;
+  if (node.type === 'svg') return true;
+  return false;
+}
+
 function nodeWidth(node: SceneNode): number {
+  if (node.type === 'text') {
+    const tn = node as import('./types').TextNode;
+    const fontSize   = tn.style?.fontSize   ?? tn.fontSize;
+    const fontFamily = tn.style?.fontFamily ?? tn.fontFamily;
+    const charW = /iosevka/i.test(fontFamily ?? '') ? 0.58
+                : /mono|courier|consolas|hack|fira code/i.test(fontFamily ?? '') ? 0.72
+                : 0.63;
+    return Math.ceil(tn.text.length * fontSize * charW);
+  }
   const s = getStyle(node);
   let w = s.width !== undefined ? s.width
-        : node.type === 'box' ? (node as BoxNode).width
+        : node.type === 'box' ? ((node as BoxNode).width ?? 0)
         : node.type === 'svg_image' ? (node as SvgNode).width
+        : node.type === 'svg' ? (node as SvgContainerNode).width
         : 0;
   if (s.minWidth !== undefined) w = Math.max(w, s.minWidth);
   if (s.maxWidth !== undefined) w = Math.min(w, s.maxWidth);
@@ -27,14 +55,60 @@ function nodeWidth(node: SceneNode): number {
 }
 
 function nodeHeight(node: SceneNode): number {
+  if (node.type === 'text') {
+    const tn = node as import('./types').TextNode;
+    const fontSize = tn.style?.fontSize ?? tn.fontSize;
+    return Math.ceil(fontSize * 1.4);
+  }
   const s = getStyle(node);
   let h = s.height !== undefined ? s.height
-        : node.type === 'box' ? (node as BoxNode).height
+        : node.type === 'box' ? ((node as BoxNode).height ?? 0)
         : node.type === 'svg_image' ? (node as SvgNode).height
+        : node.type === 'svg' ? (node as SvgContainerNode).height
         : 0;
   if (s.minHeight !== undefined) h = Math.max(h, s.minHeight);
   if (s.maxHeight !== undefined) h = Math.min(h, s.maxHeight);
   return h;
+}
+
+function intrinsicWidth(node: SceneNode): number {
+  if (hasExplicitWidth(node)) return nodeWidth(node);
+  if (node.type === 'text') return nodeWidth(node);
+  if (node.type !== 'box') return 0;
+  const s = getStyle(node);
+  const pl = s.paddingLeft  ?? s.paddingHorizontal ?? s.padding ?? 0;
+  const pr = s.paddingRight ?? s.paddingHorizontal ?? s.padding ?? 0;
+  const isRow = (s.flexDirection ?? 'row') === 'row';
+  const kids = (node as BoxNode).children.filter(
+    c => (c.type === 'box' || c.type === 'svg_image' || c.type === 'svg' || c.type === 'text') && getStyle(c).display !== 'none',
+  );
+  if (kids.length === 0) return pl + pr;
+  const gap = isRow ? (s.columnGap ?? s.gap ?? 0) : 0;
+  const widths = kids.map(intrinsicWidth);
+  const inner = isRow
+    ? widths.reduce((a, b) => a + b, 0) + gap * (kids.length - 1)
+    : Math.max(...widths);
+  return inner + pl + pr;
+}
+
+function intrinsicHeight(node: SceneNode): number {
+  if (hasExplicitHeight(node)) return nodeHeight(node);
+  if (node.type === 'text') return nodeHeight(node);
+  if (node.type !== 'box') return 0;
+  const s = getStyle(node);
+  const pt = s.paddingTop    ?? s.paddingVertical ?? s.padding ?? 0;
+  const pb = s.paddingBottom ?? s.paddingVertical ?? s.padding ?? 0;
+  const isRow = (s.flexDirection ?? 'row') === 'row';
+  const kids = (node as BoxNode).children.filter(
+    c => (c.type === 'box' || c.type === 'svg_image' || c.type === 'svg' || c.type === 'text') && getStyle(c).display !== 'none',
+  );
+  if (kids.length === 0) return pt + pb;
+  const gap = isRow ? 0 : (s.rowGap ?? s.gap ?? 0);
+  const heights = kids.map(intrinsicHeight);
+  const inner = isRow
+    ? Math.max(...heights)
+    : heights.reduce((a, b) => a + b, 0) + gap * (kids.length - 1);
+  return inner + pt + pb;
 }
 
 // Expand "repeat(N, track)" and split into tokens
@@ -67,7 +141,7 @@ function computeFlex(
 
   const isRow       = (s.flexDirection ?? 'row') === 'row';
   const justify     = s.justifyContent ?? 'flex-start';
-  const parentAlign = s.alignItems ?? 'flex-start';
+  const parentAlign = s.alignItems ?? 'stretch';
   const mainSize    = isRow ? cw : ch;
   const crossSize   = isRow ? ch : cw;
   const itemGap     = isRow ? (s.columnGap ?? s.gap ?? 0) : (s.rowGap ?? s.gap ?? 0);
@@ -92,10 +166,11 @@ function computeFlex(
     // flex: N shorthand → flexGrow=N, flexBasis=0
     const flexGrow = cs.flexGrow ?? (cs.flex !== undefined ? cs.flex : 0);
     const hasFlex  = cs.flex !== undefined && cs.flexBasis === undefined;
+    // No explicit main-axis size → use intrinsic (content) size, like CSS width/height: auto.
     const innerMain =
       cs.flexBasis !== undefined && cs.flexBasis !== 'auto' ? (cs.flexBasis as number)
       : hasFlex ? 0
-      : isRow ? nodeWidth(child) : nodeHeight(child);
+      : isRow ? intrinsicWidth(child) : intrinsicHeight(child);
     const innerCross = isRow ? nodeHeight(child) : nodeWidth(child);
 
     return {
@@ -258,9 +333,13 @@ function computeNode(
   // display:none — skip entirely (no layout, no children)
   if (s.display === 'none') return;
 
-  // Text: x/y are always relative to the containing layout box.
   if (node.type === 'text') {
-    results.set(node, { x: containing.x + (node.x ?? 0), y: containing.y + (node.y ?? 0), w: 0, h: 0 });
+    if (placement) {
+      results.set(node, placement);
+    } else {
+      // absolute or no-flex parent: position relative to containing box
+      results.set(node, { x: containing.x + (node.x ?? 0), y: containing.y + (node.y ?? 0), w: nodeWidth(node), h: nodeHeight(node) });
+    }
     return;
   }
 
@@ -287,11 +366,11 @@ function computeNode(
       ? containing.y + containing.h - h - s.bottom
       : containing.y + (s.top ?? node.y ?? 0);
   } else {
-    // In-flow with no flex parent (e.g. block container): placed at containing origin.
+    // In-flow with no flex parent (e.g. block container): fill containing box by default.
     x = containing.x;
     y = containing.y;
-    w = nodeWidth(node);
-    h = nodeHeight(node);
+    w = hasExplicitWidth(node)  ? nodeWidth(node)  : containing.w;
+    h = hasExplicitHeight(node) ? nodeHeight(node) : containing.h;
   }
 
   // Apply min/max constraints
@@ -301,7 +380,7 @@ function computeNode(
   if (s.maxHeight !== undefined) h = Math.min(h, s.maxHeight);
 
   results.set(node, { x, y, w, h });
-  if (node.type === 'svg_image') return; // no children
+  if (node.type === 'svg_image' || node.type === 'svg') return; // no layout children
 
   // Padding shorthands: paddingHorizontal / paddingVertical
   const pt = s.paddingTop    ?? s.paddingVertical   ?? s.padding ?? 0;
@@ -313,13 +392,15 @@ function computeNode(
   // Default display is 'flex' (every Box is a flex container, like React Native)
   const display = s.display ?? 'flex';
 
-  const isLayoutable    = (c: SceneNode) => c.type === 'box' || c.type === 'svg_image';
+  const isLayoutable    = (c: SceneNode) => c.type === 'box' || c.type === 'svg_image' || c.type === 'svg' || c.type === 'text';
   // Elements with explicit x/y or position:absolute are out of flow.
   const isAbsoluteChild = (c: SceneNode) => {
     const cs = getStyle(c);
     if (cs.position === 'absolute') return true;
+    if (c.type === 'text')      return c.x !== undefined || c.y !== undefined;
     if (c.type === 'box')       return c.x !== undefined || c.y !== undefined;
     if (c.type === 'svg_image') return c.x !== undefined || c.y !== undefined;
+    if (c.type === 'svg')       return (c as SvgContainerNode).x !== undefined || (c as SvgContainerNode).y !== undefined;
     return false;
   };
 
@@ -339,11 +420,6 @@ function computeNode(
 
   // Absolute children are positioned relative to this node's box
   absKids.forEach(child => computeNode(child, null, myBox, results));
-
-  // Text children: always relative to their parent's computed box
-  node.children
-    .filter(c => c.type === 'text')
-    .forEach(child => computeNode(child, null, myBox, results));
 }
 
 export function computeLayout(

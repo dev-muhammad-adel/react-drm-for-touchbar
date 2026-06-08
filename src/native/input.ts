@@ -25,8 +25,24 @@ interface NativeKeyInjector {
   pressKey(keycode: number): void;
 }
 
-// F1=59 … F9=67
-export const FKEY_CODES = [59, 60, 61, 62, 63, 64, 65, 66, 67] as const;
+// F1=59 … F12=88
+export const FKEY_CODES = [59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88] as const;
+
+export const KEY = {
+  MUTE:          113,
+  VOLUMEDOWN:    114,
+  VOLUMEUP:      115,
+  NEXTSONG:      163,
+  PLAYPAUSE:     164,
+  PREVIOUSSONG:  165,
+  LEFTMETA:      125,
+  SEARCH:        217,
+  BRIGHTNESSDOWN:224,
+  BRIGHTNESSUP:  225,
+  KBDILLUMDOWN:  229,
+  KBDILLUMUP:    230,
+  MICMUTE:       248,
+} as const;
 
 // Touch Bar raw axis ranges
 const TOUCH_MAX_X = 32767;
@@ -132,11 +148,15 @@ export class KeyInjector {
     this.handle = new native.KeyInjector();
   }
 
-  pressF(n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9): void {
+  pressF(n: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12): void {
     this.handle.pressKey(FKEY_CODES[n - 1]);
   }
 
   pressIndex(idx: number): void {
     this.handle.pressKey(FKEY_CODES[idx]);
+  }
+
+  pressKey(code: number): void {
+    this.handle.pressKey(code);
   }
 }

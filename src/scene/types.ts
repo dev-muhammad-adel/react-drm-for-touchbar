@@ -6,8 +6,8 @@ export interface BoxNode {
   type: 'box';
   x?: number;
   y?: number;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   color: Color;
   borderColor?: Color;
   borderWidth?: number;
@@ -44,8 +44,27 @@ export interface SvgNode {
   children: SceneNode[];
 }
 
-export type SceneNode = BoxNode | TextNode | SvgNode;
-export type AnyNode = SceneNode | TextLeafNode;
+export interface SvgContainerNode {
+  type: 'svg';
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  style?: Style;
+  attrs: Record<string, string>;
+  children: SceneNode[];        // always empty; satisfies SceneNode interface
+  svgChildren: SvgElementNode[];
+}
+
+export interface SvgElementNode {
+  type: 'svg_el';
+  tag: string;
+  attrs: Record<string, string>;
+  children: SvgElementNode[];
+}
+
+export type SceneNode = BoxNode | TextNode | SvgNode | SvgContainerNode;
+export type AnyNode = SceneNode | TextLeafNode | SvgElementNode;
 
 export interface RootContainer {
   type: 'root';

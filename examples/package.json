@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev":   "tsx index.tsx /dev/dri/card2",
+    "dev": "tsx index.tsx /dev/dri/card1",
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "react-drm": "file:../"
+    "react-drm": "file:../",
+    "react-icons": "^5.6.0"
   }
 }
