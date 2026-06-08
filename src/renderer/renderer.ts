@@ -28,7 +28,7 @@ export interface RenderOptions {
   screenSaverSecs?: number;
   /**
    * Sweep the entire frame ±11 px horizontally (sinusoidal Y ±2 px) to spread
-   * AMOLED pixel wear.  Value = seconds for one direction sweep (default: 60 s).
+   * AMOLED pixel wear.  Value = seconds for one direction sweep (default: 300 s).
    * 0 = disabled.
    */
   pixelShiftSecs?: number;
@@ -356,7 +356,7 @@ export function render(
   const SWEEP_STEP_MS  = 50;
   const SWEEP_PAUSE_MS = 1000;
   const randPhaseY     = Math.random() * Math.PI * 2;
-  const psMs           = (options.pixelShiftSecs ?? 60) * 1000; // one-direction sweep duration
+  const psMs           = (options.pixelShiftSecs ?? 300) * 1000; // one-direction sweep duration
 
   let sweepPhase   = 0.5;   // 0 = leftmost (−MAX_X), 1 = rightmost (+MAX_X)
   let sweepDir     = 1;
@@ -437,7 +437,7 @@ export function render(
     state = 'active';
     clearTimers();
     if (wasOff || wasInactive) backlight.on(adaptive, activeLevel);
-    if (wasInactive) display.render(lastCmds);
+    if (wasOff) renderCurrent(); // restore content with correct shift after black screen
     startIdleTimers();
   }
 

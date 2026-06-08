@@ -7,7 +7,7 @@ const display  = new DrmDisplay(process.argv[2]);
 const result = renderHot(path.resolve(__dirname, 'App'), display, {
   dimSecs:        30,
   offSecs:        60,
-  pixelShiftSecs: 60,
+  pixelShiftSecs: 300,
   keyboardReader: keyboard,
   appProps:       { keyboard },
   activeBrightness:2,
