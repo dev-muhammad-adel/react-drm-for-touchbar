@@ -53,7 +53,7 @@ export function useActiveWindow(): ActiveWindow {
     // Fetch the window that is already focused right now.
     const cmd = net.createConnection(`${dir}/.socket.sock`);
     let buf = '';
-    cmd.write('/activewindow');
+    cmd.write('j/activewindow'); // 'j' prefix = JSON output (like hyprctl -j)
     cmd.on('data', (c: Buffer) => { buf += c.toString(); });
     cmd.on('end', () => {
       try {
