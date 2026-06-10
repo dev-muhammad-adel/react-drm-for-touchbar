@@ -13,6 +13,8 @@ export interface GestureRegion {
   onTouchStart?: (x: number, y: number) => void;
   onTouchMove?:  (x: number, y: number) => void;
   onTouchEnd?:   (x: number, y: number) => void;
+  /** Gesture became a drag/scroll — reset pressed visuals, no tap will fire. */
+  onTouchCancel?: () => void;
 }
 
 export interface TapRegion {
@@ -32,6 +34,12 @@ export interface SwipeRegion {
   onSwipeRight?: (dx: number) => void;
   /** Minimum horizontal travel to count as a swipe. Default: 80. */
   threshold?: number;
+  // Real-time scroll — set onScrollMove to opt in; disables discrete swipe callbacks
+  onScrollStart?: () => void;
+  /** dx = total horizontal displacement from drag start (positive = finger moved right) */
+  onScrollMove?:  (dx: number) => void;
+  /** velocityX = signed px/frame (~60fps) at release, for momentum */
+  onScrollEnd?:   (velocityX: number) => void;
 }
 
 // Kept as alias so existing code doesn't need changes
@@ -41,11 +49,19 @@ export class TouchRegistry {
   private regions      = new Map<symbol, GestureRegion>();
   private swipeRegions = new Map<symbol, SwipeRegion>();
 
-  private activeRegion:  GestureRegion | null = null;
-  private touchOrigin:   { x: number; y: number } | null = null;
+  private activeRegion:    GestureRegion | null = null;
+  private touchOrigin:     { x: number; y: number } | null = null;
   private shiftX  = 0;
   private shiftY  = 0;
   private locked  = false;
+
+  // Scroll gesture tracking
+  private activeScrollKey:  symbol | null = null;
+  private scrollStartX      = 0;
+  private prevScrollX       = 0;
+  private prevScrollTime    = 0;
+  private lastScrollX       = 0;
+  private lastScrollTime    = 0;
 
   /** Keep in sync with the pixel-shift orbit so hit-tests use layout coordinates. */
   setShift(dx: number, dy: number): void { this.shiftX = dx; this.shiftY = dy; }
@@ -87,8 +103,9 @@ export class TouchRegistry {
     // Undo pixel shift so hit-test coordinates match unshifted layout positions.
     const lx = x - this.shiftX;
     const ly = y - this.shiftY;
-    this.touchOrigin  = { x: lx, y: ly };
-    this.activeRegion = null;
+    this.touchOrigin     = { x: lx, y: ly };
+    this.activeRegion    = null;
+    this.activeScrollKey = null;
 
     for (const r of this.regions.values()) {
       const b    = r.getBounds?.() ?? r;
@@ -99,10 +116,52 @@ export class TouchRegistry {
         break;
       }
     }
+
+    // Find scroll region (regions with onScrollMove get live tracking instead of discrete swipes)
+    for (const [key, r] of this.swipeRegions.entries()) {
+      if (!r.onScrollMove) continue;
+      if (lx >= r.x && lx < r.x + r.width) {
+        this.activeScrollKey = key;
+        this.scrollStartX    = lx;
+        this.prevScrollX     = lx;
+        this.prevScrollTime  = Date.now();
+        this.lastScrollX     = lx;
+        this.lastScrollTime  = Date.now();
+        r.onScrollStart?.();
+        break;
+      }
+    }
   }
 
   touchMove(x: number, y: number): void {
-    this.activeRegion?.onTouchMove?.(x - this.shiftX, y - this.shiftY);
+    const lx = x - this.shiftX;
+    const ly = y - this.shiftY;
+
+    // Cancel pending taps once the finger travels — a drag (scroll/swipe) must not
+    // click the button it started on. Regions with their own onTouchMove are
+    // drag-intent (sliders) and keep tracking.
+    if (this.activeRegion?.onClick && !this.activeRegion.onTouchMove && this.touchOrigin) {
+      const moved = Math.hypot(lx - this.touchOrigin.x, ly - this.touchOrigin.y);
+      if (moved > 12) {
+        const r = this.activeRegion;
+        this.activeRegion = null;
+        if (r.onTouchCancel) r.onTouchCancel();
+        else r.onTouchEnd?.(lx, ly); // legacy regions reset pressed state here
+      }
+    }
+
+    this.activeRegion?.onTouchMove?.(lx, ly);
+
+    if (this.activeScrollKey !== null) {
+      const r = this.swipeRegions.get(this.activeScrollKey);
+      if (r?.onScrollMove) {
+        this.prevScrollX    = this.lastScrollX;
+        this.prevScrollTime = this.lastScrollTime;
+        this.lastScrollX    = lx;
+        this.lastScrollTime = Date.now();
+        r.onScrollMove(lx - this.scrollStartX);
+      }
+    }
   }
 
   touchEnd(x: number, y: number): void {
@@ -122,12 +181,25 @@ export class TouchRegistry {
       }
     }
 
+    // Dispatch scroll end with momentum velocity
+    if (this.activeScrollKey !== null) {
+      const r = this.swipeRegions.get(this.activeScrollKey);
+      if (r?.onScrollEnd) {
+        const dt = this.lastScrollTime - this.prevScrollTime;
+        // px/frame at ~60fps; ignore velocity if last two samples are too close in time
+        const velocityX = dt > 5 ? (this.lastScrollX - this.prevScrollX) / dt * 16 : 0;
+        r.onScrollEnd(velocityX);
+      }
+      this.activeScrollKey = null;
+    }
+
     if (!this.touchOrigin) return;
     const { x: sx } = this.touchOrigin;  // already corrected
     this.touchOrigin = null;
     const dx = lx - sx;                  // both corrected — delta is accurate
 
     for (const r of this.swipeRegions.values()) {
+      if (r.onScrollMove) continue;      // scroll regions skip discrete swipe
       if (sx < r.x || sx >= r.x + r.width) continue;
       const threshold = r.threshold ?? 80;
       if (Math.abs(dx) < threshold) continue;

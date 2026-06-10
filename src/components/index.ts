@@ -6,3 +6,5 @@ export { Svg } from './Svg';
 export type { SvgProps } from './Svg';
 export { SwipeZone } from './SwipeZone';
 export type { SwipeZoneProps } from './SwipeZone';
+export { ScrollRow } from './ScrollRow';
+export type { ScrollRowProps } from './ScrollRow';

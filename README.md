@@ -23,6 +23,26 @@ npm install
 npx tsx <example-file>.tsx
 ```
 
+## Konsole D-Bus API (required for the Konsole panel)
+
+The Konsole example panel (`examples/layers/leftsideLayers/KonsolePanel.tsx`) sends suggested commands to Konsole via the `org.kde.konsole.Session.sendText` D-Bus method. Since Konsole 22.04 this method (along with `runCommand`) is disabled by default and fails with:
+
+```
+Security sensitive DBus API is disabled in the settings.
+```
+
+To enable it, either check **Settings → Configure Konsole → General → "Enable the security sensitive parts of the DBus API"**, or set it from the command line:
+
+```sh
+kwriteconfig6 --file konsolerc --group KonsoleWindow --key EnableSecuritySensitiveDBusAPI true
+```
+
+The key must be in the `[KonsoleWindow]` group of `~/.config/konsolerc`. Konsole only reads it at startup, so fully quit Konsole afterwards (close all windows — with `UseSingleInstance=true` the process keeps running as long as any window is open) and launch it again.
+
+Read-only methods used for the suggestion list (`getAllDisplayedText`, `foregroundProcessId`) are not gated, so suggestions appear even when sending is blocked.
+
+> **Security note:** this allows any process on your session bus to type into and run commands in your Konsole sessions. Only enable it if you're comfortable with that trade-off.
+
 ## udev Rules
 
 ### Touch Bar seat assignment

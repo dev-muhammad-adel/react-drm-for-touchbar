@@ -7,7 +7,15 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@benmalka/foxdriver": "^0.6.0",
+    "clipboardy": "^5.3.1",
+    "dbus-next": "^0.10.2",
+    "fzf": "^0.5.2",
     "react-drm": "file:../",
-    "react-icons": "^5.6.0"
+    "react-icons": "^5.6.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1"
   }
 }

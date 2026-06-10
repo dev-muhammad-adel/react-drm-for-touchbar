@@ -85,6 +85,7 @@ function nodeFromProps(type: string, props: Record<string, unknown>): AnyNode {
       borderColor: props.borderColor as string | undefined,
       borderWidth: props.borderWidth as number | undefined,
       style: props.style as Style | undefined,
+      scrollX: props.scrollX as number | undefined,
       children: [],
     } as BoxNode;
   }

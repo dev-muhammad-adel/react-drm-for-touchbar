@@ -78,9 +78,10 @@ function resolveCornerRadii(s: import('./style').Style | undefined): [number, nu
   ];
 }
 
-function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<SceneNode, LayoutBox>, parentLb?: LayoutBox): void {
+function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<SceneNode, LayoutBox>, parentLb?: LayoutBox, offsetX = 0): void {
   if (node.type === 'box') {
-    const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
+    const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
+    const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
     const a  = node.style?.opacity ?? 1;
     const [tl, tr, br, bl] = resolveCornerRadii(node.style);
     const shadowOpacity = node.style?.shadowOpacity ?? 1;
@@ -108,7 +109,7 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
       const [r, g, b, ca] = parseColor(borderColor);
       cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a: ca * a, tl, tr, br, bl, lineWidth: borderWidth, borderStyle });
     }
-    const clip = node.style?.overflow === 'hidden';
+    const clip = node.style?.overflow === 'hidden' || node.style?.overflow === 'scroll';
     if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
 
     const isAbsolute = (n: SceneNode) =>
@@ -121,10 +122,12 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const absPos  = node.children.filter(c => isAbsolute(c) && zIndexOf(c) >= 0)
                                   .sort((a, b) => zIndexOf(a) - zIndexOf(b));
 
-    for (const child of [...absNeg, ...flow, ...absPos]) emitNode(child, cmds, layout, lb);
+    const childOffsetX = offsetX + (node.scrollX ?? 0);
+    for (const child of [...absNeg, ...flow, ...absPos]) emitNode(child, cmds, layout, lb, childOffsetX);
     if (clip) cmds.push({ cmd: 'clip_pop' });
   } else if (node.type === 'text') {
-    const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
+    const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
+    const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
     const [r, g, b, ca] = parseColor(node.style?.color ?? node.color);
     const a = ca * (node.style?.opacity ?? 1);
     const size   = node.style?.fontSize   ?? node.fontSize;
@@ -138,7 +141,8 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const lineHeight = node.style?.lineHeight ?? 0;
     cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic, align, containerX, containerW, lineHeight });
   } else if (node.type === 'svg_image') {
-    const lb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
+    const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
+    const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
     cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: node.src });
   } else if (node.type === 'svg') {
     const svgNode = node as SvgContainerNode;

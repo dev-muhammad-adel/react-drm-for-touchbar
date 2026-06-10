@@ -13,6 +13,7 @@ export interface BoxNode {
   borderWidth?: number;
   style?: Style;
   children: SceneNode[];
+  scrollX?: number; // set by ScrollBox; serializer shifts children by -scrollX
 }
 
 export interface TextNode {

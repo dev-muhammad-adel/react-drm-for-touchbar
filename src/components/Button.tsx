@@ -8,6 +8,7 @@ import React, {
 import { Box } from './Box';
 import { TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
+import { ScrollOffsetContext } from '../scene/scroll-context';
 import type { Style } from '../scene/style';
 import type { BoxNode } from '../scene/types';
 
@@ -58,10 +59,12 @@ export function Button({
   children,
 }: ButtonProps): React.ReactElement {
   const [active, setActive] = useState(false);
-  const registry  = useContext(TouchRegistryContext);
-  const layoutCtx = useContext(LayoutContext);
+  const registry   = useContext(TouchRegistryContext);
+  const layoutCtx  = useContext(LayoutContext);
+  const scrollOff  = useContext(ScrollOffsetContext);
   const id      = useRef(Symbol());
   const nodeRef = useRef<BoxNode | null>(null);
+  const pressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useLayoutEffect(() => {
     if (!registry) return;
@@ -72,19 +75,38 @@ export function Button({
       x: 0, y: 0, width: 0, height: 0,
       hitSlop,
       // Called at touch time — layout is already current so flex positions are correct.
+      // Subtract cumulative scroll offset so hit area matches visual position.
       getBounds: () => {
         const lb = node ? layoutCtx.current.get(node) : undefined;
         return lb
-          ? { x: lb.x, y: lb.y, width: lb.w, height: lb.h }
+          ? { x: lb.x - scrollOff, y: lb.y, width: lb.w, height: lb.h }
           : { x: x ?? 0, y: y ?? 0, width: width ?? 0, height: height ?? 0 };
       },
-      // Highlight immediately on touch-down for instant visual feedback.
-      onTouchStart: (tx, ty) => { setActive(true); onTouchStart?.(tx, ty); },
+      // Delay the pressed visual slightly so a scroll passing over the button
+      // never lights it up; the registry cancels us before the delay elapses.
+      onTouchStart: (tx, ty) => {
+        pressTimerRef.current = setTimeout(() => { pressTimerRef.current = null; setActive(true); }, 80);
+        onTouchStart?.(tx, ty);
+      },
       // Fire the action when the finger lifts (registry checks bounds before calling).
       onClick: () => { onClick?.(); },
       onTouchMove,
-      // Reset highlight shortly after lift whether or not the tap fired.
-      onTouchEnd: (tx, ty) => { setTimeout(() => setActive(false), 100); onTouchEnd?.(tx, ty); },
+      // Reset highlight shortly after lift; taps quicker than the press delay
+      // still get a brief flash of feedback.
+      onTouchEnd: (tx, ty) => {
+        if (pressTimerRef.current) {
+          clearTimeout(pressTimerRef.current);
+          pressTimerRef.current = null;
+          setActive(true);
+        }
+        setTimeout(() => setActive(false), 100);
+        onTouchEnd?.(tx, ty);
+      },
+      // Gesture turned into a scroll/drag — never show (or immediately drop) the highlight.
+      onTouchCancel: () => {
+        if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
+        setActive(false);
+      },
     });
     return () => registry.unregisterGesture(key);
   });
