@@ -75,7 +75,7 @@ export interface Style {
   zIndex?: number;
 
   // Visual
-  overflow?: 'visible' | 'hidden';
+  overflow?: 'visible' | 'hidden' | 'scroll';
   opacity?: number;
   shadowColor?: string;
   shadowOffsetX?: number;

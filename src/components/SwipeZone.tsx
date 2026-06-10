@@ -27,8 +27,7 @@ export interface SwipeZoneProps {
  * The renderer opens the touch device automatically — no manual wiring needed.
  */
 export function SwipeZone({
-  x = 0,
-  y = 0,
+
   width = 0,
   height = 0,
   onSwipeLeft,
@@ -49,8 +48,8 @@ export function SwipeZone({
     const node = nodeRef.current;
 
     const lb = node ? layoutCtx.current.get(node) : undefined;
-    const rx = lb?.x ?? x;
-    const ry = lb?.y ?? y;
+    const rx = lb?.x ?? 0;
+    const ry = lb?.y ?? 0;
     const rw = lb?.w ?? width;
     const rh = lb?.h ?? height;
 
@@ -59,7 +58,7 @@ export function SwipeZone({
   });
 
   return (
-    <Box ref={nodeRef} x={x} y={y} width={width} height={height} color={color} style={style}>
+    <Box ref={nodeRef} color={color} style={style}>
       {children}
     </Box>
   );
