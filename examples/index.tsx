@@ -1,16 +1,17 @@
 import path from 'path';
 import { DrmDisplay, KeyboardReader, renderHot } from 'react-drm';
+import { DISPLAY } from './config';
 
 const keyboard = new KeyboardReader();
 const display  = new DrmDisplay(process.argv[2]);
 
 const result = renderHot(path.resolve(__dirname, 'App'), display, {
-  dimSecs:        30,
-  offSecs:        60,
-  pixelShiftSecs: 300,
-  keyboardReader: keyboard,
-  appProps:       { keyboard },
-  activeBrightness:2,
+  dimSecs:          DISPLAY.dimSecs,
+  offSecs:          DISPLAY.offSecs,
+  pixelShiftSecs:   DISPLAY.pixelShiftSecs,
+  keyboardReader:   keyboard,
+  appProps:         { keyboard },
+  activeBrightness: DISPLAY.activeBrightness,
   //  adaptiveBrightness: true
 });
 
