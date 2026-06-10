@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import chokidar from 'chokidar';
 import React from 'react';
 import { render } from '../renderer/renderer';
 import type { RenderResult, RenderOptions } from '../renderer/renderer';
@@ -40,18 +41,21 @@ function clearProjectCache(): void {
 function watchDir(dir: string, onChange: () => void): () => void {
   let debounce: ReturnType<typeof setTimeout> | null = null;
 
-  const watcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
-    if (!filename || !/\.(js|ts|tsx)$/.test(filename)) return;
-    if (filename.includes('node_modules')) return;
+  const watcher = chokidar.watch(dir, {
+    ignored: [/(^|[/\\])node_modules([/\\]|$)/, /(^|[/\\])\.git([/\\]|$)/, /\.node$/],
+    ignoreInitial: true,
+    // awaitWriteFinish catches atomic saves from vim/nvim (write-to-tmp then rename)
+    awaitWriteFinish: { stabilityThreshold: 80, pollInterval: 50 },
+  });
+
+  watcher.on('all', (_event, filePath) => {
+    if (!/\.(js|ts|tsx)$/.test(filePath)) return;
     if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(() => {
-      debounce = null;
-      onChange();
-    }, 150);
+    debounce = setTimeout(() => { debounce = null; onChange(); }, 150);
   });
 
   watcher.on('error', () => {});
-  return () => watcher.close();
+  return () => { void watcher.close(); };
 }
 
 /**
