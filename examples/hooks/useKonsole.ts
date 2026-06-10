@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { execFile } from 'child_process';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { keys } from '../keyInjector';
@@ -26,19 +27,35 @@ function defaultHistFile(shell: string, home: string): string {
   }
 }
 
+interface RawEntry { cmd: string; paths: string[] }
+
+/** Per-command aggregate used for context-aware ranking. */
+export interface CmdMeta {
+  count:   number;       // how often it was run
+  lastIdx: number;       // position of the most recent run (higher = more recent)
+  paths:   Set<string>;  // file/dir arguments fish recorded for it
+}
+
 /** History in file order (oldest → newest) — order is needed for next-command prediction. */
-function parseHistory(shell: string, content: string): string[] {
+function parseHistory(shell: string, content: string): RawEntry[] {
   if (shell === 'fish') {
-    return content.split('\n')
-      .map(l => l.match(/^- cmd: (.+)$/)?.[1]?.trim() ?? '')
-      .filter(Boolean);
+    const entries: RawEntry[] = [];
+    for (const line of content.split('\n')) {
+      const c = line.match(/^- cmd: (.+)$/);
+      if (c) { entries.push({ cmd: c[1].trim(), paths: [] }); continue; }
+      const p = line.match(/^\s+- (.+)$/); // items under "  paths:"
+      if (p && entries.length) entries[entries.length - 1].paths.push(p[1].trim());
+    }
+    return entries;
   }
   if (shell === 'zsh') {
     return content.split('\n')
       .map(l => l.replace(/^: \d+:\d+;/, '').trim())
-      .filter(l => l && !l.startsWith('#'));
+      .filter(l => l && !l.startsWith('#'))
+      .map(cmd => ({ cmd, paths: [] }));
   }
-  return content.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+  return content.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
+    .map(cmd => ({ cmd, paths: [] }));
 }
 
 /** Newest-first, duplicates removed — the candidate list for fuzzy matching. */
@@ -51,14 +68,62 @@ function dedupeNewestFirst(ordered: string[]): string[] {
   return result;
 }
 
-function loadHistory(shell: string, pid: number): { file: string; cmds: string[]; ordered: string[] } {
+function loadHistory(shell: string, pid: number): {
+  file: string; cmds: string[]; ordered: string[]; meta: Map<string, CmdMeta>;
+} {
   const env  = readProcEnv(pid);
   const home = env.HOME ?? process.env.HOME ?? '';
   const file = env.HISTFILE || defaultHistFile(shell, home);
   try {
-    const ordered = parseHistory(shell, fs.readFileSync(file, 'utf8'));
-    return { file, cmds: dedupeNewestFirst(ordered), ordered };
-  } catch { return { file, cmds: [], ordered: [] }; }
+    const entries = parseHistory(shell, fs.readFileSync(file, 'utf8'));
+    const ordered = entries.map(e => e.cmd);
+    const meta = new Map<string, CmdMeta>();
+    entries.forEach((e, i) => {
+      const m = meta.get(e.cmd) ?? { count: 0, lastIdx: 0, paths: new Set<string>() };
+      m.count += 1;
+      m.lastIdx = i;
+      e.paths.forEach(p => m.paths.add(p));
+      meta.set(e.cmd, m);
+    });
+    return { file, cmds: dedupeNewestFirst(ordered), ordered, meta };
+  } catch { return { file, cmds: [], ordered: [], meta: new Map() }; }
+}
+
+// ── Context-aware ranking ─────────────────────────────────────────────────────
+// fzf's text score is the base (~16–24 per matched char); context boosts are sized
+// to tip ties and near-ties, not to override a clearly better text match.
+
+const RANK = { cwdPath: 20, tool: 10, recencyMax: 12, freqMax: 10 };
+
+const PROJECT_TOOLS: [marker: string, tools: string[]][] = [
+  ['package.json',       ['npm', 'npx', 'node', 'pnpm', 'yarn', 'bun', 'tsx']],
+  ['Cargo.toml',         ['cargo']],
+  ['go.mod',             ['go']],
+  ['Makefile',           ['make']],
+  ['.git',               ['git', 'gh']],
+  ['docker-compose.yml', ['docker']],
+  ['compose.yaml',       ['docker']],
+];
+
+function projectTools(cwd: string): Set<string> {
+  const tools = new Set<string>();
+  for (const [marker, t] of PROJECT_TOOLS) {
+    try { if (fs.existsSync(path.join(cwd, marker))) t.forEach(x => tools.add(x)); } catch {}
+  }
+  return tools;
+}
+
+/** Did this command touch anything in/under the current directory? */
+function pathsRelevant(paths: Set<string>, cwd: string, home: string): boolean {
+  for (const p of paths) {
+    if (p.startsWith('/') || p.startsWith('~')) {
+      const abs = p.startsWith('~') ? home + p.slice(1) : p;
+      if (abs.startsWith(cwd)) return true;
+    } else {
+      try { if (fs.existsSync(path.join(cwd, p))) return true; } catch {}
+    }
+  }
+  return false;
 }
 
 /** Fish paints its gray inline autosuggestion into the terminal text, so the screen
@@ -207,6 +272,8 @@ export function useKonsole() {
   const fzfRef         = useRef<Fzf<string[]> | null>(null);
   const histSetRef     = useRef<Set<string>>(new Set());
   const orderedRef     = useRef<string[]>([]);
+  const metaRef        = useRef<Map<string, CmdMeta>>(new Map());
+  const toolsCacheRef  = useRef<{ cwd: string; tools: Set<string> } | null>(null);
   const histWatcherRef = useRef<fs.FSWatcher | null>(null);
   const lastInputRef   = useRef('');
   const predKeyRef     = useRef<string | null>(null);
@@ -227,26 +294,58 @@ export function useKonsole() {
   }, []);
 
   // Cap the candidate set so fzf scoring stays cheap on the 300ms poll tick.
+  // limit 50 = ranking pool; context scoring reorders it before slicing to 15.
   const buildMatcher = useCallback((cmds: string[]) => {
     fzfRef.current = new Fzf(cmds.slice(0, 5000), {
       casing: 'smart-case',
-      limit: 15,
+      limit: 50,
       tiebreakers: [byLengthAsc],
     });
     histSetRef.current = new Set(cmds);
   }, []);
 
+  // fzf text score + context: ran in/on this directory, fits the project's tooling,
+  // recent, frequent. Pool of 50 fzf matches re-ranked, best 15 kept.
+  const rankHistory = useCallback((input: string, cwd: string): string[] => {
+    const results = fzfRef.current?.find(input) ?? [];
+    const meta    = metaRef.current;
+    const total   = orderedRef.current.length || 1;
+    const home    = process.env.HOME ?? '';
+    if (cwd && toolsCacheRef.current?.cwd !== cwd) {
+      toolsCacheRef.current = { cwd, tools: projectTools(cwd) };
+    }
+    const tools = toolsCacheRef.current?.tools ?? new Set<string>();
+
+    return results
+      .map(r => {
+        let score = r.score;
+        const m = meta.get(r.item);
+        if (m) {
+          score += Math.min(RANK.freqMax, Math.log2(m.count + 1) * 3);
+          score += (m.lastIdx / total) * RANK.recencyMax;
+          if (cwd && m.paths.size && pathsRelevant(m.paths, cwd, home)) score += RANK.cwdPath;
+        }
+        if (tools.has(r.item.split(' ', 1)[0])) score += RANK.tool;
+        return { cmd: r.item, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 15)
+      .map(s => s.cmd);
+  }, []);
+
   const reloadHistory = useCallback((shell: string, shellPid: number) => {
     histWatcherRef.current?.close();
-    const { file, cmds, ordered } = loadHistory(shell, shellPid);
+    const { file, cmds, ordered, meta } = loadHistory(shell, shellPid);
     buildMatcher(cmds);
     orderedRef.current = ordered;
+    metaRef.current    = meta;
     predKeyRef.current = null; // newest history entry changed — recompute predictions
     try {
       histWatcherRef.current = fs.watch(file, () => {
         const fresh = loadHistory(shell, shellPid);
         buildMatcher(fresh.cmds);
         orderedRef.current = fresh.ordered;
+        metaRef.current    = fresh.meta;
         predKeyRef.current = null;
       });
     } catch {}
@@ -389,7 +488,7 @@ export function useKonsole() {
                 ? autosuggestPrefix(orderedRef.current, input)
                 : input;
               const [prefix] = splitLastToken(effInput);
-              const hist = (fzfRef.current?.find(effInput) ?? []).map(e => e.item);
+              const hist = rankHistory(effInput, rawCwd);
 
               const buildList = (comps: string[]): Suggestion[] => {
                 const seen = new Set([input]);
