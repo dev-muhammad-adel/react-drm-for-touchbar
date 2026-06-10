@@ -14,6 +14,13 @@ export const DISPLAY = {
   activeBrightness: 2,
 } as const;
 
+// ─── Dolphin panel ──────────────────────────────────────────────────────────
+
+export const DOLPHIN = {
+  maxPlaces: 5,   // quick-jump place chips shown in the panel
+  pollMs:    400, // action-state poll interval (dolphin emits no property-change signals)
+};
+
 // ─── Browser shortcuts ──────────────────────────────────────────────────────
 
 /**

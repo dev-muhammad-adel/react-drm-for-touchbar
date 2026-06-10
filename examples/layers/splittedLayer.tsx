@@ -10,6 +10,7 @@ import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
 import { BrowserPanel } from './leftsideLayers/FirefoxPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
 import { VlcPanel } from './leftsideLayers/VlcPanel';
+import { DolphinPanel } from './leftsideLayers/DolphinPanel';
 
 
 // ── Media control ─────────────────────────────────────────────────────────────
@@ -22,7 +23,7 @@ function playerctl(cmd: MediaCmd): void {
 
 const ICON_SIZE = 32;
 
-type SplittedLeftLayerName = 'window' | 'browser' | 'konsole' | 'vlc';
+type SplittedLeftLayerName = 'window' | 'browser' | 'konsole' | 'vlc' | 'dolphin';
 
 const BROWSER_CLASSES = [
   'firefox', 'firefox-esr',
@@ -41,6 +42,7 @@ function resolveLeftSideLayerByClass(activeClass: string): SplittedLeftLayerName
   if (cls && BROWSER_CLASSES.some(b => cls.includes(b))) return 'browser';
   if (cls.includes('konsole')) return 'konsole';
   if (cls.includes('vlc')) return 'vlc';
+  if (cls.includes('dolphin')) return 'dolphin';
   return 'window';
 }
 
@@ -49,6 +51,7 @@ const SPLITTED_LEFT_LAYERS: Layer[] = [
   { name: 'browser', component: BrowserPanel,      animation: 'fade' },
   { name: 'konsole', component: KonsolePanel,      animation: 'fade' },
   { name: 'vlc',     component: VlcPanel,          animation: 'fade' },
+  { name: 'dolphin', component: DolphinPanel,      animation: 'fade' },
 ];
 
 const MEDIA_BTNS: { icon: React.ReactElement; cmd?: MediaCmd  }[] = [

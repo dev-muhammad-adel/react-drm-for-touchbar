@@ -5,9 +5,10 @@ import fs from 'fs';
 export interface ActiveWindow {
   title: string;
   class: string;
+  pid:   number;
 }
 
-const EMPTY: ActiveWindow = { title: '', class: '' };
+const EMPTY: ActiveWindow = { title: '', class: '', pid: 0 };
 
 // Auto-discover the Hyprland instance dir — works even when running as root
 // (where HYPRLAND_INSTANCE_SIGNATURE may not be in the environment).
@@ -34,13 +35,22 @@ function findHyprDir(): string | null {
   return null;
 }
 
-function parseLine(line: string): ActiveWindow | null {
-  if (!line.startsWith('activewindow>>')) return null;
-  const data  = line.slice('activewindow>>'.length);
-  const comma = data.indexOf(',');
-  return comma === -1
-    ? { class: data, title: '' }
-    : { class: data.slice(0, comma), title: data.slice(comma + 1) };
+function queryActiveWindow(dir: string): Promise<ActiveWindow> {
+  return new Promise(resolve => {
+    const cmd = net.createConnection(`${dir}/.socket.sock`);
+    let buf = '';
+    cmd.write('j/activewindow'); // 'j' prefix = JSON output (like hyprctl -j)
+    cmd.on('data', (c: Buffer) => { buf += c.toString(); });
+    cmd.on('end', () => {
+      try {
+        const json = JSON.parse(buf) as { class?: string; title?: string; pid?: number };
+        resolve(json.class !== undefined
+          ? { class: json.class ?? '', title: json.title ?? '', pid: json.pid ?? 0 }
+          : EMPTY);
+      } catch { resolve(EMPTY); }
+    });
+    cmd.on('error', () => resolve(EMPTY));
+  });
 }
 
 export function useActiveWindow(): ActiveWindow {
@@ -49,23 +59,20 @@ export function useActiveWindow(): ActiveWindow {
   useEffect(() => {
     const dir = findHyprDir();
     if (!dir) return;
+    let alive = true;
+
+    const refresh = () => queryActiveWindow(dir).then(w => {
+      if (!alive) return;
+      setWin(prev =>
+        prev.class === w.class && prev.title === w.title && prev.pid === w.pid ? prev : w,
+      );
+    });
 
     // Fetch the window that is already focused right now.
-    const cmd = net.createConnection(`${dir}/.socket.sock`);
-    let buf = '';
-    cmd.write('j/activewindow'); // 'j' prefix = JSON output (like hyprctl -j)
-    cmd.on('data', (c: Buffer) => { buf += c.toString(); });
-    cmd.on('end', () => {
-      try {
-        const json = JSON.parse(buf) as { class?: string; title?: string };
-        if (json.class !== undefined) {
-          setWin({ class: json.class ?? '', title: json.title ?? '' });
-        }
-      } catch { /**/ }
-    });
-    cmd.on('error', () => {});
+    refresh();
 
-    // Subscribe to focus-change events.
+    // Focus-change events carry class/title but not pid, so each event
+    // triggers a one-shot command-socket query for the full picture.
     const ev = net.createConnection(`${dir}/.socket2.sock`);
     let carry = '';
 
@@ -73,18 +80,12 @@ export function useActiveWindow(): ActiveWindow {
       carry += chunk.toString('utf8');
       const lines = carry.split('\n');
       carry = lines.pop() ?? '';
-      for (const line of lines) {
-        const parsed = parseLine(line.trim());
-        if (!parsed) continue;
-        setWin(prev =>
-          prev.class === parsed.class && prev.title === parsed.title ? prev : parsed,
-        );
-      }
+      if (lines.some(l => l.startsWith('activewindow>>') || l.startsWith('windowtitle>>'))) refresh();
     });
 
     ev.on('error', () => {});
 
-    return () => { cmd.destroy(); ev.destroy(); };
+    return () => { alive = false; ev.destroy(); };
   }, []);
 
   return win;

@@ -21,6 +21,7 @@ const ACCENT: Record<string, string> = {
   steam: '#4a9dd4',
   thunar: '#64b5f6',
   nautilus: '#64b5f6',
+  'org.kde.dolphin': '#1d99f3',
   obsidian: '#7c3aed',
   mpv: '#f59e0b',
   vlc: '#f97316',
