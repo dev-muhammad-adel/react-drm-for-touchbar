@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Box, KeyboardContext, useKeyPressed, useTouchLock } from 'react-drm';
 import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions } from 'react-drm';
 
@@ -26,6 +26,8 @@ interface LayerCtx {
 const Ctx = createContext<LayerCtx>({ current: '', go: () => {}, next: () => {}, prev: () => {} });
 
 export function useLayers(): LayerCtx { return useContext(Ctx); }
+
+export type LayerHostHandle = LayerCtx;
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 
@@ -80,9 +82,7 @@ interface Trans {
 
 // ── LayerHost (public) ─────────────────────────────────────────────────────────
 
-export function LayerHost({
-  layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer,
-}: {
+export const LayerHost = forwardRef<LayerHostHandle, {
   layers:    Layer[];
   initial?:  string;
   width:     number;
@@ -90,30 +90,31 @@ export function LayerHost({
   keyboard?: KeyboardReader;
   fnKey?:    KeyId;
   fnLayer?:  string;
-}) {
+}>(function LayerHost({ layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer }, ref) {
+  const inherited = useContext(KeyboardContext);
+  const kb = keyboard ?? inherited ?? null;
   return (
-    <KeyboardContext.Provider value={keyboard ?? null}>
+    <KeyboardContext.Provider value={kb}>
       <LayerHostInner
+        ref={ref}
         layers={layers} initial={initial}
         width={width} height={height}
         fnKey={fnKey} fnLayer={fnLayer}
       />
     </KeyboardContext.Provider>
   );
-}
+});
 
 // ── LayerHostInner (private) ───────────────────────────────────────────────────
 
-function LayerHostInner({
-  layers, initial, width, height, fnKey, fnLayer,
-}: {
+const LayerHostInner = forwardRef<LayerHostHandle, {
   layers:   Layer[];
   initial?: string;
   width:    number;
   height:   number;
   fnKey:    KeyId;
   fnLayer?: string;
-}) {
+}>(function LayerHostInner({ layers, initial, width, height, fnKey, fnLayer }, ref) {
   const initIdx = initial ? Math.max(0, layers.findIndex(l => l.name === initial)) : 0;
 
   const [stableIdx, setStableIdx] = useState(initIdx);
@@ -205,12 +206,14 @@ function LayerHostInner({
     prev: (raw) => switchTo((activeIdx - 1 + layers.length) % layers.length, resolveOpts(raw)),
   };
 
+  useImperativeHandle(ref, () => ctx);
+
   if (!trans) {
     const Active = layers[stableIdx]?.component;
     if (!Active) return null;
     return (
       <Ctx.Provider value={ctx}>
-        <Box style={{ flex: 1 }}>
+        <Box style={{  width, height }}>
           <Active width={width} height={height} />
         </Box>
       </Ctx.Provider>
@@ -230,7 +233,7 @@ function LayerHostInner({
 
   return (
     <Ctx.Provider value={ctx}>
-      <Box style={{ width, height, overflow: 'hidden' }}>
+      <Box style={{ width, height }}>
         {From && (
           <Box style={fStyle}>
             <From width={width} height={height} />
@@ -246,4 +249,4 @@ function LayerHostInner({
       </Box>
     </Ctx.Provider>
   );
-}
+});

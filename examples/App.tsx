@@ -7,7 +7,6 @@ import { BootScreen } from './components/BootScreen';
 import { SplittedLayer } from './layers/splittedLayer';
 import { MediaScreen } from './layers/mediaScreen';
 import { FnKeys } from './layers/fnKeys';
-import { BackgroundServices } from './layers/backgroundServices';
 import { SystemBar } from './layers/systemBar';
 import { AudioSliderLayer } from './layers/audioSlider';
 import { BrightnessSliderLayer } from './layers/brightnessSlider';
@@ -20,7 +19,7 @@ import { useBootSequence } from './hooks/useBootSequence';
 export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
   const { booted, opacity } = useBootSequence();
 
-  if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
+  // if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
 
   return (
     <SafeArea width={width} height={height}>
@@ -34,7 +33,6 @@ export function App({ width, height, keyboard }: { width: number; height: number
             { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
             { name: 'brightness-slider', component: BrightnessSliderLayer,   leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
             { name: 'fnkeys',            component: FnKeys,                  leaving: { outAnim: 'fade', duration: 0 }, entering: { inAnim: 'fade', duration: 0 } },
-            { name: 'services',          component: BackgroundServices,      leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
             { name: 'systembar',         component: SystemBar,               leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
             { name: 'games',             component: GamesLayer,              leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
             { name: 'dino',              component: DinoLayer,               leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
