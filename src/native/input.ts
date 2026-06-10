@@ -23,6 +23,7 @@ interface NativeTouchReader {
 
 interface NativeKeyInjector {
   pressKey(keycode: number): void;
+  pressCombo(keycodes: number[]): void;
 }
 
 // F1=59 … F12=88
@@ -42,6 +43,23 @@ export const KEY = {
   KBDILLUMDOWN:  229,
   KBDILLUMUP:    230,
   MICMUTE:       248,
+  // Modifiers
+  LEFTCTRL:       29,
+  LEFTALT:        56,
+  LEFTSHIFT:      42,
+  // Navigation
+  TAB:            15,
+  LEFT:          105,
+  RIGHT:         106,
+  UP:            103,
+  DOWN:          108,
+  ENTER:          28,
+  ESC:             1,
+  BACKSPACE:      14,
+  // Letters used in browser combos
+  KEY_R:          19,
+  KEY_T:          20,
+  KEY_W:          17,
 } as const;
 
 // Touch Bar raw axis ranges
@@ -198,5 +216,9 @@ export class KeyInjector {
 
   pressKey(code: number): void {
     this.handle.pressKey(code);
+  }
+
+  pressCombo(keycodes: number[]): void {
+    this.handle.pressCombo(keycodes);
   }
 }
