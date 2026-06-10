@@ -6,6 +6,7 @@ import { keys } from '../keyInjector';
 import { KEY } from 'react-drm';
 import dbus, { MessageBus, ClientInterface } from 'dbus-next';
 import { Fzf, byLengthAsc } from 'fzf';
+import { useActiveWindow } from '../useActiveWindow';
 
 // ── History ──────────────────────────────────────────────────────────────────
 
@@ -221,12 +222,31 @@ function tokenPad(cmd: string): string {
 }
 
 // ── D-Bus helpers ─────────────────────────────────────────────────────────────
+// Konsole may run single-process (all windows under one service, often the
+// plain 'org.kde.konsole' name) or one process per window ('org.kde.konsole-
+// <pid>'). Every service is tracked; the focused window is found by matching
+// the compositor's active-window pid to the service's process, then asking
+// each /konsole/MainWindow_<n> for its QWidget isActiveWindow property
+// (window n maps to the /Windows/<n> control object).
 
-async function findKonsoleService(bus: MessageBus): Promise<string | null> {
-  const obj   = await bus.getProxyObject('org.freedesktop.DBus', '/org/freedesktop/DBus');
-  const iface = obj.getInterface('org.freedesktop.DBus');
-  const names: string[] = await iface.ListNames();
-  return names.find(n => n.startsWith('org.kde.konsole')) ?? null;
+const isKonsoleService = (n: string) => n.startsWith('org.kde.konsole');
+
+async function servicePid(bus: MessageBus, svc: string): Promise<number> {
+  const reply = await bus.call(new dbus.Message({
+    destination: 'org.freedesktop.DBus', path: '/org/freedesktop/DBus',
+    interface: 'org.freedesktop.DBus', member: 'GetConnectionUnixProcessID',
+    signature: 's', body: [svc],
+  }));
+  return Number(reply?.body[0] ?? 0);
+}
+
+async function isWindowActive(bus: MessageBus, svc: string, n: string): Promise<boolean> {
+  const reply = await bus.call(new dbus.Message({
+    destination: svc, path: `/konsole/MainWindow_${n}`,
+    interface: 'org.freedesktop.DBus.Properties', member: 'Get',
+    signature: 'ss', body: ['org.qtproject.Qt.QWidget', 'isActiveWindow'],
+  }));
+  return Boolean((reply?.body[0] as dbus.Variant)?.value);
 }
 
 function shortenPath(p: string): string {
@@ -261,7 +281,12 @@ export function useKonsole() {
   const [status,      setStatus]      = useState<SessionStatus>({ cwd: '', isRunning: false, foregroundCmd: '' });
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
 
+  const { pid: activePid } = useActiveWindow();
+
   const busRef         = useRef<MessageBus | null>(null);
+  const svcsRef        = useRef<Map<string, number>>(new Map()); // service name → unix pid
+  const winPathRef     = useRef<string | null>(null);
+  const activePidRef   = useRef(0);
   const serviceRef     = useRef<string | null>(null);
   const windowRef      = useRef<ClientInterface | null>(null);
   const activeIdRef    = useRef<number | null>(null);
@@ -278,7 +303,8 @@ export function useKonsole() {
   const lastInputRef   = useRef('');
   const predKeyRef     = useRef<string | null>(null);
 
-  activeIdRef.current = activeId;
+  activeIdRef.current  = activeId;
+  activePidRef.current = activePid;
 
   const flushSessions = useCallback(() => {
     setSessions(Array.from(titleMap.current.entries()).map(([id, title]) => ({ id, title })));
@@ -362,13 +388,50 @@ export function useKonsole() {
     } catch {}
   }, [getSessionIface, reloadHistory]);
 
-  const attachService = useCallback(async (svc: string, bus: MessageBus) => {
+  /** Find the focused konsole window across all services: pid match first, then isActiveWindow. */
+  const resolveTarget = useCallback(async (): Promise<{ svc: string; win: string } | null> => {
+    const bus  = busRef.current!;
+    const svcs = svcsRef.current;
+    if (svcs.size === 0) return null;
+
+    const keys  = [...svcs.keys()];
+    const byPid = keys.find(s => svcs.get(s) === activePidRef.current);
+    const first = byPid ?? (serviceRef.current && svcs.has(serviceRef.current) ? serviceRef.current : keys[0]);
+    const ordered = [first, ...keys.filter(s => s !== first)];
+
+    for (const svc of ordered) {
+      try {
+        const root = await bus.getProxyObject(svc, '/konsole');
+        const nums = root.nodes
+          .map(n => n.match(/\/MainWindow_(\d+)$/)?.[1])
+          .filter((x): x is string => x !== undefined);
+        if (nums.length === 0) continue;
+
+        let num = nums[0];
+        if (nums.length > 1) {
+          let focused: string | null = null;
+          for (const n of nums) {
+            if (await isWindowActive(bus, svc, n).catch(() => false)) { focused = n; break; }
+          }
+          // No window focused (konsole in background) — stick with the
+          // attached window so the panel doesn't churn between windows.
+          const cur = winPathRef.current?.match(/\/Windows\/(\d+)$/)?.[1];
+          num = focused ?? (svc === serviceRef.current && cur && nums.includes(cur) ? cur : nums[0]);
+        }
+        return { svc, win: `/Windows/${num}` };
+      } catch { continue; } // service died mid-scan
+    }
+    return null;
+  }, []);
+
+  const attachService = useCallback(async (svc: string, winPath: string, bus: MessageBus) => {
     try {
-      const obj = await bus.getProxyObject(svc, '/Windows/1');
+      const obj = await bus.getProxyObject(svc, winPath);
       const win = obj.getInterface('org.kde.konsole.Window');
 
       windowRef.current  = win;
       serviceRef.current = svc;
+      winPathRef.current = winPath;
       sessCache.current.clear();
       titleMap.current.clear();
 
@@ -393,27 +456,35 @@ export function useKonsole() {
       const dbusIface = dbusObj.getInterface('org.freedesktop.DBus');
 
       dbusIface.on('NameOwnerChanged', async (name: string, _old: string, newOwner: string) => {
-        if (!alive || !name.startsWith('org.kde.konsole')) return;
-        if (newOwner && !serviceRef.current) {
-          await attachService(name, bus);
-        } else if (!newOwner && serviceRef.current === name) {
-          windowRef.current     = null;
-          serviceRef.current    = null;
-          activeSessRef.current = null;
-          shellPidRef.current   = null;
-          sessCache.current.clear();
-          titleMap.current.clear();
-          histWatcherRef.current?.close();
-          setSessions([]);
-          setActiveId(null);
-          setConnected(false);
-          setSuggestions([]);
-          setStatus({ cwd: '', isRunning: false, foregroundCmd: '' });
+        if (!alive || !isKonsoleService(name)) return;
+        if (newOwner) {
+          svcsRef.current.set(name, await servicePid(bus, name).catch(() => 0));
+        } else {
+          svcsRef.current.delete(name);
+          if (serviceRef.current === name) {
+            windowRef.current     = null;
+            serviceRef.current    = null;
+            winPathRef.current    = null;
+            activeSessRef.current = null;
+            shellPidRef.current   = null;
+            sessCache.current.clear();
+            titleMap.current.clear();
+            histWatcherRef.current?.close();
+            setSessions([]);
+            setActiveId(null);
+            setConnected(false);
+            setSuggestions([]);
+            setStatus({ cwd: '', isRunning: false, foregroundCmd: '' });
+          }
         }
       });
 
-      const svc = await findKonsoleService(bus);
-      if (alive && svc) await attachService(svc, bus);
+      const names: string[] = await dbusIface.ListNames();
+      for (const n of names.filter(isKonsoleService)) {
+        svcsRef.current.set(n, await servicePid(bus, n).catch(() => 0));
+      }
+      const target = await resolveTarget();
+      if (alive && target) await attachService(target.svc, target.win, bus);
     }
 
     init().catch(() => {});
@@ -421,6 +492,13 @@ export function useKonsole() {
     const timer = setInterval(async () => {
       if (!alive) return;
       try {
+        // ── Retarget to the focused window — services and windows come and go ──
+        const target = await resolveTarget();
+        if (!alive) return;
+        if (target && (target.svc !== serviceRef.current || target.win !== winPathRef.current)) {
+          await attachService(target.svc, target.win, busRef.current!);
+        }
+
         // ── Tab/session sync — konsole exposes no D-Bus signals, so poll ──
         const win = windowRef.current;
         const svc = serviceRef.current;
@@ -542,7 +620,7 @@ export function useKonsole() {
       histWatcherRef.current?.close();
       bus.disconnect();
     };
-  }, [attachService]);
+  }, [attachService, resolveTarget]);
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
