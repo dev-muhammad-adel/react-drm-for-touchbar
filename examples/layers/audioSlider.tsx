@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { execFile, execFileSync } from 'child_process';
+import React, { useState, useRef, useEffect } from 'react';
+import { execFile, execFileSync, spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { MdVolumeOff, MdVolumeDown, MdVolumeUp } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
@@ -87,6 +87,23 @@ function Track({ fill, color }: { fill: number; color: string }) {
 export function AudioSliderLayer({ width, height }: { width: number; height: number }) {
   const [vol, setVol] = useState<number>(() => readVolume());
   const drag = useRef<{ x: number; v: number } | null>(null);
+
+  // Sync when volume changes externally (keyboard shortcut, another app).
+  // PipeWire/PulseAudio is socket-based so chokidar can't watch it —
+  // pactl subscribe is the audio equivalent of a file watcher.
+  useEffect(() => {
+    const proc = spawn('pactl', ['subscribe'], { env: PW_ENV });
+
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      if (chunk.toString().includes("'change' on sink") && !drag.current) {
+        setVol(readVolume());
+      }
+    });
+
+    proc.on('error', () => {}); // pactl unavailable — wpctl-only system
+
+    return () => { proc.kill(); };
+  }, []);
 
   function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
   function update(v: number) { setVol(v); applyVolume(v); }

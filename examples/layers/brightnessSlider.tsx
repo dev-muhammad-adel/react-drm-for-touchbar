@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { execFile, execFileSync } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7 } from 'react-icons/md';
@@ -52,6 +52,18 @@ function Track({ fill, color }: { fill: number; color: string }) {
 export function BrightnessSliderLayer({ width, height }: { width: number; height: number }) {
   const [bright, setBright] = useState<number>(() => readBrightness());
   const drag = useRef<{ x: number; v: number } | null>(null);
+
+  // Sync when brightness changes externally (keyboard shortcut, another process).
+  // sysfs mtime never updates so we compare the actual value on an interval.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!drag.current) {
+        const current = readBrightness();
+        setBright(prev => Math.abs(prev - current) > 0.01 ? current : prev);
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, []);
 
   function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
   function update(v: number) { setBright(v); applyBrightness(v); }
