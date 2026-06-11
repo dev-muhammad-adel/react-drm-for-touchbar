@@ -6,6 +6,7 @@ import { setRepaint } from './invalidate';
 import { serializeScene } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayout } from '../scene/layout';
+import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
 import { TouchReader } from '../native/input';
@@ -326,6 +327,34 @@ function shiftCmds(cmds: DrawCommand[], dx: number, dy: number): DrawCommand[] {
   });
 }
 
+// ── Layout engine selection ───────────────────────────────────────────────────
+// Yoga is the default; REACT_DRM_LAYOUT=legacy selects the built-in engine.
+// Legacy is also the fallback while yoga loads (it's an async ESM import) and
+// if a layout uses display:grid, which yoga doesn't support.
+
+const wantYoga = process.env.REACT_DRM_LAYOUT !== 'legacy';
+let yogaFailed = false;
+if (wantYoga) {
+  loadYogaEngine()
+    .then(() => console.log('[react-drm] layout engine: yoga'))
+    .catch(err => {
+      yogaFailed = true;
+      console.warn('[react-drm] yoga failed to load, using legacy layout:', err instanceof Error ? err.message : err);
+    });
+}
+
+function runLayout(container: RootContainer, w: number, h: number) {
+  if (wantYoga && !yogaFailed && yogaReady()) {
+    try {
+      return computeLayoutYoga(container, w, h);
+    } catch (err) {
+      yogaFailed = true;
+      console.warn('[react-drm] yoga layout failed, falling back to legacy:', err instanceof Error ? err.message : err);
+    }
+  }
+  return computeLayout(container, w, h);
+}
+
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
 export function render(
@@ -458,7 +487,7 @@ export function render(
   // ──────────────────────────────────────────────────────────────────────────
 
   container._onCommit = () => {
-    const layout   = computeLayout(container, container.width, container.height);
+    const layout   = runLayout(container, container.width, container.height);
     layoutRef.current = layout;
     const commands = serializeScene(container, layout);
     lastCmds = commands;

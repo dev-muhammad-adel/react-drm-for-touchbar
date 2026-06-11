@@ -33,15 +33,19 @@ function hasExplicitHeight(node: SceneNode): boolean {
   return false;
 }
 
+/** Estimated pixel size of a text node — shared by both layout engines. */
+export function measureText(tn: import('./types').TextNode): { w: number; h: number } {
+  const fontSize   = tn.style?.fontSize   ?? tn.fontSize;
+  const fontFamily = tn.style?.fontFamily ?? tn.fontFamily;
+  const charW = /iosevka/i.test(fontFamily ?? '') ? 0.58
+              : /mono|courier|consolas|hack|fira code/i.test(fontFamily ?? '') ? 0.72
+              : 0.63;
+  return { w: Math.ceil(tn.text.length * fontSize * charW), h: Math.ceil(fontSize * 1.4) };
+}
+
 function nodeWidth(node: SceneNode): number {
   if (node.type === 'text') {
-    const tn = node as import('./types').TextNode;
-    const fontSize   = tn.style?.fontSize   ?? tn.fontSize;
-    const fontFamily = tn.style?.fontFamily ?? tn.fontFamily;
-    const charW = /iosevka/i.test(fontFamily ?? '') ? 0.58
-                : /mono|courier|consolas|hack|fira code/i.test(fontFamily ?? '') ? 0.72
-                : 0.63;
-    return Math.ceil(tn.text.length * fontSize * charW);
+    return measureText(node as import('./types').TextNode).w;
   }
   const s = getStyle(node);
   let w = s.width !== undefined ? s.width
@@ -56,9 +60,7 @@ function nodeWidth(node: SceneNode): number {
 
 function nodeHeight(node: SceneNode): number {
   if (node.type === 'text') {
-    const tn = node as import('./types').TextNode;
-    const fontSize = tn.style?.fontSize ?? tn.fontSize;
-    return Math.ceil(fontSize * 1.4);
+    return measureText(node as import('./types').TextNode).h;
   }
   const s = getStyle(node);
   let h = s.height !== undefined ? s.height
