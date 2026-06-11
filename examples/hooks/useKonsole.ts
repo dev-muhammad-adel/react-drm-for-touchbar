@@ -224,10 +224,16 @@ function tokenPad(cmd: string): string {
 // ── D-Bus helpers ─────────────────────────────────────────────────────────────
 // Konsole may run single-process (all windows under one service, often the
 // plain 'org.kde.konsole' name) or one process per window ('org.kde.konsole-
-// <pid>'). Every service is tracked; the focused window is found by matching
-// the compositor's active-window pid to the service's process, then asking
-// each /konsole/MainWindow_<n> for its QWidget isActiveWindow property
-// (window n maps to the /Windows/<n> control object).
+// <pid>'). Every service is tracked; the focused window's process is found by
+// matching the compositor's active-window pid, and the focused GUI window via
+// the QWidget isActiveWindow property on /konsole/MainWindow_<n>.
+//
+// The catch: session control lives on /Windows/<m>, whose numbering is
+// UNRELATED to MainWindow_<n> (MainWindow numbers are reused after closes,
+// Windows ids only grow — MainWindow_3 ↔ /Windows/8 was observed), and
+// konsole offers no D-Bus bridge between the two trees. The pairing is
+// learned instead (see resolveTarget) and tab actions go through the focused
+// MainWindow's action collection, which needs no pairing at all.
 
 const isKonsoleService = (n: string) => n.startsWith('org.kde.konsole');
 
@@ -240,13 +246,25 @@ async function servicePid(bus: MessageBus, svc: string): Promise<number> {
   return Number(reply?.body[0] ?? 0);
 }
 
-async function isWindowActive(bus: MessageBus, svc: string, n: string): Promise<boolean> {
+async function widgetProp(bus: MessageBus, svc: string, n: string, prop: string): Promise<unknown> {
   const reply = await bus.call(new dbus.Message({
     destination: svc, path: `/konsole/MainWindow_${n}`,
     interface: 'org.freedesktop.DBus.Properties', member: 'Get',
-    signature: 'ss', body: ['org.qtproject.Qt.QWidget', 'isActiveWindow'],
+    signature: 'ss', body: ['org.qtproject.Qt.QWidget', prop],
   }));
-  return Boolean((reply?.body[0] as dbus.Variant)?.value);
+  return (reply?.body[0] as dbus.Variant)?.value;
+}
+
+/** Per-window tab state used for pairing inference. */
+interface WinInfo { cur: number; list: string; title: string }
+
+async function windowInfo(bus: MessageBus, svc: string, winPath: string): Promise<WinInfo> {
+  const win  = (await bus.getProxyObject(svc, winPath)).getInterface('org.kde.konsole.Window');
+  const id   = Number(await win.currentSession());
+  const list = ((await win.sessionList()) as (string | number)[]).map(Number).join(',');
+  const sess = (await bus.getProxyObject(svc, `/Sessions/${id}`)).getInterface('org.kde.konsole.Session');
+  const title = String(await sess.title(1));
+  return { cur: id, list, title };
 }
 
 function shortenPath(p: string): string {
@@ -287,6 +305,10 @@ export function useKonsole() {
   const svcsRef        = useRef<Map<string, number>>(new Map()); // service name → unix pid
   const winPathRef     = useRef<string | null>(null);
   const activePidRef   = useRef(0);
+  const pairsRef       = useRef<Map<string, string>>(new Map()); // `${svc}|${mwNum}` → /Windows/<m>
+  const prevScanRef    = useRef<Map<string, { mws: string[]; wins: string[] }>>(new Map());
+  const prevInfoRef    = useRef<Map<string, WinInfo>>(new Map()); // `${svc}${win}` → last tab state
+  const focusedMwRef   = useRef<{ svc: string; num: string } | null>(null);
   const serviceRef     = useRef<string | null>(null);
   const windowRef      = useRef<ClientInterface | null>(null);
   const activeIdRef    = useRef<number | null>(null);
@@ -388,7 +410,14 @@ export function useKonsole() {
     } catch {}
   }, [getSessionIface, reloadHistory]);
 
-  /** Find the focused konsole window across all services: pid match first, then isActiveWindow. */
+  /**
+   * Find the focused konsole window across all services. The MainWindow↔
+   * Windows pairing cannot be queried, so it is learned and cached from:
+   * single-window processes (trivial), a MainWindow and a Windows object
+   * appearing in the same scan (window created while we watch), the focused
+   * window's tab changing (only the focused window switches tabs), and a
+   * title that matches exactly one window. Fallback: current attachment.
+   */
   const resolveTarget = useCallback(async (): Promise<{ svc: string; win: string } | null> => {
     const bus  = busRef.current!;
     const svcs = svcsRef.current;
@@ -401,24 +430,80 @@ export function useKonsole() {
 
     for (const svc of ordered) {
       try {
-        const root = await bus.getProxyObject(svc, '/konsole');
-        const nums = root.nodes
+        const wins = (await bus.getProxyObject(svc, '/Windows')).nodes
+          .filter(n => /\/Windows\/\d+$/.test(n));
+        const mws = (await bus.getProxyObject(svc, '/konsole')).nodes
           .map(n => n.match(/\/MainWindow_(\d+)$/)?.[1])
           .filter((x): x is string => x !== undefined);
-        if (nums.length === 0) continue;
 
-        let num = nums[0];
-        if (nums.length > 1) {
-          let focused: string | null = null;
-          for (const n of nums) {
-            if (await isWindowActive(bus, svc, n).catch(() => false)) { focused = n; break; }
-          }
-          // No window focused (konsole in background) — stick with the
-          // attached window so the panel doesn't churn between windows.
-          const cur = winPathRef.current?.match(/\/Windows\/(\d+)$/)?.[1];
-          num = focused ?? (svc === serviceRef.current && cur && nums.includes(cur) ? cur : nums[0]);
+        // Drop pairs whose window vanished; learn from creation diffs.
+        for (const [k, w] of pairsRef.current) {
+          if (!k.startsWith(`${svc}|`)) continue;
+          if (!mws.includes(k.slice(svc.length + 1)) || !wins.includes(w)) pairsRef.current.delete(k);
         }
-        return { svc, win: `/Windows/${num}` };
+        const prev = prevScanRef.current.get(svc);
+        if (prev) {
+          const newMws  = mws.filter(n => !prev.mws.includes(n));
+          const newWins = wins.filter(w => !prev.wins.includes(w));
+          if (newMws.length === 1 && newWins.length === 1) pairsRef.current.set(`${svc}|${newMws[0]}`, newWins[0]);
+        }
+        prevScanRef.current.set(svc, { mws, wins });
+        if (wins.length === 1 && mws.length === 1) pairsRef.current.set(`${svc}|${mws[0]}`, wins[0]);
+
+        if (wins.length === 0) continue;
+
+        let focused: string | null = null;
+        for (const n of mws) {
+          if (await widgetProp(bus, svc, n, 'isActiveWindow').catch(() => false)) { focused = n; break; }
+        }
+        if (focused) focusedMwRef.current = { svc, num: focused };
+        else if (focusedMwRef.current && (focusedMwRef.current.svc !== svc || !mws.includes(focusedMwRef.current.num))) {
+          focusedMwRef.current = null;
+        }
+
+        if (wins.length === 1) return { svc, win: wins[0] };
+
+        if (focused) {
+          const cached = pairsRef.current.get(`${svc}|${focused}`);
+          if (cached) return { svc, win: cached };
+
+          // Pairing unknown — gather per-window tab state to infer it.
+          const infos = new Map<string, WinInfo>();
+          for (const w of wins) {
+            const info = await windowInfo(bus, svc, w).catch(() => null);
+            if (info) infos.set(w, info);
+          }
+
+          // A tab switch (current changed, tab set unchanged) can only come
+          // from the focused window.
+          let switched: string | null = null;
+          let ambiguous = false;
+          for (const [w, info] of infos) {
+            const old = prevInfoRef.current.get(`${svc}${w}`);
+            prevInfoRef.current.set(`${svc}${w}`, info);
+            if (old && old.cur !== info.cur && old.list === info.list) {
+              if (switched) ambiguous = true;
+              switched = w;
+            }
+          }
+          if (switched && !ambiguous) {
+            pairsRef.current.set(`${svc}|${focused}`, switched);
+            return { svc, win: switched };
+          }
+
+          // Title match — trust it only when it is unique among windows.
+          const ft = String(await widgetProp(bus, svc, focused, 'windowTitle').catch(() => '') ?? '');
+          const matches = [...infos.entries()].filter(([, i]) => i.title === ft).map(([w]) => w);
+          if (ft && matches.length === 1) {
+            pairsRef.current.set(`${svc}|${focused}`, matches[0]);
+            return { svc, win: matches[0] };
+          }
+        }
+
+        // Unknown or unfocused — stick with the attached window if it still
+        // exists so the panel doesn't churn, else take the first.
+        const cur = winPathRef.current;
+        return { svc, win: svc === serviceRef.current && cur && wins.includes(cur) ? cur : wins[0] };
       } catch { continue; } // service died mid-scan
     }
     return null;
@@ -443,7 +528,13 @@ export function useKonsole() {
       activeIdRef.current = curId;
       setConnected(true);
       await switchActiveSess(svc, curId);
-    } catch {}
+    } catch {
+      // A failed attach (e.g. racing konsole's startup) must not leave the
+      // refs looking attached, or the poll would never retry this target.
+      windowRef.current  = null;
+      serviceRef.current = null;
+      winPathRef.current = null;
+    }
   }, [flushSessions, getSessionIface, switchActiveSess]);
 
   useEffect(() => {
@@ -461,6 +552,10 @@ export function useKonsole() {
           svcsRef.current.set(name, await servicePid(bus, name).catch(() => 0));
         } else {
           svcsRef.current.delete(name);
+          prevScanRef.current.delete(name);
+          for (const k of [...pairsRef.current.keys()]) if (k.startsWith(`${name}|`)) pairsRef.current.delete(k);
+          for (const k of [...prevInfoRef.current.keys()]) if (k.startsWith(name)) prevInfoRef.current.delete(k);
+          if (focusedMwRef.current?.svc === name) focusedMwRef.current = null;
           if (serviceRef.current === name) {
             windowRef.current     = null;
             serviceRef.current    = null;
@@ -624,17 +719,34 @@ export function useKonsole() {
 
   // ── Actions ──────────────────────────────────────────────────────────────────
 
-  const newTab = useCallback(async () => {
-    await windowRef.current?.newSession('', '');
+  // Tab actions go through the focused MainWindow's action collection —
+  // correct regardless of the MainWindow↔Windows pairing. Falls back to the
+  // attached control object when no konsole window has focus.
+  const activateWindowAction = useCallback(async (name: string): Promise<boolean> => {
+    const f   = focusedMwRef.current;
+    const bus = busRef.current;
+    if (!f || !bus) return false;
+    try {
+      await bus.call(new dbus.Message({
+        destination: f.svc, path: `/konsole/MainWindow_${f.num}`,
+        interface: 'org.kde.KMainWindow', member: 'activateAction',
+        signature: 's', body: [name],
+      }));
+      return true;
+    } catch { return false; }
   }, []);
+
+  const newTab = useCallback(async () => {
+    if (!(await activateWindowAction('new-tab'))) await windowRef.current?.newSession('', '');
+  }, [activateWindowAction]);
 
   const nextTab = useCallback(async () => {
-    await windowRef.current?.nextSession();
-  }, []);
+    if (!(await activateWindowAction('next-tab'))) await windowRef.current?.nextSession();
+  }, [activateWindowAction]);
 
   const prevTab = useCallback(async () => {
-    await windowRef.current?.prevSession();
-  }, []);
+    if (!(await activateWindowAction('previous-tab'))) await windowRef.current?.prevSession();
+  }, [activateWindowAction]);
 
   const closeTab = useCallback(() => {
     keys.pressCombo([KEY.LEFTCTRL, KEY.LEFTSHIFT, KEY.KEY_W]);
