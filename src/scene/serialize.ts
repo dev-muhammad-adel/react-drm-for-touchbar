@@ -1,3 +1,4 @@
+import colorString from 'color-string';
 import type { SceneNode, RootContainer, SvgContainerNode, SvgElementNode } from './types';
 import { computeLayout } from './layout';
 import type { LayoutBox } from './layout';
@@ -26,42 +27,11 @@ function svgElToXml(node: SvgElementNode): string {
   return `${open}>${node.children.map(svgElToXml).join('')}</${node.tag}>`;
 }
 
-const NAMED_COLORS: Record<string, [number, number, number]> = {
-  black:   [0, 0, 0],
-  white:   [1, 1, 1],
-  red:     [1, 0, 0],
-  green:   [0, 0.502, 0],
-  lime:    [0, 1, 0],
-  blue:    [0, 0, 1],
-  yellow:  [1, 1, 0],
-  cyan:    [0, 1, 1],
-  magenta: [1, 0, 1],
-  gray:    [0.502, 0.502, 0.502],
-  grey:    [0.502, 0.502, 0.502],
-  orange:  [1, 0.647, 0],
-  purple:  [0.502, 0, 0.502],
-  pink:    [1, 0.753, 0.796],
-  navy:    [0, 0, 0.502],
-  teal:    [0, 0.502, 0.502],
-};
-
+/** Parse any CSS color (named, hex, rgb[a]) to [r, g, b, a] in 0..1. */
 export function parseColor(color: string): [number, number, number, number] {
-  if (NAMED_COLORS[color]) { const [r, g, b] = NAMED_COLORS[color]; return [r, g, b, 1]; }
-  if (color.startsWith('#')) {
-    const hex = color.slice(1);
-    const full = hex.length === 3 ? hex.split('').map(c => c + c).join('') + 'ff'
-               : hex.length === 6 ? hex + 'ff'
-               : hex; // 8 chars: rrggbbaa
-    return [
-      parseInt(full.slice(0, 2), 16) / 255,
-      parseInt(full.slice(2, 4), 16) / 255,
-      parseInt(full.slice(4, 6), 16) / 255,
-      parseInt(full.slice(6, 8), 16) / 255,
-    ];
-  }
-  const m = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-  if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255, m[4] !== undefined ? +m[4] : 1];
-  return [1, 1, 1, 1];
+  const rgba = colorString.get.rgb(color);
+  if (!rgba) return [1, 1, 1, 1];
+  return [rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3]];
 }
 
 function zIndexOf(node: SceneNode): number {
@@ -112,7 +82,10 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const borderStyle = node.style?.borderStyle ?? 'solid';
     if (borderColor && borderWidth && borderWidth > 0) {
       const [r, g, b, ca] = parseColor(borderColor);
-      cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a: ca * a, tl, tr, br, bl, lineWidth: borderWidth, borderStyle });
+      const alpha = ca * a;
+      if (alpha > 0.001) {
+        cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a: alpha, tl, tr, br, bl, lineWidth: borderWidth, borderStyle });
+      }
     }
     const clip = node.style?.overflow === 'hidden' || node.style?.overflow === 'scroll';
     if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
@@ -144,7 +117,9 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const containerX = parentLb?.x ?? lb.x;
     const containerW = parentLb?.w ?? 0;
     const lineHeight = node.style?.lineHeight ?? 0;
-    cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic, align, containerX, containerW, lineHeight });
+    if (a > 0.001) {
+      cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic, align, containerX, containerW, lineHeight });
+    }
   } else if (node.type === 'svg_image') {
     const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
     const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
