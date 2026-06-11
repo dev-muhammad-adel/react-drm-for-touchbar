@@ -42,6 +42,7 @@ function loadNative(): { DrmDisplay: new (devicePath: string) => NativeHandle } 
 interface NativeHandle {
   setup(): { width: number; height: number };
   render(commands: DrawCommand[]): void;
+  screenshot(filePath: string): void;
   getWidth(): number;
   getHeight(): number;
   close(): void;
@@ -64,6 +65,11 @@ export class DrmDisplay {
 
   render(commands: DrawCommand[]): void {
     this.handle.render(commands);
+  }
+
+  /** Write the currently displayed frame to a PNG file (logical orientation). */
+  screenshot(filePath: string): void {
+    this.handle.screenshot(filePath);
   }
 
   close(): void {

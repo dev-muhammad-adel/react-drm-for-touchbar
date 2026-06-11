@@ -297,3 +297,41 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
   cairo_surface_flush(surf);
   cairo_surface_destroy(surf);
 }
+
+void CairoRenderer::screenshot(const std::string& path) {
+  cairo_surface_t* fb_surf = cairo_image_surface_create_for_data(
+    buf_, CAIRO_FORMAT_ARGB32, (int)fb_w_, (int)fb_h_, (int)stride_);
+  if (cairo_surface_status(fb_surf) != CAIRO_STATUS_SUCCESS) {
+    cairo_surface_destroy(fb_surf);
+    throw std::runtime_error("screenshot: failed to wrap framebuffer");
+  }
+
+  // RGB24 drops the framebuffer's undefined X channel from the PNG.
+  int lw = rotate90_ ? (int)fb_h_ : (int)fb_w_;
+  int lh = rotate90_ ? (int)fb_w_ : (int)fb_h_;
+  cairo_surface_t* out = cairo_image_surface_create(CAIRO_FORMAT_RGB24, lw, lh);
+  cairo_t* cr = cairo_create(out);
+
+  if (rotate90_) {
+    // render() maps logical (lx,ly) → fb (fb_w−ly, lx); sampling the
+    // framebuffer through the same matrix as a pattern transform undoes it.
+    cairo_pattern_t* pat = cairo_pattern_create_for_surface(fb_surf);
+    cairo_matrix_t m;
+    m.xx = 0;  m.xy = -1; m.x0 = (double)fb_w_;
+    m.yx = 1;  m.yy = 0;  m.y0 = 0;
+    cairo_pattern_set_matrix(pat, &m);
+    cairo_set_source(cr, pat);
+    cairo_paint(cr);
+    cairo_pattern_destroy(pat);
+  } else {
+    cairo_set_source_surface(cr, fb_surf, 0, 0);
+    cairo_paint(cr);
+  }
+
+  cairo_status_t st = cairo_surface_write_to_png(out, path.c_str());
+  cairo_destroy(cr);
+  cairo_surface_destroy(out);
+  cairo_surface_destroy(fb_surf);
+  if (st != CAIRO_STATUS_SUCCESS)
+    throw std::runtime_error(std::string("screenshot: ") + cairo_status_to_string(st));
+}

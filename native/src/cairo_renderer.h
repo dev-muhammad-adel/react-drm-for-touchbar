@@ -1,6 +1,7 @@
 #pragma once
 #include <napi.h>
 #include <cstdint>
+#include <string>
 
 class CairoRenderer {
 public:
@@ -8,6 +9,10 @@ public:
 
   // Executes a JS array of draw-command objects against the framebuffer.
   void render(Napi::Env env, Napi::Array commands);
+
+  // Writes the current framebuffer to a PNG file, in logical orientation
+  // (un-rotated when the panel scans out 90°).
+  void screenshot(const std::string& path);
 
 private:
   uint8_t*  buf_;

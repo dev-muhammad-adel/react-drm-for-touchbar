@@ -11,11 +11,12 @@ class DrmDisplayWrapper : public Napi::ObjectWrap<DrmDisplayWrapper> {
 public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     Napi::Function func = DefineClass(env, "DrmDisplay", {
-      InstanceMethod("setup",     &DrmDisplayWrapper::Setup),
-      InstanceMethod("render",    &DrmDisplayWrapper::Render),
-      InstanceMethod("getWidth",  &DrmDisplayWrapper::GetWidth),
-      InstanceMethod("getHeight", &DrmDisplayWrapper::GetHeight),
-      InstanceMethod("close",     &DrmDisplayWrapper::Close),
+      InstanceMethod("setup",      &DrmDisplayWrapper::Setup),
+      InstanceMethod("render",     &DrmDisplayWrapper::Render),
+      InstanceMethod("screenshot", &DrmDisplayWrapper::Screenshot),
+      InstanceMethod("getWidth",   &DrmDisplayWrapper::GetWidth),
+      InstanceMethod("getHeight",  &DrmDisplayWrapper::GetHeight),
+      InstanceMethod("close",      &DrmDisplayWrapper::Close),
     });
     exports.Set("DrmDisplay", func);
     return exports;
@@ -60,6 +61,24 @@ private:
 
     renderer_->render(env, info[0].As<Napi::Array>());
     drm_->dirty();
+    return env.Undefined();
+  }
+
+  Napi::Value Screenshot(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) {
+      Napi::TypeError::New(env, "Call setup() before screenshot()").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    if (info.Length() < 1 || !info[0].IsString()) {
+      Napi::TypeError::New(env, "screenshot(path: string)").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    try {
+      renderer_->screenshot(info[0].As<Napi::String>().Utf8Value());
+    } catch (const std::exception& e) {
+      Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+    }
     return env.Undefined();
   }
 

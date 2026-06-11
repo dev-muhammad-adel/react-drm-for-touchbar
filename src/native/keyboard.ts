@@ -44,6 +44,10 @@ export const KEY_NAMES: Record<string, number> = {
   brightnessdown: 224, brightnessup: 225,
   kbdillumdown: 229, kbdillumup: 230,
   micmute: 248,
+  // Letters (digit strings like '3' resolve as raw keycodes, not key names)
+  q: 16, w: 17, e: 18, r: 19, t: 20, y: 21, u: 22, i: 23, o: 24, p: 25,
+  a: 30, s: 31, d: 32, f: 33, g: 34, h: 35, j: 36, k: 37, l: 38,
+  z: 44, x: 45, c: 46, v: 47, b: 48, n: 49, m: 50,
 };
 
 export type KeyId = number | string;
