@@ -100,7 +100,12 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const bgColor = node.style?.backgroundColor ?? node.color;
     if (bgColor !== 'transparent') {
       const [r, g, b, ca] = parseColor(bgColor);
-      cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a: ca * a, tl, tr, br, bl });
+      // Skip invisible fills — the native fill_rect treats a<=0 as "alpha not
+      // set" and coerces it to 1, turning a transparent rect opaque.
+      const alpha = ca * a;
+      if (alpha > 0.001) {
+        cmds.push({ cmd: 'fill_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a: alpha, tl, tr, br, bl });
+      }
     }
     const borderColor = node.style?.borderColor ?? node.borderColor;
     const borderWidth = node.style?.borderWidth ?? node.borderWidth;
