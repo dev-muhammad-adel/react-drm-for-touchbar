@@ -15,6 +15,13 @@ export const DISPLAY = {
   activeBrightness: 2,
 } as const;
 
+// ─── Layer transitions ──────────────────────────────────────────────────────
+
+export const LAYER_TRANSITION = {
+  outDurationMs: 200, // leaving layer (fade-out / slide-out)
+  inDurationMs:  350, // entering layer — slower so the new layer eases in
+} as const;
+
 // ─── Active window tracking ─────────────────────────────────────────────────
 
 export const ACTIVE_WINDOW = {

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Box, KeyboardContext, useKeyPressed, useTouchLock } from 'react-drm';
 import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions } from 'react-drm';
+import { LAYER_TRANSITION } from '../config';
 
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions };
 
@@ -31,7 +32,6 @@ export type LayerHostHandle = LayerCtx;
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 
-const DEFAULT_DURATION = 200;
 
 function easeOut(t: number)   { return t * (2 - t); }
 function easeInOut(t: number) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
@@ -146,14 +146,18 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
     const fromAnim: LayerAnimation =
       fOpts?.outAnim ?? fromLayer?.leaving?.outAnim ?? fromLayer?.outAnim ?? fromLayer?.animation ?? 'fade';
     const fromDuration =
-      fOpts?.duration ?? fromLayer?.leaving?.duration ?? fromLayer?.duration ?? DEFAULT_DURATION;
+      fOpts?.duration ?? fromLayer?.leaving?.duration ?? fromLayer?.duration ?? LAYER_TRANSITION.outDurationMs;
 
     const toAnim: LayerAnimation =
       tOpts?.inAnim    ?? toLayer?.entering?.inAnim    ?? toLayer?.inAnim    ?? toLayer?.animation  ?? 'fade';
-    const toShowAfter =
-      tOpts?.showAfter ?? toLayer?.entering?.showAfter ?? toLayer?.enterDelay ?? 0;
     const toDuration =
-      tOpts?.duration  ?? toLayer?.entering?.duration  ?? toLayer?.duration   ?? DEFAULT_DURATION;
+      tOpts?.duration  ?? toLayer?.entering?.duration  ?? toLayer?.duration   ?? LAYER_TRANSITION.inDurationMs;
+    // Fade-on-both-sides defaults to a sequence (fade out, then fade in) — starting
+    // both at once stacks the entering layer's full-alpha overlay on top of the
+    // leaving layer, which reads as an instant cut to black.
+    const toShowAfter =
+      tOpts?.showAfter ?? toLayer?.entering?.showAfter ?? toLayer?.enterDelay ??
+      (fromAnim === 'fade' && toAnim === 'fade' ? fromDuration : 0);
 
     t0Ref.current = Date.now();
     lock();
@@ -208,13 +212,19 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
 
   useImperativeHandle(ref, () => ctx);
 
+  // Layer wrappers are keyed by layer name, and the stable render uses the same
+  // Box shape as the transition render — otherwise React remounts the visible
+  // panel at both ends of every transition (blank-frame flicker while its data
+  // hooks restart).
   if (!trans) {
     const Active = layers[stableIdx]?.component;
     if (!Active) return null;
     return (
       <Ctx.Provider value={ctx}>
-        <Box style={{  width, height }}>
-          <Active width={width} height={height} />
+        <Box style={{ width, height }}>
+          <Box key={layers[stableIdx].name} style={{ position: 'absolute', left: 0, top: 0, width, height }}>
+            <Active width={width} height={height} />
+          </Box>
         </Box>
       </Ctx.Provider>
     );
@@ -231,17 +241,21 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
   const tFade = trans.toAnim   === 'fade' ? 1 - ease(trans.toAnim, trans.toProgress) : 0;
   const overlayBase: Style = { position: 'absolute', left: 0, top: 0, width, height };
 
+  // Keep the entering layer unmounted until its showAfter delay has elapsed —
+  // it stacks above the leaving layer, so rendering it early hides the out phase.
+  const toVisible = trans.toDelay === 0 || trans.toProgress > 0;
+
   return (
     <Ctx.Provider value={ctx}>
       <Box style={{ width, height }}>
         {From && (
-          <Box style={fStyle}>
+          <Box key={layers[trans.fromIdx].name} style={fStyle}>
             <From width={width} height={height} />
             {fFade > 0.01 && <Box style={{ ...overlayBase, backgroundColor: `rgba(0,0,0,${fFade.toFixed(3)})` }} />}
           </Box>
         )}
-        {To && (
-          <Box style={tStyle}>
+        {To && toVisible && (
+          <Box key={layers[trans.toIdx].name} style={tStyle}>
             <To width={width} height={height} />
             {tFade > 0.01 && <Box style={{ ...overlayBase, backgroundColor: `rgba(0,0,0,${tFade.toFixed(3)})` }} />}
           </Box>
