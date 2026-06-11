@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Box, KeyboardContext, useKeyPressed, useTouchLock } from 'react-drm';
-import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions } from 'react-drm';
+import { Box, KeyboardContext, useKeyPressed, useTouchLock, animated, useTransition, easings } from 'react-drm';
+import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions, SpringValue } from 'react-drm';
 import { LAYER_TRANSITION } from '../config';
 
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions };
@@ -32,52 +32,35 @@ export type LayerHostHandle = LayerCtx;
 
 // ── Style helpers ──────────────────────────────────────────────────────────────
 
-
-function easeOut(t: number)   { return t * (2 - t); }
-function easeInOut(t: number) { return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; }
-function ease(anim: LayerAnimation, t: number) {
-  return anim === 'fade' ? easeOut(t) : easeInOut(t);
+function easing(anim: LayerAnimation) {
+  return anim === 'fade' ? easings.easeOutQuad : easings.easeInOutQuad;
 }
 
-/** Style for the layer that is leaving (p: 0 → 1). */
-function fromLayerStyle(anim: LayerAnimation, p: number, w: number, h: number): Style {
-  const e = ease(anim, p);
-  const base: Style = { position: 'absolute', left: 0, top: 0, width: w, height: h };
+/**
+ * Style for a layer at presence p (1 = fully on screen, 0 = fully off).
+ * Entering layers run p 0→1, leaving layers 1→0; slides exit toward the
+ * opposite side they entered from, so the offset sign flips per phase.
+ * Fade layers sit offscreen at exactly p=0 — useTransition mounts a delayed
+ * entering layer immediately, and its full-alpha overlay would otherwise
+ * black out the leaving layer below before the fade-in even starts.
+ */
+function presenceStyle(
+  anim: LayerAnimation,
+  phase: 'enter' | 'leave',
+  p: SpringValue<number>,
+  w: number,
+  h: number,
+) {
+  const base = { position: 'absolute' as const, top: 0, width: w, height: h };
+  const dir = phase === 'enter' ? 1 : -1;
+  const off = (sign: number, size: number) => p.to(v => Math.round(sign * (1 - v) * size));
   switch (anim) {
-    case 'fade':        return base; // fade handled via overlay (opacity doesn't propagate to children)
-    case 'slide-left':  return { ...base, left: -Math.round(e * w) };
-    case 'slide-right': return { ...base, left:  Math.round(e * w) };
-    case 'slide-up':    return { ...base, top:  -Math.round(e * h) };
-    case 'slide-down':  return { ...base, top:   Math.round(e * h) };
+    case 'fade':        return { ...base, left: p.to(v => (v <= 0 ? -2 * w : 0)) };
+    case 'slide-left':  return { ...base, left: off(dir, w) };
+    case 'slide-right': return { ...base, left: off(-dir, w) };
+    case 'slide-up':    return { ...base, left: 0, top: off(dir, h) };
+    case 'slide-down':  return { ...base, left: 0, top: off(-dir, h) };
   }
-}
-
-/** Style for the layer that is entering (p: 0 → 1). */
-function toLayerStyle(anim: LayerAnimation, p: number, w: number, h: number): Style {
-  const e = ease(anim, p);
-  const base: Style = { position: 'absolute', left: 0, top: 0, width: w, height: h };
-  switch (anim) {
-    case 'fade':        return base; // fade handled via overlay
-    case 'slide-left':  return { ...base, left:  Math.round((1 - e) * w) };
-    case 'slide-right': return { ...base, left: -Math.round((1 - e) * w) };
-    case 'slide-up':    return { ...base, top:   Math.round((1 - e) * h) };
-    case 'slide-down':  return { ...base, top:  -Math.round((1 - e) * h) };
-  }
-}
-
-// ── Trans state ────────────────────────────────────────────────────────────────
-
-interface Trans {
-  fromIdx:      number;
-  toIdx:        number;
-  fromAnim:     LayerAnimation;
-  toAnim:       LayerAnimation;
-  fromDelay:    number;
-  fromDuration: number;
-  toDelay:      number;
-  toDuration:   number;
-  fromProgress: number;
-  toProgress:   number;
 }
 
 // ── LayerHost (public) ─────────────────────────────────────────────────────────
@@ -107,6 +90,14 @@ export const LayerHost = forwardRef<LayerHostHandle, {
 
 // ── LayerHostInner (private) ───────────────────────────────────────────────────
 
+interface PendingSwitch {
+  fromAnim:     LayerAnimation;
+  fromDuration: number;
+  toAnim:       LayerAnimation;
+  toDuration:   number;
+  showAfter:    number;
+}
+
 const LayerHostInner = forwardRef<LayerHostHandle, {
   layers:   Layer[];
   initial?: string;
@@ -117,26 +108,27 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
 }>(function LayerHostInner({ layers, initial, width, height, fnKey, fnLayer }, ref) {
   const initIdx = initial ? Math.max(0, layers.findIndex(l => l.name === initial)) : 0;
 
-  const [stableIdx, setStableIdx] = useState(initIdx);
-  const [trans,     setTrans]     = useState<Trans | null>(null);
-  const timer       = useRef<ReturnType<typeof setInterval> | null>(null);
-  const t0Ref       = useRef(0);
+  const [activeIdx, setActiveIdx] = useState(initIdx);
   const { lock, unlock } = useTouchLock();
   const beforeFnIdx = useRef(-1);
+  const activeIdxRef = useRef(activeIdx);
+  activeIdxRef.current = activeIdx;
 
-  const stableIdxRef = useRef(stableIdx);
-  const transRef     = useRef(trans);
-  stableIdxRef.current = stableIdx;
-  transRef.current     = trans;
+  // Resolved options for the in-flight switch — read by the enter/leave
+  // callbacks below, which useTransition invokes when the active key changes.
+  const pendingRef = useRef<PendingSwitch>({
+    fromAnim: 'fade', fromDuration: LAYER_TRANSITION.outDurationMs,
+    toAnim:   'fade', toDuration:   LAYER_TRANSITION.inDurationMs, showAfter: 0,
+  });
+  // Which anim/phase each mounted layer is currently running (keyed by name).
+  const phaseRef = useRef(new Map<string, { anim: LayerAnimation; phase: 'enter' | 'leave' }>());
 
   const fnHeld = useKeyPressed(fnKey);
   const fnIdx  = fnLayer ? layers.findIndex(l => l.name === fnLayer) : -1;
 
   function switchTo(nextIdx: number, opts: SwitchOptions = {}) {
-    const curIdx = transRef.current?.toIdx ?? stableIdxRef.current;
-    if (nextIdx === curIdx) return;
-
-    if (timer.current) clearInterval(timer.current);
+    const curIdx = activeIdxRef.current;
+    if (nextIdx === curIdx || !layers[nextIdx]) return;
 
     const fromLayer = layers[curIdx];
     const toLayer   = layers[nextIdx];
@@ -152,114 +144,78 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
       tOpts?.inAnim    ?? toLayer?.entering?.inAnim    ?? toLayer?.inAnim    ?? toLayer?.animation  ?? 'fade';
     const toDuration =
       tOpts?.duration  ?? toLayer?.entering?.duration  ?? toLayer?.duration   ?? LAYER_TRANSITION.inDurationMs;
-    // Fade-on-both-sides defaults to a sequence (fade out, then fade in) — starting
-    // both at once stacks the entering layer's full-alpha overlay on top of the
-    // leaving layer, which reads as an instant cut to black.
-    const toShowAfter =
+    // Fade-on-both-sides defaults to a sequence (fade out, then fade in) —
+    // starting both at once reads as an instant cut to black.
+    const showAfter =
       tOpts?.showAfter ?? toLayer?.entering?.showAfter ?? toLayer?.enterDelay ??
       (fromAnim === 'fade' && toAnim === 'fade' ? fromDuration : 0);
 
-    t0Ref.current = Date.now();
+    pendingRef.current = { fromAnim, fromDuration, toAnim, toDuration, showAfter };
     lock();
-
-    setTrans({
-      fromIdx: curIdx, toIdx: nextIdx,
-      fromAnim, fromDelay: 0, fromDuration,
-      toAnim,   toDelay: toShowAfter, toDuration,
-      fromProgress: 0, toProgress: 0,
-    });
-
-    timer.current = setInterval(() => {
-      const elapsed = Date.now() - t0Ref.current;
-      const fromP = Math.min(1, Math.max(0, elapsed / fromDuration));
-      const toP   = Math.min(1, Math.max(0, (elapsed - toShowAfter) / toDuration));
-      const done  = elapsed >= Math.max(fromDuration, toShowAfter + toDuration);
-
-      if (done) {
-        clearInterval(timer.current!);
-        timer.current = null;
-        setStableIdx(nextIdx);
-        setTrans(null);
-        unlock();
-      } else {
-        setTrans(t => t ? { ...t, fromProgress: fromP, toProgress: toP } : t);
-      }
-    }, 16);
+    setActiveIdx(nextIdx);
   }
 
-  useEffect(() => {
-    if (fnIdx < 0) return;
-    if (fnHeld) {
-      beforeFnIdx.current = transRef.current?.toIdx ?? stableIdxRef.current;
-      switchTo(fnIdx, { fromLayerSwitch: { outAnim: 'fade', duration: 5 }, toLayerSwitch: { inAnim: 'fade', duration: 100, showAfter: 0 } });
-    } else {
-      const returnTo = beforeFnIdx.current >= 0 ? beforeFnIdx.current : stableIdxRef.current;
-            switchTo(returnTo, { fromLayerSwitch: { outAnim: 'fade', duration: 5 }, toLayerSwitch: { inAnim: 'fade', duration: 100, showAfter: 0 } });
-
-    }
-  }, [fnHeld]);
-
-  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
-
-  const activeIdx = trans?.toIdx ?? stableIdx;
+  const transition = useTransition(activeIdx, {
+    keys: (i: number) => layers[i]?.name ?? String(i),
+    initial: { p: 1 }, // first layer mounts without animating in
+    from:    { p: 0 },
+    enter: (i: number) => {
+      const { toAnim, toDuration, showAfter } = pendingRef.current;
+      phaseRef.current.set(layers[i]?.name ?? String(i), { anim: toAnim, phase: 'enter' });
+      return {
+        p: 1, delay: showAfter,
+        config: { duration: toDuration, easing: easing(toAnim) },
+        onRest: () => unlock(),
+      };
+    },
+    leave: (i: number) => {
+      const { fromAnim, fromDuration } = pendingRef.current;
+      phaseRef.current.set(layers[i]?.name ?? String(i), { anim: fromAnim, phase: 'leave' });
+      return { p: 0, config: { duration: fromDuration, easing: easing(fromAnim) } };
+    },
+  });
 
   const ctx: LayerCtx = {
     current: layers[activeIdx]?.name ?? '',
     go:   (name, raw) => { const i = layers.findIndex(l => l.name === name); if (i >= 0) switchTo(i, resolveOpts(raw)); },
-    next: (raw) => switchTo((activeIdx + 1) % layers.length, resolveOpts(raw)),
-    prev: (raw) => switchTo((activeIdx - 1 + layers.length) % layers.length, resolveOpts(raw)),
+    next: (raw) => switchTo((activeIdxRef.current + 1) % layers.length, resolveOpts(raw)),
+    prev: (raw) => switchTo((activeIdxRef.current - 1 + layers.length) % layers.length, resolveOpts(raw)),
   };
 
   useImperativeHandle(ref, () => ctx);
 
-  // Layer wrappers are keyed by layer name, and the stable render uses the same
-  // Box shape as the transition render — otherwise React remounts the visible
-  // panel at both ends of every transition (blank-frame flicker while its data
-  // hooks restart).
-  if (!trans) {
-    const Active = layers[stableIdx]?.component;
-    if (!Active) return null;
-    return (
-      <Ctx.Provider value={ctx}>
-        <Box style={{ width, height }}>
-          <Box key={layers[stableIdx].name} style={{ position: 'absolute', left: 0, top: 0, width, height }}>
-            <Active width={width} height={height} />
-          </Box>
-        </Box>
-      </Ctx.Provider>
-    );
-  }
+  useEffect(() => {
+    if (fnIdx < 0) return;
+    if (fnHeld) {
+      beforeFnIdx.current = activeIdxRef.current;
+      switchTo(fnIdx, { fromLayerSwitch: { outAnim: 'fade', duration: 5 }, toLayerSwitch: { inAnim: 'fade', duration: 100, showAfter: 0 } });
+    } else {
+      const returnTo = beforeFnIdx.current >= 0 ? beforeFnIdx.current : activeIdxRef.current;
+      switchTo(returnTo, { fromLayerSwitch: { outAnim: 'fade', duration: 5 }, toLayerSwitch: { inAnim: 'fade', duration: 100, showAfter: 0 } });
+    }
+  }, [fnHeld]);
 
-  const From = layers[trans.fromIdx]?.component;
-  const To   = layers[trans.toIdx]?.component;
-  const fStyle = fromLayerStyle(trans.fromAnim, trans.fromProgress, width, height);
-  const tStyle = toLayerStyle(trans.toAnim,     trans.toProgress,   width, height);
-
-  // Fade overlay alphas: use backgroundColor rgba instead of opacity (opacity doesn't
-  // propagate to children in this renderer, but fill_rect alpha does).
-  const fFade = trans.fromAnim === 'fade' ? ease(trans.fromAnim, trans.fromProgress) : 0;
-  const tFade = trans.toAnim   === 'fade' ? 1 - ease(trans.toAnim, trans.toProgress) : 0;
   const overlayBase: Style = { position: 'absolute', left: 0, top: 0, width, height };
-
-  // Keep the entering layer unmounted until its showAfter delay has elapsed —
-  // it stacks above the leaving layer, so rendering it early hides the out phase.
-  const toVisible = trans.toDelay === 0 || trans.toProgress > 0;
 
   return (
     <Ctx.Provider value={ctx}>
       <Box style={{ width, height }}>
-        {From && (
-          <Box key={layers[trans.fromIdx].name} style={fStyle}>
-            <From width={width} height={height} />
-            {fFade > 0.01 && <Box style={{ ...overlayBase, backgroundColor: `rgba(0,0,0,${fFade.toFixed(3)})` }} />}
-          </Box>
-        )}
-        {To && toVisible && (
-          <Box key={layers[trans.toIdx].name} style={tStyle}>
-            <To width={width} height={height} />
-            {tFade > 0.01 && <Box style={{ ...overlayBase, backgroundColor: `rgba(0,0,0,${tFade.toFixed(3)})` }} />}
-          </Box>
-        )}
+        {transition((style, i) => {
+          const layer = layers[i];
+          if (!layer) return null;
+          const info = phaseRef.current.get(layer.name) ?? { anim: 'fade' as LayerAnimation, phase: 'enter' as const };
+          const Comp = layer.component;
+          return (
+            <animated.Box style={presenceStyle(info.anim, info.phase, style.p, width, height)}>
+              <Comp width={width} height={height} />
+              {info.anim === 'fade' && (
+                // Fade via a black overlay — opacity doesn't propagate to
+                // children in this renderer, but fill alpha does.
+                <animated.Box style={{ ...overlayBase, backgroundColor: style.p.to(v => `rgba(0,0,0,${(1 - v).toFixed(3)})`) }} />
+              )}
+            </animated.Box>
+          );
+        })}
       </Box>
     </Ctx.Provider>
   );

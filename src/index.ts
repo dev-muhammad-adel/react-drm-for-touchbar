@@ -34,3 +34,9 @@ export type { LayoutRef } from './scene/layout-context';
 export { SAFE_INSET, SAFE_INSET_X, SAFE_INSET_Y } from './scene/safe-area';
 export type { SafeAreaInsets } from './scene/safe-area';
 export { renderHot } from './dev/hot-reload';
+export {
+  animated,
+  useSpring, useSpringValue, useSprings, useTransition,
+  springTo, easings, springConfig,
+} from './spring';
+export type { SpringValue, Interpolation, TransitionFn } from './spring';

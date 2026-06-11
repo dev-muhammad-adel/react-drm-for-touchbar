@@ -2,6 +2,7 @@ import fs from 'fs';
 import { Worker } from 'worker_threads';
 import React from 'react';
 import { reconciler } from './reconciler';
+import { setRepaint } from './invalidate';
 import { serializeScene } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayout } from '../scene/layout';
@@ -463,6 +464,7 @@ export function render(
     lastCmds = commands;
     renderCurrent(); // respects current dim/off state
   };
+  setRepaint(() => container._onCommit?.());
 
   const root = reconciler.createContainer(
     container, 0, null, false, null, 'react-drm',
@@ -511,6 +513,7 @@ export function render(
 
   return {
     unmount: () => {
+      setRepaint(null);
       reconciler.updateContainer(null, root, null, null);
       clearTimers();
       if (shiftTimer) clearInterval(shiftTimer);
