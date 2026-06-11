@@ -14,6 +14,15 @@ export const DISPLAY = {
   activeBrightness: 2,
 } as const;
 
+// ─── Active window tracking ─────────────────────────────────────────────────
+
+export const ACTIVE_WINDOW = {
+  // 'auto' detects the session (Xorg vs Wayland, then Hyprland vs GNOME —
+  // sudo-safe, via sockets not env vars) and picks the matching backend.
+  // Set a backend name to skip detection and force one.
+  backend: 'auto' as 'auto' | 'hyprland' | 'gnome',
+};
+
 // ─── Dolphin panel ──────────────────────────────────────────────────────────
 
 export const DOLPHIN = {
