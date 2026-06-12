@@ -91,14 +91,7 @@ export const DEFAULT_BROWSER_KEYS: BrowserKeymap = {
   prevTab:  [KEY.LEFTCTRL, KEY.LEFTSHIFT, KEY.TAB],
 };
 
-/**
- * Per-browser overrides, keyed by window class (lowercase).
- * Only list the actions that differ from DEFAULT_BROWSER_KEYS —
- * everything else falls back to the defaults.
- *
- * If you changed a shortcut inside your browser, mirror it here, e.g.:
- *   firefox: { reload: [KEY.F5] },
- */
+
 export const BROWSER_KEY_OVERRIDES: Record<string, Partial<BrowserKeymap>> = {
   // firefox:       { reload: [KEY.F5] },
   // chromium:      { nextTab: [KEY.LEFTCTRL, KEY.PAGEDOWN], prevTab: [KEY.LEFTCTRL, KEY.PAGEUP] },
