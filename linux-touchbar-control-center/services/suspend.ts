@@ -3,7 +3,7 @@ import path from 'path';
 import { spawn } from 'child_process';
 import dbus from 'dbus-next';
 import { usbReset } from 'react-drm';
-import { SLEEP } from './config';
+import { SLEEP } from '../config';
 
 /**
  * In-app Touch Bar lifecycle: suspend/resume handling for every run mode

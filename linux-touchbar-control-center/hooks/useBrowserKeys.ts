@@ -1,4 +1,4 @@
-import { keys } from '../keyInjector';
+import { keys } from '../services/keyInjector';
 import { execFile } from 'child_process';
 import { browserKeysFor } from '../config';
 

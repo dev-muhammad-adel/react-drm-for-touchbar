@@ -4,7 +4,7 @@
  * Ultra-wide transport/timeline UI for a 2008x60 DRM display.
  *
  * Run with:
- *   sudo npx tsx examples/media.tsx
+ *   sudo npx tsx linux-touchbar-control-center/media.tsx
  *
  * Controls:
  *   - Touch: previous / play-pause / next / seek bar / volume +/-

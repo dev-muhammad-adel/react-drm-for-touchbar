@@ -11,7 +11,7 @@ import {
   MdApps,
 } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
-import { keys } from '../keyInjector';
+import { keys } from '../services/keyInjector';
 
 // ── Actions ────────────────────────────────────────────────────────────────────
 

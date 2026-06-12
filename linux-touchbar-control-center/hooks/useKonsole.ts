@@ -2,11 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { keys } from '../keyInjector';
+import { keys } from '../services/keyInjector';
 import { KEY } from 'react-drm';
 import dbus, { MessageBus, ClientInterface } from 'dbus-next';
 import { Fzf, byLengthAsc } from 'fzf';
-import { useActiveWindow } from '../useActiveWindow';
+import { useActiveWindow } from './useActiveWindow';
 
 // ── History ──────────────────────────────────────────────────────────────────
 

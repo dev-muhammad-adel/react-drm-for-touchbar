@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text, Button } from 'react-drm';
 import { useLayers } from '..';
-import { useActiveWindow } from '../../useActiveWindow';
+import { useActiveWindow } from '../../hooks/useActiveWindow';
 
 const ACCENT: Record<string, string> = {
   firefox: '#f97316',

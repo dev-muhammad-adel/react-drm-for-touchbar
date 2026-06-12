@@ -6,7 +6,7 @@
   "main": "./src/index.ts",
   "types": "./dist/src/index.d.ts",
   "workspaces": [
-    "examples"
+    "linux-touchbar-control-center"
   ],
   "scripts": {
     "build:native": "node-gyp configure build",

@@ -14,7 +14,7 @@ After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
-WorkingDirectory=%h/react-drm/examples
+WorkingDirectory=%h/react-drm/linux-touchbar-control-center
 ExecStart=%h/react-drm/node_modules/.bin/tsx index.tsx
 ExecStopPost=-%h/react-drm/system/react-drm-tb-detach
 KillSignal=SIGINT

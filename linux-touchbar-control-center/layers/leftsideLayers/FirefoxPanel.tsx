@@ -4,7 +4,7 @@ import {
   MdArrowBack, MdArrowForward, MdRefresh,
   MdAdd, MdClose, MdChevronLeft, MdChevronRight,
 } from 'react-icons/md';
-import { useActiveWindow } from '../../useActiveWindow';
+import { useActiveWindow } from '../../hooks/useActiveWindow';
 import { useBrowserKeys } from '../../hooks/useBrowserKeys';
 
 const ACCENT    = '#f97316';

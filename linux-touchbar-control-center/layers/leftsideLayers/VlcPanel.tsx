@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text, Button } from 'react-drm';
 import { useLayers } from '..';
-import { useActiveWindow } from '../../useActiveWindow';
+import { useActiveWindow } from '../../hooks/useActiveWindow';
 
 export function VlcPanel({ width, height }: { width: number; height: number }) {
   const { next } = useLayers();

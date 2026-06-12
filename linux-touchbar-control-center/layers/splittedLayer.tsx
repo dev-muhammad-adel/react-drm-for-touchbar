@@ -5,7 +5,7 @@ import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
 import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSportsEsports } from 'react-icons/md';
 import { LayerHost, useLayers } from '.';
 import type { Layer, LayerHostHandle } from '.';
-import { useActiveWindow } from '../useActiveWindow';
+import { useActiveWindow } from '../hooks/useActiveWindow';
 import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
 import { BrowserPanel } from './leftsideLayers/FirefoxPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';

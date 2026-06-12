@@ -16,17 +16,17 @@ npm install
 npm run build
 ```
 
-## Run examples (foreground)
+## Run linux-touchbar-control-center (foreground)
 
 ```sh
-cd examples
+cd linux-touchbar-control-center
 npm install
-npx tsx <example-file>.tsx
+npm run dev
 ```
 
 ## Install as a service
 
-Runs the example app (`examples/index.tsx`) as an unprivileged user service tied
+Runs as an unprivileged user service tied
 to your graphical session — no root, no sudo rules. Lifecycle: the firmware
 fn-key strip stays on the Touch Bar from power-on until login (the USB device
 sits in config 1, so the `appletbdrm` driver never loads), the app switches
@@ -67,14 +67,14 @@ is at `~/react-drm` — edit the paths in `system/react-drm.service` otherwise.
    systemctl --user enable react-drm
    ```
 
-   Make sure `examples/` has its dependencies (`cd examples && npm install`),
+   Make sure `linux-touchbar-control-center/` has its dependencies (`cd linux-touchbar-control-center && npm install`),
    then reboot — the fn strip should be visible until login, after which
    react-drm takes the bar. Check with `systemctl --user status react-drm`
    and `journalctl --user -u react-drm`.
 
 ## Konsole D-Bus API (required for the Konsole panel)
 
-The Konsole example panel (`examples/layers/leftsideLayers/KonsolePanel.tsx`) sends suggested commands to Konsole via the `org.kde.konsole.Session.sendText` D-Bus method. Since Konsole 22.04 this method (along with `runCommand`) is disabled by default and fails with:
+The Konsole panel (`linux-touchbar-control-center/layers/leftsideLayers/KonsolePanel.tsx`) sends suggested commands to Konsole via the `org.kde.konsole.Session.sendText` D-Bus method. Since Konsole 22.04 this method (along with `runCommand`) is disabled by default and fails with:
 
 ```
 Security sensitive DBus API is disabled in the settings.

@@ -2,7 +2,7 @@ import fs from 'fs';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import dbus, { MessageBus } from 'dbus-next';
 import { DOLPHIN } from '../config';
-import { useActiveWindow } from '../useActiveWindow';
+import { useActiveWindow } from './useActiveWindow';
 
 // Dolphin exposes every menu action as a QAction D-Bus object at
 // <window>/actions/<name> — trigger() invokes it, properties carry state.

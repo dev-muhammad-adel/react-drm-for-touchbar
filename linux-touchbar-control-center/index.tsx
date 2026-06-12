@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { DrmDisplay, KeyboardReader, renderHot, resolveKeyCode } from 'react-drm';
 import { DISPLAY, SCREENSHOT, SLEEP } from './config';
-import { attachTouchBar, ensureTouchBarAttached, watchSleep } from './suspend';
+import { attachTouchBar, ensureTouchBarAttached, watchSleep } from './services/suspend';
 
 // The app owns the Touch Bar lifecycle in every run mode — manual `npm run
 // dev` and react-drm.service alike: attach at startup, quiesce before system

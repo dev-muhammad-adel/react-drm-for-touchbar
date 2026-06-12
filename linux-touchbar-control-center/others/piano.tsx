@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import { Box, Button, Text, LayoutContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
-import { registerSuspendHooks } from '../suspend';
+import { registerSuspendHooks } from '../services/suspend';
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 

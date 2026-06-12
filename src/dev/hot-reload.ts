@@ -8,7 +8,7 @@ import type { DrmDisplay } from '../native/binding';
 
 // Walk up from startDir looking for a package.json that declares "workspaces"
 // (the monorepo/workspace root). Falls back to the highest package.json found.
-// This ensures both examples/ and src/ are covered in one watch.
+// This ensures both linux-touchbar-control-center/ and src/ are covered in one watch.
 function findWatchRoot(startDir: string): string {
   let dir = startDir;
   let highest = startDir;
