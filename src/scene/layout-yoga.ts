@@ -4,18 +4,19 @@ import type { LayoutBox } from './layout';
 import { measureText } from './layout';
 
 /**
- * Yoga-backed layout engine, selected with REACT_DRM_LAYOUT=yoga.
+ * The layout engine, backed by Meta's yoga.
  *
- * Mirrors the legacy engine's semantics, which differ from CSS defaults:
+ * Semantics deliberately differ from CSS defaults (inherited from the
+ * original hand-rolled engine the example app was tuned against):
  * - flexDirection defaults to 'row', alignItems to 'stretch'
- * - items never shrink (flexShrink is always 0)
+ * - items don't shrink unless they set flexShrink explicitly
  * - `flex: N` means grow N with flexBasis 0
+ * - a stretching parent overrides the child's explicit cross-axis size
  * - position:absolute (or x/y props) sizes to the explicit width/height, not
  *   to content — unspecified dimensions are 0
  * - root children and display:'block' children fill their containing box
  *   unless they have explicit dimensions
- * - display:'grid' is not supported here; computeLayoutYoga throws and the
- *   caller falls back to the legacy engine for the whole tree
+ * - pixel-grid rounding is disabled; coordinates stay fractional
  *
  * yoga-layout is ESM with top-level await, so it can't be required from this
  * CJS build — callers must loadYogaEngine() (dynamic import) before use.
@@ -30,7 +31,7 @@ let yogaConfig: ReturnType<Yoga['Config']['create']> | null = null;
 export async function loadYogaEngine(): Promise<void> {
   if (!Y) {
     Y = (await import('yoga-layout')).default;
-    // Legacy produces fractional positions; disable yoga's pixel-grid
+    // Keep fractional positions; disable yoga's pixel-grid
     // rounding so both engines emit identical coordinates.
     yogaConfig = Y.Config.create();
     yogaConfig.setPointScaleFactor(0);
@@ -48,7 +49,7 @@ function getStyle(node: SceneNode): Style {
   return {};
 }
 
-function explicitWidth(node: SceneNode): number | undefined {
+function explicitWidth(node: SceneNode): import('./style').Dimension | undefined {
   const s = getStyle(node);
   if (s.width !== undefined) return s.width;
   if (node.type === 'box')       return (node as BoxNode).width;
@@ -57,7 +58,7 @@ function explicitWidth(node: SceneNode): number | undefined {
   return undefined;
 }
 
-function explicitHeight(node: SceneNode): number | undefined {
+function explicitHeight(node: SceneNode): import('./style').Dimension | undefined {
   const s = getStyle(node);
   if (s.height !== undefined) return s.height;
   if (node.type === 'box')       return (node as BoxNode).height;
@@ -92,6 +93,15 @@ const ALIGN = () => ({
   'stretch':    Y!.ALIGN_STRETCH,
 } as const);
 
+const ALIGN_CONTENT = () => ({
+  'flex-start':    Y!.ALIGN_FLEX_START,
+  'flex-end':      Y!.ALIGN_FLEX_END,
+  'center':        Y!.ALIGN_CENTER,
+  'stretch':       Y!.ALIGN_STRETCH,
+  'space-between': Y!.ALIGN_SPACE_BETWEEN,
+  'space-around':  Y!.ALIGN_SPACE_AROUND,
+} as const);
+
 /** Pairs a scene node with its yoga node so results can be read back. */
 interface Built {
   scene: SceneNode;
@@ -108,7 +118,7 @@ function applyCommonStyle(yn: YogaNode, node: SceneNode, stretch: StretchAxis): 
 
   const w = explicitWidth(node);
   const h = explicitHeight(node);
-  // Legacy quirk: a stretching parent overrides the child's explicit
+  // Renderer quirk: a stretching parent overrides the child's explicit
   // cross-axis size entirely — drop it so yoga stretches the same way.
   if (w !== undefined && stretch !== 'horizontal') yn.setWidth(w);
   if (h !== undefined && stretch !== 'vertical')   yn.setHeight(h);
@@ -127,15 +137,17 @@ function applyCommonStyle(yn: YogaNode, node: SceneNode, stretch: StretchAxis): 
   yn.setPadding(yoga.EDGE_TOP,    s.paddingTop    ?? s.paddingVertical   ?? s.padding ?? 0);
   yn.setPadding(yoga.EDGE_BOTTOM, s.paddingBottom ?? s.paddingVertical   ?? s.padding ?? 0);
 
-  // Container props — legacy defaults: row + stretch.
+  // Container props — this renderer's defaults: row + stretch.
   yn.setFlexDirection(s.flexDirection === 'column' ? yoga.FLEX_DIRECTION_COLUMN : yoga.FLEX_DIRECTION_ROW);
   yn.setJustifyContent(JUSTIFY()[s.justifyContent ?? 'flex-start']);
   yn.setAlignItems(ALIGN()[s.alignItems ?? 'stretch']);
+  yn.setAlignContent(ALIGN_CONTENT()[s.alignContent ?? 'flex-start']);
+  yn.setFlexWrap(s.flexWrap === 'wrap' ? yoga.WRAP_WRAP : yoga.WRAP_NO_WRAP);
   yn.setGap(yoga.GUTTER_COLUMN, s.columnGap ?? s.gap ?? 0);
   yn.setGap(yoga.GUTTER_ROW,    s.rowGap    ?? s.gap ?? 0);
 
-  // Item props — legacy never shrinks.
-  yn.setFlexShrink(0);
+  // Item props — items don't shrink unless they explicitly opt in.
+  yn.setFlexShrink(s.flexShrink ?? 0);
   const grow = s.flexGrow ?? (s.flex !== undefined ? s.flex : 0);
   if (grow > 0) yn.setFlexGrow(grow);
   if (s.flexBasis !== undefined && s.flexBasis !== 'auto') {
@@ -144,10 +156,11 @@ function applyCommonStyle(yn: YogaNode, node: SceneNode, stretch: StretchAxis): 
     yn.setFlexBasis(0); // `flex: N` shorthand
   }
   if (s.alignSelf && s.alignSelf !== 'auto') yn.setAlignSelf(ALIGN()[s.alignSelf]);
+  if (s.aspectRatio !== undefined) yn.setAspectRatio(s.aspectRatio);
 
   if (isAbsolute(node)) {
     yn.setPositionType(yoga.POSITION_TYPE_ABSOLUTE);
-    // Legacy: right/bottom only apply when left/top are unset; x/y props are
+    // right/bottom only apply when left/top are unset; x/y props are
     // the fallback offsets.
     if (s.left !== undefined)        yn.setPosition(yoga.EDGE_LEFT, s.left);
     else if (s.right !== undefined)  yn.setPosition(yoga.EDGE_RIGHT, s.right);
@@ -155,7 +168,7 @@ function applyCommonStyle(yn: YogaNode, node: SceneNode, stretch: StretchAxis): 
     if (s.top !== undefined)         yn.setPosition(yoga.EDGE_TOP, s.top);
     else if (s.bottom !== undefined) yn.setPosition(yoga.EDGE_BOTTOM, s.bottom);
     else                             yn.setPosition(yoga.EDGE_TOP, (node as BoxNode).y ?? 0);
-    // Legacy sizes absolutes to their explicit dimensions only — never content.
+    // Absolutes size to their explicit dimensions only — never content.
     if (w === undefined && node.type !== 'text') yn.setWidth(0);
     if (h === undefined && node.type !== 'text') yn.setHeight(0);
   } else if (s.position === 'relative') {
@@ -164,7 +177,7 @@ function applyCommonStyle(yn: YogaNode, node: SceneNode, stretch: StretchAxis): 
   }
 }
 
-/** Legacy root children and display:'block' children fill the containing box. */
+/** Root children and display:'block' children fill the containing box. */
 function applyFillContaining(yn: YogaNode, node: SceneNode): void {
   const yoga = Y!;
   yn.setPositionType(yoga.POSITION_TYPE_ABSOLUTE);
@@ -177,7 +190,6 @@ function applyFillContaining(yn: YogaNode, node: SceneNode): void {
 function buildNode(node: SceneNode, fillContaining: boolean, stretch: StretchAxis): Built | null {
   const s = getStyle(node);
   if (s.display === 'none') return null;
-  if (s.display === 'grid') throw new Error('yoga layout: display:grid is not supported');
 
   const yn = Y!.Node.create(yogaConfig!);
   const built: Built = { scene: node, yoga: yn, children: [] };

@@ -1,0 +1,28 @@
+# react-drm touch bar UI as an unprivileged user service. The app owns the
+# Touch Bar lifecycle itself (attach at startup, quiesce before suspend via a
+# logind delay inhibitor, re-attach on resume) — the unit only adds
+# start-at-login and the logout detach (ExecStopPost), which switches the
+# device back to config 1 so the firmware fn strip comes back.
+# KillSignal: the app treats SIGINT as its shutdown signal and ignores SIGTERM.
+# TimeoutStopSec covers the detach helper's ETIMEDOUT retries (the first
+# SET_CONFIG after a host config switch routinely times out and is retried).
+# Install: install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
+#          systemctl --user daemon-reload && systemctl --user enable react-drm
+[Unit]
+Description=react-drm touch bar UI
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+WorkingDirectory=%h/react-drm/examples
+ExecStart=%h/react-drm/node_modules/.bin/tsx index.tsx
+ExecStopPost=-%h/react-drm/system/react-drm-tb-detach
+KillSignal=SIGINT
+SuccessExitStatus=130 137 SIGINT
+TimeoutStartSec=180
+TimeoutStopSec=150
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

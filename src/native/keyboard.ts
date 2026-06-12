@@ -70,6 +70,7 @@ export class KeyboardReader {
   private listeners = new Set<(code: number, value: number) => void>();
   private readonly explicitPath?: string;
   private stopped = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(devicePath?: string) {
     this.explicitPath = devicePath;
@@ -85,24 +86,36 @@ export class KeyboardReader {
   private startHandle(): void {
     this.handle.start((code, value) => {
       if (code === -1) {
-        this.scheduleReconnect();
+        this.scheduleReconnect(1000);
         return;
       }
       this.listeners.forEach(l => l(code, value));
     });
   }
 
-  private scheduleReconnect(): void {
-    if (this.stopped) return;
-    setTimeout(() => {
+  private scheduleReconnect(delayMs: number): void {
+    if (this.stopped || this.reconnectTimer) return;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       if (this.stopped) return;
       try {
         this.handle = this.openHandle();
         this.startHandle();
       } catch (_) {
-        this.scheduleReconnect(); // device not back yet — retry in 1 s
+        // Device not back yet (or path changed) — keep retrying.
+        this.scheduleReconnect(1000);
       }
-    }, 1000);
+    }, delayMs);
+  }
+
+  /**
+   * Force a fresh device open and resume event delivery.
+   * Useful after system suspend/resume when evdev nodes re-enumerate.
+   */
+  reconnect(): void {
+    if (this.stopped) return;
+    try { this.handle.stop(); } catch (_) { /* stale handle */ }
+    this.scheduleReconnect(0);
   }
 
   /** Subscribe to raw key events. Returns an unsubscribe function. */
@@ -121,6 +134,10 @@ export class KeyboardReader {
 
   stop(): void {
     this.stopped = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.handle.stop();
     this.listeners.clear();
   }

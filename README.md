@@ -4,9 +4,10 @@ React renderer targeting Linux DRM/KMS via libdrm + Cairo, built for the Apple T
 
 ## Prerequisites
 
+- T2 MacBook with the `appletbdrm` and `hid-appletb-bl` kernel modules available
 - Node.js with native addon support (`node-gyp`)
 - `libdrm`, `libcairo` development headers
-- Linux with `appletbdrm` and `hid-appletb-bl` kernel modules loaded (T2/M-series MacBooks)
+- **No other Touch Bar daemon**: remove `tiny-dfr` / `mac-touchbar-plus` first — it competes for the Touch Bar display and the install below assumes it is gone
 
 ## Build
 
@@ -15,13 +16,61 @@ npm install
 npm run build
 ```
 
-## Run examples
+## Run examples (foreground)
 
 ```sh
 cd examples
 npm install
 npx tsx <example-file>.tsx
 ```
+
+## Install as a service
+
+Runs the example app (`examples/index.tsx`) as an unprivileged user service tied
+to your graphical session — no root, no sudo rules. Lifecycle: the firmware
+fn-key strip stays on the Touch Bar from power-on until login (the USB device
+sits in config 1, so the `appletbdrm` driver never loads), the app switches
+the device to config 2 at startup (the kernel auto-loads the driver), and the
+fn strip comes back at logout (the unit's `ExecStopPost` detach). Suspend and
+resume are handled by the app itself: it holds a logind delay inhibitor,
+releases the bar before suspend (the t2 sleep fix can't remove `apple-bce`
+safely while something holds the bar) and re-attaches on resume — the same
+code paths a manual `npm run dev` uses.
+
+All files live in `system/`; each also carries its install command in its
+header comment. The unit calls the detach helper from the repo and assumes it
+is at `~/react-drm` — edit the paths in `system/react-drm.service` otherwise.
+
+1. **Device access** — card nodes are `root:video`, evdev needs `input`:
+
+   ```sh
+   sudo usermod -aG video,input $USER   # re-login to take effect
+   ```
+
+2. **udev rules** — own logind seat for the Touch Bar (keeps the main
+   compositor from claiming it), group-writable USB config switch and
+   backlight, USB runtime PM pinned off (autosuspend deadlocks the
+   `hid_appletb_kbd` driver, wedging the device until reboot — and tools like
+   `powertop --auto-tune` would silently re-enable it):
+
+   ```sh
+   sudo install -m644 system/99-react-drm.rules /etc/udev/rules.d/
+   sudo udevadm control --reload
+   sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
+   ```
+
+3. **User unit** — starts/stops with the graphical session:
+
+   ```sh
+   install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
+   systemctl --user daemon-reload
+   systemctl --user enable react-drm
+   ```
+
+   Make sure `examples/` has its dependencies (`cd examples && npm install`),
+   then reboot — the fn strip should be visible until login, after which
+   react-drm takes the bar. Check with `systemctl --user status react-drm`
+   and `journalctl --user -u react-drm`.
 
 ## Konsole D-Bus API (required for the Konsole panel)
 
@@ -42,38 +91,3 @@ The key must be in the `[KonsoleWindow]` group of `~/.config/konsolerc`. Konsole
 Read-only methods used for the suggestion list (`getAllDisplayedText`, `foregroundProcessId`) are not gated, so suggestions appear even when sending is blocked.
 
 > **Security note:** this allows any process on your session bus to type into and run commands in your Konsole sessions. Only enable it if you're comfortable with that trade-off.
-
-## udev Rules
-
-### Touch Bar seat assignment
-
-Required for separating the Touch Bar input from the main seat. Copy the rules from `99-touchbar-seat.rules` and `99-touchbar-tiny-dfr.rules` if not already installed by your distro package.
-
-### Touch Bar backlight brightness (no sudo)
-
-By default `/sys/class/backlight/appletb_backlight/brightness` is only writable by root. To allow members of the `video` group to write it:
-
-```sh
-sudo cp /tmp/99-appletb-backlight.rules /etc/udev/rules.d/99-appletb-backlight.rules
-```
-
-Or create `/etc/udev/rules.d/99-appletb-backlight.rules` with:
-
-```
-ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="appletb_backlight", RUN+="/bin/chown root:video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
-```
-
-Then reload and apply:
-
-```sh
-sudo udevadm control --reload
-sudo udevadm trigger --action=add --subsystem-match=backlight
-```
-
-Add your user to the `video` group if not already a member:
-
-```sh
-sudo usermod -aG video $USER
-```
-
-The rule persists across reboots — the `chown`/`chmod` re-runs each time the device is added.

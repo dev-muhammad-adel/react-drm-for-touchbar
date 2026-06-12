@@ -1,10 +1,15 @@
+/** Numeric pixels or a percentage of the parent, e.g. 120 or '50%'. */
+export type Dimension = number | `${number}%`;
+
 export interface Style {
-  display?: 'flex' | 'grid' | 'block' | 'none';
+  display?: 'flex' | 'block' | 'none';
 
   // Flex container
   flexDirection?: 'row' | 'column';
   justifyContent?: 'flex-start' | 'flex-end' | 'center' | 'space-between' | 'space-around' | 'space-evenly';
   alignItems?: 'flex-start' | 'flex-end' | 'center' | 'stretch';
+  /** Distribution of wrapped lines along the cross axis (pairs with flexWrap). */
+  alignContent?: 'flex-start' | 'flex-end' | 'center' | 'stretch' | 'space-between' | 'space-around';
   flexWrap?: 'nowrap' | 'wrap';
   gap?: number;
   rowGap?: number;
@@ -14,16 +19,10 @@ export interface Style {
   alignSelf?: 'auto' | 'flex-start' | 'flex-end' | 'center' | 'stretch';
   flexGrow?: number;
   flexShrink?: number;
-  flexBasis?: number | 'auto';
+  flexBasis?: Dimension | 'auto';
   flex?: number; // shorthand: sets flexGrow (and flexBasis: 0)
-
-  // Grid container
-  gridTemplateColumns?: string;
-  gridTemplateRows?: string;
-
-  // Grid item
-  gridColumn?: number | string;
-  gridRow?: number | string;
+  /** width / height. Constrains the missing dimension when only one is set. */
+  aspectRatio?: number;
 
   // Positioning
   position?: 'relative' | 'absolute' | 'static';
@@ -33,12 +32,12 @@ export interface Style {
   bottom?: number;
 
   // Dimensions (override node width/height props when set)
-  width?: number;
-  height?: number;
-  minWidth?: number;
-  maxWidth?: number;
-  minHeight?: number;
-  maxHeight?: number;
+  width?: Dimension;
+  height?: Dimension;
+  minWidth?: Dimension;
+  maxWidth?: Dimension;
+  minHeight?: Dimension;
+  maxHeight?: Dimension;
 
   // Padding (shrinks the content area inside the box)
   padding?: number;

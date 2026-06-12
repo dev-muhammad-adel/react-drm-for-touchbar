@@ -1,6 +1,5 @@
 import colorString from 'color-string';
 import type { SceneNode, RootContainer, SvgContainerNode, SvgElementNode } from './types';
-import { computeLayout } from './layout';
 import type { LayoutBox } from './layout';
 
 export type DrawCommand =
@@ -136,9 +135,8 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
 
 export function serializeScene(
   root: RootContainer,
-  precomputedLayout?: ReadonlyMap<SceneNode, LayoutBox>,
+  layout: ReadonlyMap<SceneNode, LayoutBox>,
 ): DrawCommand[] {
-  const layout = precomputedLayout ?? computeLayout(root, root.width, root.height);
   const cmds: DrawCommand[] = [{ cmd: 'clear', r: 0, g: 0, b: 0 }];
   for (const child of root.children) emitNode(child, cmds, layout);
   return cmds;

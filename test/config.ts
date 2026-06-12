@@ -15,18 +15,6 @@ export const DISPLAY = {
   activeBrightness: 2,
 } as const;
 
-// ─── Touch Bar lifecycle ─────────────────────────────────────────────────────
-
-export const SLEEP = {
-  // In-app Touch Bar lifecycle: attach at startup, quiesce before system
-  // sleep (logind delay inhibitor), re-attach + resume after. Applies to
-  // every run mode — manual `npm run dev` and react-drm.service alike.
-  enabled: true,
-  // How long to wait for the appletbdrm card at startup and after resume
-  // (covers re-enumeration, udev permission settling and config-write retries).
-  cardWaitSecs: 30,
-} as const;
-
 // ─── Layer transitions ──────────────────────────────────────────────────────
 
 export const LAYER_TRANSITION = {

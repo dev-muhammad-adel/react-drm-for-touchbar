@@ -5,7 +5,6 @@ import { reconciler } from './reconciler';
 import { setRepaint } from './invalidate';
 import { serializeScene } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
-import { computeLayout } from '../scene/layout';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
@@ -82,6 +81,19 @@ export interface RenderResult {
    * was dimmed or off.  Call this from keyboard / custom input handlers.
    */
   wake: () => void;
+
+  /**
+   * Quiesce before system sleep: stop rendering and idle watchers and close
+   * the DRM fd (the device disappears during suspend anyway). The React tree
+   * stays mounted; commits keep updating the scene off-screen.
+   */
+  suspend: () => void;
+
+  /**
+   * Undo suspend() after the device is back (attached + driver bound):
+   * reopens the display, restarts the watchers and repaints the latest scene.
+   */
+  resume: () => void;
 }
 
 // ── Input device helpers ──────────────────────────────────────────────────────
@@ -327,34 +339,6 @@ function shiftCmds(cmds: DrawCommand[], dx: number, dy: number): DrawCommand[] {
   });
 }
 
-// ── Layout engine selection ───────────────────────────────────────────────────
-// Yoga is the default; REACT_DRM_LAYOUT=legacy selects the built-in engine.
-// Legacy is also the fallback while yoga loads (it's an async ESM import) and
-// if a layout uses display:grid, which yoga doesn't support.
-
-const wantYoga = process.env.REACT_DRM_LAYOUT !== 'legacy';
-let yogaFailed = false;
-if (wantYoga) {
-  loadYogaEngine()
-    .then(() => console.log('[react-drm] layout engine: yoga'))
-    .catch(err => {
-      yogaFailed = true;
-      console.warn('[react-drm] yoga failed to load, using legacy layout:', err instanceof Error ? err.message : err);
-    });
-}
-
-function runLayout(container: RootContainer, w: number, h: number) {
-  if (wantYoga && !yogaFailed && yogaReady()) {
-    try {
-      return computeLayoutYoga(container, w, h);
-    } catch (err) {
-      yogaFailed = true;
-      console.warn('[react-drm] yoga layout failed, falling back to legacy:', err instanceof Error ? err.message : err);
-    }
-  }
-  return computeLayout(container, w, h);
-}
-
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
 export function render(
@@ -428,11 +412,13 @@ export function render(
   // ── Screen-saver state ────────────────────────────────────────────────────
   type SsState = 'active' | 'dim' | 'off';
   let state: SsState = 'active';
+  let suspended = false;
   let lastCmds: DrawCommand[] = [];
   let dimTimer:  ReturnType<typeof setTimeout> | null = null;
   let offTimer:  ReturnType<typeof setTimeout> | null = null;
 
   function renderCurrent(): void {
+    if (suspended) return;       // DRM fd is closed during system sleep
     if (state === 'off') return; // screen stays on the black frame already rendered
     display.render(shiftCmds(lastCmds, shiftX, shiftY));
   }
@@ -462,6 +448,7 @@ export function render(
   }
 
   function wake(): void {
+    if (suspended) return; // reconnecting input during sleep is not activity
     const wasInactive = state !== 'active';
     const wasOff = state === 'off';
     state = 'active';
@@ -487,7 +474,8 @@ export function render(
   // ──────────────────────────────────────────────────────────────────────────
 
   container._onCommit = () => {
-    const layout   = runLayout(container, container.width, container.height);
+    if (!yogaReady()) return; // pre-engine commits are re-rendered once yoga loads
+    const layout   = computeLayoutYoga(container, container.width, container.height);
     layoutRef.current = layout;
     const commands = serializeScene(container, layout);
     lastCmds = commands;
@@ -501,7 +489,9 @@ export function render(
     null,
   );
 
+  let latestEl: React.ReactNode = element;
   function doUpdate(el: React.ReactNode): void {
+    latestEl = el;
     const wrapped = React.createElement(
       TouchRegistryContext.Provider, { value: registry },
       React.createElement(LayoutContext.Provider, { value: layoutRef }, el),
@@ -510,20 +500,29 @@ export function render(
   }
 
   doUpdate(element);
+  // yoga loads async (ESM/WASM); commits before then are skipped, so re-commit
+  // the latest tree once the engine is up.
+  if (!yogaReady()) {
+    loadYogaEngine()
+      .then(() => doUpdate(latestEl))
+      .catch(err => console.error('[react-drm] layout engine failed to load:', err));
+  }
 
-  const stopLid     = watchLid(onLid);
-  const stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
+  // The evdev watchers' worker fds die silently when the devices disappear
+  // (e.g. the apple-bce bus teardown during suspend), so suspend()/resume()
+  // stop and recreate them. The keyboardReader subscription is excluded — the
+  // caller's KeyboardReader reconnects on its own and the listener persists.
+  let stopLid     = watchLid(onLid);
+  let stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
   let stopKeyboard  = () => {};
-  if (dimMs > 0) {
-    if (options.keyboardReader) {
-      // Reuse the caller's KeyboardReader — no second fd open.
-      const unsub = options.keyboardReader.onKey((_code, value) => {
-        if (value === 1) wake(); // key-down = activity
-      });
-      stopKeyboard = unsub;
-    } else {
-      stopKeyboard = watchKeyboard(wake);
-    }
+  const ownKeyboardWatch = dimMs > 0 && !options.keyboardReader;
+  if (ownKeyboardWatch) {
+    stopKeyboard = watchKeyboard(wake);
+  } else if (dimMs > 0 && options.keyboardReader) {
+    // Reuse the caller's KeyboardReader — no second fd open.
+    stopKeyboard = options.keyboardReader.onKey((_code, value) => {
+      if (value === 1) wake(); // key-down = activity
+    });
   }
 
   let stopTouch = (): void => {};
@@ -538,6 +537,32 @@ export function render(
     console.log('[react-drm] touch device ready');
   } catch (e) {
     console.warn('[react-drm] no touch device:', (e as Error).message ?? e);
+  }
+
+  function suspend(): void {
+    if (suspended) return;
+    suspended = true;
+    clearTimers();
+    stopLid();
+    stopPointer();
+    if (ownKeyboardWatch) stopKeyboard();
+    backlight.off();
+    display.close(); // device disappears during suspend — drop the fd cleanly
+    console.log('[react-drm] suspended (display closed)');
+  }
+
+  function resume(): void {
+    if (!suspended) return;
+    display.reopen(); // throws if the card is not back yet — caller retries
+    suspended = false;
+    state = 'active';
+    stopLid = watchLid(onLid);
+    stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
+    if (ownKeyboardWatch) stopKeyboard = watchKeyboard(wake);
+    backlight.on(adaptive, activeLevel);
+    startIdleTimers();
+    renderCurrent();
+    console.log('[react-drm] resumed');
   }
 
   return {
@@ -557,5 +582,7 @@ export function render(
     touchMove:  (x, y) => { wake(); registry.touchMove(x, y); },
     touchEnd:   (x, y) => { wake(); registry.touchEnd(x, y); },
     wake,
+    suspend,
+    resume,
   };
 }

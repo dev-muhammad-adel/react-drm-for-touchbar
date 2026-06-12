@@ -1,5 +1,11 @@
 #include <napi.h>
 #include <memory>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <linux/usbdevice_fs.h>
 #include "drm.h"
 #include "cairo_renderer.h"
 #include "touch_input.h"
@@ -100,6 +106,31 @@ private:
   std::unique_ptr<CairoRenderer> renderer_;
 };
 
+// USBDEVFS_RESET on a /dev/bus/usb/BBB/DDD node. The Touch Bar firmware puts
+// the display interface to sleep when idle; once asleep, every transfer —
+// including the SET_CONFIGURATION behind a bConfigurationValue write — fails
+// with ETIMEDOUT, and the kernel's own post-failure recovery reset does not
+// wake it. Only an explicit device reset does.
+Napi::Value UsbReset(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "usbReset(devnode: string)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::string path = info[0].As<Napi::String>().Utf8Value();
+  int fd = open(path.c_str(), O_WRONLY);
+  if (fd < 0) {
+    Napi::Error::New(env, "open " + path + ": " + std::strerror(errno)).ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  int rc = ioctl(fd, USBDEVFS_RESET, 0);
+  int err = errno;
+  close(fd);
+  if (rc < 0)
+    Napi::Error::New(env, "USBDEVFS_RESET " + path + ": " + std::strerror(err)).ThrowAsJavaScriptException();
+  return env.Undefined();
+}
+
 Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   DrmDisplayWrapper::Init(env, exports);
   TouchReader::Init(env, exports);
@@ -109,6 +140,7 @@ Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   exports.Set("findKeyboardDevices", Napi::Function::New(env, FindKeyboardDevices));
   exports.Set("findPointerDevices",  Napi::Function::New(env, FindPointerDevices));
   exports.Set("findLidDevice",       Napi::Function::New(env, FindLidDevice));
+  exports.Set("usbReset",            Napi::Function::New(env, UsbReset));
   return exports;
 }
 

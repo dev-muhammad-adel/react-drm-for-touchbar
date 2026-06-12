@@ -20,8 +20,13 @@ function resolveCardPath(devicePath?: string): string {
   return '/dev/dri/card1';
 }
 
+interface NativeModule {
+  DrmDisplay: new (devicePath: string) => NativeHandle;
+  usbReset(devnode: string): void;
+}
+
 // Lazy-load the native addon — fails with a clear message if not built yet.
-function loadNative(): { DrmDisplay: new (devicePath: string) => NativeHandle } {
+function loadNative(): NativeModule {
   const candidates = [
     path.join(__dirname, '../../build/Release/drm_backend.node'),
     path.join(__dirname, '../../build/Debug/drm_backend.node'),
@@ -48,12 +53,26 @@ interface NativeHandle {
   close(): void;
 }
 
+/**
+ * USBDEVFS_RESET ioctl on a USB device node (`/dev/bus/usb/BBB/DDD`).
+ * Wakes the Touch Bar firmware's display interface out of its idle sleep —
+ * the state where every transfer (including config switches) fails with
+ * ETIMEDOUT. Needs write access to the node (see system/99-react-drm.rules).
+ */
+export function usbReset(devnode: string): void {
+  loadNative().usbReset(devnode);
+}
+
 export class DrmDisplay {
   private handle: NativeHandle;
+  private readonly devicePath?: string;
+  private closed = false;
+
   readonly width: number;
   readonly height: number;
 
   constructor(devicePath?: string) {
+    this.devicePath = devicePath;
     const native = loadNative();
     const resolvedPath = resolveCardPath(devicePath);
     this.handle = new native.DrmDisplay(resolvedPath);
@@ -73,6 +92,26 @@ export class DrmDisplay {
   }
 
   close(): void {
-    this.handle.close();
+    if (this.closed) return;
+    this.closed = true;
+    try { this.handle.close(); } catch { /* fd may already be dead (device gone) */ }
+  }
+
+  /**
+   * Reopen the display after the device was lost and came back (e.g. the
+   * Touch Bar re-enumerates after suspend). Re-resolves the card path — the
+   * card number can change across re-enumeration.
+   */
+  reopen(): void {
+    this.close();
+    const native = loadNative();
+    const resolvedPath = resolveCardPath(this.devicePath);
+    this.handle = new native.DrmDisplay(resolvedPath);
+    const info = this.handle.setup();
+    this.closed = false;
+    if (info.width !== this.width || info.height !== this.height) {
+      console.warn(`[react-drm] display size changed on reopen: ${info.width}×${info.height} (was ${this.width}×${this.height})`);
+    }
+    console.log(`[react-drm] DRM display reopened on ${resolvedPath}`);
   }
 }

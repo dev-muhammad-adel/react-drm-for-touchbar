@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import { Box, Button, Text, LayoutContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
+import { registerSuspendHooks } from '../suspend';
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -48,8 +49,36 @@ class FluidSynth {
 }
 
 const sf2 = SF2_PATHS.find(p => { try { fs.accessSync(p); return true; } catch { return false; } });
-const synth = sf2 ? new FluidSynth(sf2) : null;
 if (!sf2) console.warn('[piano] No soundfont found — running silently');
+
+// fluidsynth holds a running PipeWire stream to the T2 speakers (apple_bce) for
+// its whole life, and any open stream during suspend-fix-t2's `rmmod -f apple-bce`
+// oopses the kernel (pipewire in iowrite32, observed 2026-06-12). Spawn it only
+// while a Piano is mounted — never at import time. Refcounted because layer
+// transitions keep the outgoing panel instance alive while the next one mounts.
+let synth: FluidSynth | null = null;
+let synthUsers = 0;
+
+function acquireSynth(): void {
+  synthUsers++;
+  if (!synth && sf2) synth = new FluidSynth(sf2);
+}
+
+function releaseSynth(): void {
+  synthUsers--;
+  if (synthUsers > 0) return;
+  synthUsers = 0;
+  synth?.destroy();
+  synth = null;
+}
+
+// A piano open across a system suspend would keep its PipeWire stream alive
+// into the apple-bce teardown (kernel Oops) — kill the synth before sleep and
+// bring it back for the still-mounted piano on resume.
+registerSuspendHooks('piano-audio', {
+  onSleep: () => { synth?.destroy(); synth = null; },
+  onResume: () => { if (synthUsers > 0 && !synth && sf2) synth = new FluidSynth(sf2); },
+});
 
 const RELEASE_MS = 500;
 
@@ -133,6 +162,11 @@ export function Piano({ width, height }: { width: number; height: number }) {
   const [active, setActive] = useState<ReadonlySet<number>>(new Set());
   const touchMidi  = useRef<number | null>(null);
   const decayTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    acquireSynth();
+    return releaseSynth;
+  }, []);
 
   const noteOn = useCallback((midi: number) => {
     if (decayTimer.current) { clearTimeout(decayTimer.current); decayTimer.current = null; }

@@ -7,7 +7,7 @@ const KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'] as
 
 export function FnKeys({ width, height }: { width: number; height: number }) {
   return (
-    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 6, paddingHorizontal: 8 }}>
+    <Box style={{ flex: 1, alignItems: 'stretch', gap: 6, paddingHorizontal: 8 }}>
 
       {/* <BackButton /> */}
 

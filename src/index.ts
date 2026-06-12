@@ -12,7 +12,7 @@ export type { ButtonProps } from './components/Button';
 export type { SvgProps } from './components/Svg';
 export type { SwipeZoneProps } from './components/SwipeZone';
 export type { ScrollRowProps } from './components/ScrollRow';
-export { DrmDisplay } from './native/binding';
+export { DrmDisplay, usbReset } from './native/binding';
 export { TouchReader, KeyInjector, FKEY_CODES, KEY } from './native/input';
 export type { GestureOptions } from './native/input';
 export { KeyboardReader, KEY_NAMES, resolveKeyCode } from './native/keyboard';
