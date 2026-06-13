@@ -3,6 +3,7 @@ import type { ActiveWindowBackend } from './types';
 import { EMPTY } from './types';
 import { hyprland } from './hyprland';
 import { gnome } from './gnome';
+import { xorg } from './xorg';
 import { detectSession } from './detect';
 import { ACTIVE_WINDOW } from '../config';
 
@@ -12,20 +13,23 @@ import { ACTIVE_WINDOW } from '../config';
 
 type Listener = (w: ActiveWindow) => void;
 
-const BACKENDS = [hyprland, gnome]; // fallback probe order when detection is inconclusive
+const BACKENDS = [hyprland, gnome, xorg]; // fallback probe order when detection is inconclusive
 
-// Map the detected session to backends worth starting. The gnome backend
-// (Window Monitor Pro over D-Bus) works on GNOME Xorg too; a native xorg
-// backend slots in here later for other X11 desktops.
+// Map the detected session to backends worth starting. Any Xorg session —
+// GNOME included — exposes EWMH window properties over the X protocol, so the
+// xprop backend handles it. The gnome (Window Monitor Pro) backend is only for
+// GNOME *Wayland*, where the X protocol is blocked and the extension is the
+// only window-focus source.
 async function backendsForSession(): Promise<ActiveWindowBackend[]> {
   const s = await detectSession();
   console.log(`[react-drm] session: ${s.type} (${s.desktop})`);
+
+  // Xorg, whatever the desktop: EWMH props over the X protocol → xprop.
+  if (s.type === 'xorg') return [xorg];
+
+  // Wayland: each compositor needs its own focus source.
   if (s.desktop === 'hyprland') return [hyprland];
   if (s.desktop === 'gnome')    return [gnome];
-  if (s.type === 'xorg') {
-    console.warn('[react-drm] xorg session — no xorg active-window backend yet');
-    return [];
-  }
   return BACKENDS; // unknown — probe everything
 }
 
