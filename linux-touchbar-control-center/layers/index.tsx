@@ -96,7 +96,11 @@ export const LayerHost = forwardRef<LayerHostHandle, {
   fnLongMs?: number;
   /** Long-press toggles: each flips to its layer and back (see useKeyGesture). */
   toggles?:  LayerToggle[];
-}>(function LayerHost({ layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer, fnMode = 'hold', fnLongMs = FN_LONG_MS, toggles }, ref) {
+  /** Layer a toggle returns to when flipped off. Defaults to `initial`/first.
+   *  Anchoring every toggle here keeps overlays (Fn, dock) from flipping
+   *  directly into each other — toggling one off always lands on home. */
+  home?:     string;
+}>(function LayerHost({ layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer, fnMode = 'hold', fnLongMs = FN_LONG_MS, toggles, home }, ref) {
   const inherited = useContext(KeyboardContext);
   const kb = keyboard ?? inherited ?? null;
 
@@ -115,6 +119,7 @@ export const LayerHost = forwardRef<LayerHostHandle, {
         width={width} height={height}
         toggles={allToggles}
         hold={hold}
+        home={home}
       />
     </KeyboardContext.Provider>
   );
@@ -137,8 +142,10 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
   height:   number;
   toggles?: LayerToggle[];                 // long-press toggles
   hold?:    { key: KeyId; layer: string }; // momentary "show while held" binding
-}>(function LayerHostInner({ layers, initial, width, height, toggles, hold }, ref) {
+  home?:    string;                        // layer a toggle returns to when flipped off
+}>(function LayerHostInner({ layers, initial, width, height, toggles, hold, home }, ref) {
   const initIdx = initial ? Math.max(0, layers.findIndex(l => l.name === initial)) : 0;
+  const homeIdx = home ? Math.max(0, layers.findIndex(l => l.name === home)) : initIdx;
 
   const [activeIdx, setActiveIdx] = useState(initIdx);
   const { lock, unlock } = useTouchLock();
@@ -230,8 +237,14 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
     }
   }, [holdHeld]);
 
+  // Set of toggle-layer names — the overlays (Fn, dock). An overlay must never
+  // record another overlay as its "previous", or toggling off would flip Fn↔dock.
+  const overlayNames = new Set((toggles ?? []).map(t => t.layer));
+
   // Long-press toggle: flip to a layer, and on the next long-press flip back to
-  // whatever was active when we entered it (tracked per target layer).
+  // whatever was active when we entered it (tracked per target layer). When we
+  // enter from another overlay, fall back to `home` so toggling off lands there
+  // instead of bouncing straight into the other overlay.
   const beforeToggle = useRef<Map<string, number>>(new Map());
   function toggleLayer(name: string) {
     const idx = layers.findIndex(l => l.name === name);
@@ -242,7 +255,9 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
       beforeToggle.current.delete(name);
       if (back !== undefined && layers[back]) ctx.go(layers[back].name);
     } else {
-      beforeToggle.current.set(name, cur);
+      const curName = layers[cur]?.name;
+      const fromOverlay = curName !== undefined && overlayNames.has(curName);
+      beforeToggle.current.set(name, fromOverlay ? homeIdx : cur);
       ctx.go(name);
     }
   }

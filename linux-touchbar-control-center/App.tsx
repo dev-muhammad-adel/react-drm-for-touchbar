@@ -53,6 +53,7 @@ export function App({ width, height, keyboard }: { width: number; height: number
             fnLayer="fnkeys"
             fnMode={FN_LAYER.mode}
             fnLongMs={FN_LAYER.longMs}
+            home="splitted"
             toggles={[{ key: DOCK.shortcut.key, layer: 'dock', longMs: DOCK.shortcut.longMs }]}
             layers={[
               { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'  } },
