@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
-import { MdCancel, MdReplay } from 'react-icons/md';
+import { MdArrowDownward, MdArrowUpward, MdCancel, MdReplay } from 'react-icons/md';
 import { useLayers } from './index';
 import { BackButton } from '../components/BackButton';
 
@@ -109,13 +109,14 @@ const NUM_CORES = tickCpu().length;
 // ── Polybar primitives ────────────────────────────────────────────────────────
 
 // Module wrapper — raised background, horizontal padding, vertically centered
-function Mod({ children, accent }: { children: React.ReactNode; accent?: string }) {
+function Mod({ children, width }: { children: React.ReactNode; width: number }) {
   return (
     <Box style={{
       flexDirection: 'row', alignItems: 'center', gap: 14,
       // backgroundColor: MOD_BG,
       paddingHorizontal: 20,
       alignSelf: 'stretch',
+      width,
     }}>
       {children}
     </Box>
@@ -152,7 +153,7 @@ function CpuMod({ cores }: { cores: number[] }) {
   const avg   = Math.round(cores.reduce((s, v) => s + v, 0) / cores.length);
   const color = loadColor(avg);
   return (
-    <Mod accent="#3b82f6">
+    <Mod width={220}>
       <Label>CPU</Label>
       <Bar fill={avg / 100} color={color} />
       <Val color={color}>{`${avg}%`}</Val>
@@ -165,7 +166,7 @@ function MemMod({ used, total }: { used: number; total: number }) {
   const pctN  = Math.round(pct * 100);
   const color = loadColor(pctN);
   return (
-    <Mod accent="#a855f7">
+    <Mod width={285}>
       <Label>MEM</Label>
       <Bar fill={pct} color={color} />
       <Val color={color}>{`${pctN}%`}</Val>
@@ -177,7 +178,7 @@ function MemMod({ used, total }: { used: number; total: number }) {
 function TempMod({ temp }: { temp: number | null }) {
   const color = temp !== null ? tempColor(temp) : '#475569';
   return (
-    <Mod accent={color}>
+    <Mod width={165}>
       <Label>TEMP</Label>
       <Val color={color}>{temp !== null ? `${temp}°C` : 'N/A'}</Val>
     </Mod>
@@ -186,25 +187,30 @@ function TempMod({ temp }: { temp: number | null }) {
 
 function NetMod({ rx, tx, iface }: { rx: number; tx: number; iface: string }) {
   return (
-   
-          <Box style={{
-       alignItems: 'center', gap: 14,
+    <Box style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
       paddingHorizontal: 20,
       alignSelf: 'stretch',
-      width:270,
-      justifyContent:"center"
+      width: 330,
     }}>
- 
       <Label>{iface}</Label>
-      <Val color="#7dd3fc">{`↓${fmtRate(rx)}`}</Val>
-      <Val color="#fdba74">{`↑${fmtRate(tx)}`}</Val>
+      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <MdArrowDownward style={{ width: 16, height: 16 }} fill="#7dd3fc" stroke="none" />
+        <Val color="#7dd3fc">{fmtRate(rx)}</Val>
+      </Box>
+      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <MdArrowUpward style={{ width: 16, height: 16 }} fill="#fdba74" stroke="none" />
+        <Val color="#fdba74">{fmtRate(tx)}</Val>
+      </Box>
     </Box>
   );
 }
 
 function HostMod({ uptime }: { uptime: string }) {
   return (
-    <Mod accent="#22c55e">
+    <Mod width={240}>
       <Box style={{ width: 6, height: 6, backgroundColor: '#22c55e' }} />
       <Val color="#c7d2fe">{HOSTNAME}</Val>
       {uptime ? <Label>{`↑${uptime}`}</Label> : null}
@@ -216,7 +222,7 @@ function BatMod({ bat }: { bat: { pct: number; charging: boolean } | null }) {
   if (!bat) return null;
   const color = batColor(bat.pct, bat.charging);
   return (
-    <Mod accent={color}>
+    <Mod width={215}>
       <Label>{bat.charging ? 'CHG' : 'BAT'}</Label>
       <Bar fill={bat.pct / 100} color={color} width={52} />
       <Val color={color}>{`${bat.pct}%`}</Val>
