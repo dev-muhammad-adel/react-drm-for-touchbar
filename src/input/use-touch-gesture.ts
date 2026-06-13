@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import { TouchReader, type GestureOptions } from '../native/input';
+import { DisplaySizeContext } from '../scene/display-context';
 
 export interface TouchGestureOptions extends GestureOptions {
   /** Override the input device path. Defaults to auto-detect. */
@@ -25,11 +26,12 @@ export function useTouchGesture(opts: TouchGestureOptions): void {
   optsRef.current = opts;
 
   const { devicePath, swipeThreshold } = opts;
+  const { width, height } = useContext(DisplaySizeContext);
 
   useEffect(() => {
     let reader: TouchReader | undefined;
     try {
-      reader = new TouchReader(devicePath);
+      reader = new TouchReader({ devicePath, width, height });
       reader.startWithGestures({
         swipeThreshold,
         onTouchStart:  (x, y)       => optsRef.current.onTouchStart?.(x, y),
@@ -40,7 +42,7 @@ export function useTouchGesture(opts: TouchGestureOptions): void {
       });
     } catch (_) { /* no touch device — silently skip */ }
     return () => reader?.stop();
-  // Only recreate the reader if the device or threshold changes
+  // Only recreate the reader if the device, threshold, or display size changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [devicePath, swipeThreshold]);
+  }, [devicePath, swipeThreshold, width, height]);
 }

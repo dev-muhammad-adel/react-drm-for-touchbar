@@ -14,7 +14,7 @@ export type { SwipeZoneProps } from './components/SwipeZone';
 export type { ScrollRowProps } from './components/ScrollRow';
 export { DrmDisplay, usbReset } from './native/binding';
 export { TouchReader, KeyInjector, FKEY_CODES, KEY } from './native/input';
-export type { GestureOptions } from './native/input';
+export type { GestureOptions, TouchReaderOptions } from './native/input';
 export { KeyboardReader, KEY_NAMES, resolveKeyCode } from './native/keyboard';
 export type { KeyId } from './native/keyboard';
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions } from './layers/types';
@@ -31,6 +31,8 @@ export type { SceneNode, BoxNode, TextNode, SvgNode, SvgContainerNode, SvgElemen
 export type { Style } from './scene/style';
 export { LayoutContext } from './scene/layout-context';
 export type { LayoutRef } from './scene/layout-context';
+export { DisplaySizeContext } from './scene/display-context';
+export type { DisplaySize } from './scene/display-context';
 export { SAFE_INSET, SAFE_INSET_X, SAFE_INSET_Y } from './scene/safe-area';
 export type { SafeAreaInsets } from './scene/safe-area';
 export { renderHot } from './dev/hot-reload';

@@ -8,6 +8,7 @@ import type { DrawCommand } from '../scene/serialize';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
+import { DisplaySizeContext } from '../scene/display-context';
 import { TouchReader } from '../native/input';
 import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
@@ -494,7 +495,9 @@ export function render(
     latestEl = el;
     const wrapped = React.createElement(
       TouchRegistryContext.Provider, { value: registry },
-      React.createElement(LayoutContext.Provider, { value: layoutRef }, el),
+      React.createElement(DisplaySizeContext.Provider, { value: { width: display.width, height: display.height } },
+        React.createElement(LayoutContext.Provider, { value: layoutRef }, el),
+      ),
     );
     reconciler.updateContainer(wrapped, root, null, null);
   }
@@ -527,7 +530,7 @@ export function render(
 
   let stopTouch = (): void => {};
   try {
-    const touchDevice = new TouchReader();
+    const touchDevice = new TouchReader({ width: display.width, height: display.height });
     touchDevice.startWithGestures({
       onTouchStart: (x, y) => { wake(); registry.touchStart(x, y); },
       onTouchMove:  (x, y) => { registry.touchMove(x, y); },

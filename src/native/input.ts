@@ -66,9 +66,11 @@ export const KEY = {
 const TOUCH_MAX_X = 32767;
 const TOUCH_MAX_Y = 127;
 
-// Logical display size (after rotation)
-const DISPLAY_W = 2008;
-const DISPLAY_H = 60;
+// Fallback logical display size (after rotation) for the T2 Touch Bar, used
+// only when the caller doesn't supply the real DRM display dimensions. The
+// renderer passes display.width/height so touch tracks the auto-detected mode.
+const DEFAULT_DISPLAY_W = 2008;
+const DEFAULT_DISPLAY_H = 60;
 
 function resolveTouchDevicePath(devicePath?: string): string {
   if (devicePath) return devicePath;
@@ -100,6 +102,18 @@ function resolveTouchDevicePath(devicePath?: string): string {
   );
 }
 
+export interface TouchReaderOptions {
+  /** Override the input device path. Defaults to auto-detect. */
+  devicePath?: string;
+  /**
+   * Logical display size (post-rotation) used to scale raw touch axes into
+   * pixel coordinates. Defaults to the T2 Touch Bar's 2008×60 when omitted.
+   * Pass the DrmDisplay's width/height so touch tracks the detected mode.
+   */
+  width?: number;
+  height?: number;
+}
+
 export interface GestureOptions {
   onTouchStart?: (x: number, y: number) => void;
   onTouchMove?:  (x: number, y: number) => void;
@@ -115,10 +129,17 @@ export interface GestureOptions {
 export class TouchReader {
   private handle: NativeTouchReader;
   private readonly explicitPath?: string;
+  private readonly displayW: number;
+  private readonly displayH: number;
   private stopped = false;
 
-  constructor(devicePath?: string) {
-    this.explicitPath = devicePath;
+  // Accepts either a device-path string (legacy form) or an options object
+  // carrying the real display dimensions.
+  constructor(opts?: string | TouchReaderOptions) {
+    const o: TouchReaderOptions = typeof opts === 'string' ? { devicePath: opts } : (opts ?? {});
+    this.explicitPath = o.devicePath;
+    this.displayW = o.width ?? DEFAULT_DISPLAY_W;
+    this.displayH = o.height ?? DEFAULT_DISPLAY_H;
     this.handle = this.openHandle();
   }
 
@@ -158,8 +179,8 @@ export class TouchReader {
   start(onTap: (x: number, y: number) => void): void {
     this.startHandle((type: number, rawX: number, rawY: number) => {
       if (type !== 0) return; // only fire on start (tap)
-      const x = Math.round(rawX * (DISPLAY_W - 1) / TOUCH_MAX_X);
-      const y = Math.round(rawY * (DISPLAY_H - 1) / TOUCH_MAX_Y);
+      const x = Math.round(rawX * (this.displayW - 1) / TOUCH_MAX_X);
+      const y = Math.round(rawY * (this.displayH - 1) / TOUCH_MAX_Y);
       onTap(x, y);
     });
   }
@@ -173,8 +194,8 @@ export class TouchReader {
     let startX = 0, startY = 0;
 
     this.startHandle((type: number, rawX: number, rawY: number) => {
-      const x = Math.round(rawX * (DISPLAY_W - 1) / TOUCH_MAX_X);
-      const y = Math.round(rawY * (DISPLAY_H - 1) / TOUCH_MAX_Y);
+      const x = Math.round(rawX * (this.displayW - 1) / TOUCH_MAX_X);
+      const y = Math.round(rawY * (this.displayH - 1) / TOUCH_MAX_Y);
 
       if (type === 0) {        // start
         startX = x; startY = y;
