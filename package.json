@@ -29,8 +29,11 @@
     "@types/react": "^18.3.20",
     "@types/react-reconciler": "^0.28.8",
     "node-gyp": "^12.4.0",
-    "tsx": "^4.19.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.8.3"
   },
-  "gypfile": true
+  "gypfile": true,
+  "overrides": {
+    "tmp": "^0.2.7"
+  }
 }
