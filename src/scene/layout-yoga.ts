@@ -1,4 +1,4 @@
-import type { SceneNode, BoxNode, SvgNode, SvgContainerNode, TextNode, RootContainer } from './types';
+import type { SceneNode, BoxNode, SvgNode, GifNode, SvgContainerNode, TextNode, RootContainer } from './types';
 import type { Style } from './style';
 import type { LayoutBox } from './layout';
 import { measureText } from './layout';
@@ -43,8 +43,8 @@ export function yogaReady(): boolean {
 }
 
 function getStyle(node: SceneNode): Style {
-  if (node.type === 'box' || node.type === 'svg_image' || node.type === 'svg') {
-    return (node as BoxNode | SvgNode | SvgContainerNode).style ?? {};
+  if (node.type === 'box' || node.type === 'svg_image' || node.type === 'gif_image' || node.type === 'svg') {
+    return (node as BoxNode | SvgNode | GifNode | SvgContainerNode).style ?? {};
   }
   return {};
 }
@@ -54,6 +54,7 @@ function explicitWidth(node: SceneNode): import('./style').Dimension | undefined
   if (s.width !== undefined) return s.width;
   if (node.type === 'box')       return (node as BoxNode).width;
   if (node.type === 'svg_image') return (node as SvgNode).width;
+  if (node.type === 'gif_image') return (node as GifNode).width;
   if (node.type === 'svg')       return (node as SvgContainerNode).width;
   return undefined;
 }
@@ -63,12 +64,13 @@ function explicitHeight(node: SceneNode): import('./style').Dimension | undefine
   if (s.height !== undefined) return s.height;
   if (node.type === 'box')       return (node as BoxNode).height;
   if (node.type === 'svg_image') return (node as SvgNode).height;
+  if (node.type === 'gif_image') return (node as GifNode).height;
   if (node.type === 'svg')       return (node as SvgContainerNode).height;
   return undefined;
 }
 
 function isLayoutable(c: SceneNode): boolean {
-  return c.type === 'box' || c.type === 'svg_image' || c.type === 'svg' || c.type === 'text';
+  return c.type === 'box' || c.type === 'svg_image' || c.type === 'gif_image' || c.type === 'svg' || c.type === 'text';
 }
 
 function isAbsolute(node: SceneNode): boolean {
@@ -211,8 +213,8 @@ function buildNode(node: SceneNode, fillContaining: boolean, stretch: StretchAxi
   applyCommonStyle(yn, node, stretch);
   if (fillContaining && !isAbsolute(node)) applyFillContaining(yn, node);
 
-  // svg / svg_image are layout leaves.
-  if (node.type === 'svg_image' || node.type === 'svg') return built;
+  // svg / svg_image / gif_image are layout leaves.
+  if (node.type === 'svg_image' || node.type === 'gif_image' || node.type === 'svg') return built;
 
   const childFill = s.display === 'block';
   const crossAxis: 'horizontal' | 'vertical' =

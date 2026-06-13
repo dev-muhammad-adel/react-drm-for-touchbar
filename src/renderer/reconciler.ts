@@ -1,6 +1,6 @@
 import ReactReconciler from 'react-reconciler';
 import { DefaultEventPriority } from 'react-reconciler/constants';
-import type { RootContainer, SceneNode, BoxNode, TextNode, TextLeafNode, AnyNode, SvgNode, SvgContainerNode, SvgElementNode } from '../scene/types';
+import type { RootContainer, SceneNode, BoxNode, TextNode, TextLeafNode, AnyNode, SvgNode, GifNode, SvgContainerNode, SvgElementNode } from '../scene/types';
 import type { Style } from '../scene/style';
 
 // JSX camelCase prop names → SVG XML attribute names
@@ -118,6 +118,17 @@ function nodeFromProps(type: string, props: Record<string, unknown>): AnyNode {
       style: props.style as Style | undefined,
       children: [],
     } as SvgNode;
+  }
+  if (type === 'gif_image') {
+    return {
+      type: 'gif_image',
+      x: props.x as number | undefined,
+      y: props.y as number | undefined,
+      width: (props.width as number) ?? 0,
+      height: (props.height as number) ?? 0,
+      style: props.style as Style | undefined,
+      children: [],
+    } as GifNode;
   }
   if (type === 'svg') {
     const w = props.width;

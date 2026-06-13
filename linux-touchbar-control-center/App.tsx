@@ -1,5 +1,6 @@
 import React from 'react';
-import { Box } from 'react-drm';
+import path from 'path';
+import { Box, Gif } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
@@ -23,6 +24,18 @@ export function App({ width, height, keyboard }: { width: number; height: number
   const { booted, opacity } = useBootSequence();
 
   // if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
+
+  // Manual <Gif> test. The asset is 75×56; keep aspect ratio at the bar height.
+  // if (!booted) return (<Box style={{ width, height, backgroundColor: '#000',  justifyContent: 'center' }}> 
+  //   <Gif
+  //     src={path.join(__dirname, 'public', 'boot.gif')}
+  //     height={height}
+  //     width={Math.round(height * 960 / 445)} // keep aspect ratio of the source (960×445)
+  //     loop={false}
+  //     playing={!booted}
+  //   />
+  //   </Box>
+  // );
 
   // Wide Touch Bars (no physical Esc key) report a wider panel — show a fixed
   // Esc at the far left and inset the layer area by its width. Only in 'all'

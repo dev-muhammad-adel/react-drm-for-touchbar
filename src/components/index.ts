@@ -4,6 +4,8 @@ export { Text } from './Text';
 export type { TextProps } from './Text';
 export { Svg } from './Svg';
 export type { SvgProps } from './Svg';
+export { Gif } from './Gif';
+export type { GifProps } from './Gif';
 export { SwipeZone } from './SwipeZone';
 export type { SwipeZoneProps } from './SwipeZone';
 export { ScrollRow } from './ScrollRow';

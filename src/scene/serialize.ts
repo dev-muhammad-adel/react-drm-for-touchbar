@@ -11,6 +11,7 @@ export type DrawCommand =
   | { cmd: 'clip_pop' }
   | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string; bold: boolean; italic: boolean; align: string; containerX: number; containerW: number; lineHeight: number }
   | { cmd: 'draw_svg'; x: number; y: number; w: number; h: number; src: string }
+  | { cmd: 'draw_image'; x: number; y: number; w: number; h: number; sw: number; sh: number; data: Buffer; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
 
 function escapeXml(s: string): string {
@@ -123,6 +124,13 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
     const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
     cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: node.src });
+  } else if (node.type === 'gif_image') {
+    if (node.frame && node.frameW && node.frameH) {
+      const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
+      const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
+      const [tl, tr, br, bl] = resolveCornerRadii(node.style);
+      cmds.push({ cmd: 'draw_image', x: lb.x, y: lb.y, w: lb.w, h: lb.h, sw: node.frameW, sh: node.frameH, data: node.frame, tl, tr, br, bl });
+    }
   } else if (node.type === 'svg') {
     const svgNode = node as SvgContainerNode;
     const lb = layout.get(node) ?? { x: svgNode.x ?? 0, y: svgNode.y ?? 0, w: svgNode.width, h: svgNode.height };

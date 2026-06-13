@@ -289,6 +289,43 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       cairo_restore(cr);
       g_object_unref(handle);
 
+    } else if (type == "draw_image") {
+      // Raw pixels (premultiplied ARGB32 / BGRA on little-endian) scaled into
+      // a destination box with rounded-corner clipping. The buffer is borrowed,
+      // not copied — it stays alive as a command arg for this synchronous call.
+      double x = numProp(cmd, "x"), y = numProp(cmd, "y");
+      double w = numProp(cmd, "w"), h = numProp(cmd, "h");
+      int sw = (int)numProp(cmd, "sw");
+      int sh = (int)numProp(cmd, "sh");
+      if (sw <= 0 || sh <= 0 || w <= 0 || h <= 0) continue;
+
+      auto dataVal = cmd.Get("data");
+      if (!dataVal.IsBuffer()) continue;
+      Napi::Buffer<uint8_t> data = dataVal.As<Napi::Buffer<uint8_t>>();
+      int stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, sw);
+      if (data.Length() < (size_t)(stride * sh)) continue;
+
+      cairo_surface_t* img = cairo_image_surface_create_for_data(
+        data.Data(), CAIRO_FORMAT_ARGB32, sw, sh, stride);
+      if (cairo_surface_status(img) != CAIRO_STATUS_SUCCESS) {
+        cairo_surface_destroy(img);
+        continue;
+      }
+
+      double tl = numProp(cmd, "tl"), tr = numProp(cmd, "tr");
+      double br = numProp(cmd, "br"), bl = numProp(cmd, "bl");
+
+      cairo_save(cr);
+      rounded_rect(cr, x, y, w, h, tl, tr, br, bl);
+      cairo_clip(cr);
+      cairo_translate(cr, x, y);
+      cairo_scale(cr, w / (double)sw, h / (double)sh);
+      cairo_set_source_surface(cr, img, 0, 0);
+      cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD);
+      cairo_paint(cr);
+      cairo_restore(cr);
+      cairo_surface_destroy(img);
+
     }
     // Unknown commands are silently skipped.
   }

@@ -45,6 +45,23 @@ export interface SvgNode {
   children: SceneNode[];
 }
 
+export interface GifNode {
+  type: 'gif_image';
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+  style?: Style;
+  children: SceneNode[];
+  // Mutated out-of-band by the <Gif> component each frame (like the spring
+  // adapter): the current frame's premultiplied-BGRA pixels and its source
+  // dimensions. Not a React prop — survives commitUpdate (nodeFromProps omits
+  // it, so Object.assign never clears it).
+  frame?: Buffer;
+  frameW?: number;
+  frameH?: number;
+}
+
 export interface SvgContainerNode {
   type: 'svg';
   x?: number;
@@ -64,7 +81,7 @@ export interface SvgElementNode {
   children: SvgElementNode[];
 }
 
-export type SceneNode = BoxNode | TextNode | SvgNode | SvgContainerNode;
+export type SceneNode = BoxNode | TextNode | SvgNode | GifNode | SvgContainerNode;
 export type AnyNode = SceneNode | TextLeafNode | SvgElementNode;
 
 export interface RootContainer {
