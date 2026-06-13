@@ -8,7 +8,7 @@ import { keys } from '../services/keyInjector';
  */
 export function EscKey({ width, height }: { width: number; height: number }) {
   return (
-    <Box style={{ width, height, alignItems: 'stretch',backgroundColor: '#000' }}>
+    <Box style={{ width,backgroundColor: '#000' }}>
       <Button
         color="#4f4b4f"
         activeColor="#666666"
@@ -23,7 +23,7 @@ export function EscKey({ width, height }: { width: number; height: number }) {
         }}
         onClick={() => keys.pressKey(KEY.ESC)}
       >
-        <Text color="#94a3b8" fontSize={22} fontFamily="monospace" style={{ fontWeight: '700' }}>esc</Text>
+        <Text  fontSize={22} fontFamily="monospace" style={{ fontWeight: '700' }}>esc</Text>
       </Button>
     </Box>
   );
