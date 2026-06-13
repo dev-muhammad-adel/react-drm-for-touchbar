@@ -179,4 +179,24 @@ export const DOCK = {
     { id: 'github',   label: 'GitHub',   iconName: 'github',                 icon: FaGithub,         color: '#e2e8f0', command: 'xdg-open',       args: ['https://github.com'] },
     { id: 'settings', label: 'Settings', iconName: 'systemsettings',         icon: FaGear,           color: '#94a3b8', command: 'systemsettings', matchClass: ['systemsettings'] },
   ] as DockApp[],
+
+  // Keyboard gesture that toggles the dock layer on/off. Long-press the key to
+  // show the dock; long-press again to return to the previous layer.
+  //
+  // 'ralt' = Right Option/Alt on the MacBook keyboard. Swap to any KEY
+  // name from react-drm (e.g. 'rmeta', 'rctrl', 'menu') if you prefer.
+  shortcut: {
+    key:    'lalt' as KeyId,
+    longMs: 350,   // hold time that counts as a long-press
+  },
+};
+
+// ─── Fn-key layer ─────────────────────────────────────────────────────────────
+
+export const FN_LAYER = {
+  // How the Fn key reaches the F-keys layer:
+  //   'hold'   — momentary: the layer shows only while Fn is held (original).
+  //   'toggle' — long-press Fn to switch to it, long-press again to return.
+  mode:   'toggle' as 'hold' | 'toggle',
+  longMs: 350,   // long-press duration when mode === 'toggle'
 };

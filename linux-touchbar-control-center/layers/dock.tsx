@@ -1,10 +1,15 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { Box, Button, Svg, animated, useSprings, useSpringValue } from 'react-drm';
 import { BackButton } from '../components/BackButton';
 import { useActiveWindow } from '../hooks/useActiveWindow';
 import { launchApp } from '../services/launch';
 import { appIconSource } from '../services/appIcon';
 import { DOCK, type DockApp } from '../config';
+
+// Resolve every app's theme icon once at module load (app boot) — not on the
+// first dock switch, which would block the transition while the icon theme is
+// searched. Results are cached, so this is the only filesystem hit.
+const ICON_SRC: (string | null)[] = DOCK.apps.map(a => appIconSource(a.iconName ?? a.command));
 
 /** Does the focused window class belong to this dock app? Drives the dot. */
 function isRunning(app: DockApp, activeClass: string): boolean {
@@ -22,9 +27,6 @@ function isRunning(app: DockApp, activeClass: string): boolean {
 export function DockLayer({ width, height }: { width: number; height: number }) {
   const { class: activeClass } = useActiveWindow();
   const { apps, slot, iconSize, gap, lift, panel, indicator } = DOCK;
-
-  // Resolve each app's real theme icon once (null → react-icons fallback).
-  const iconSrc = useMemo(() => apps.map(a => appIconSource(a.iconName ?? a.command)), [apps]);
 
   // Low friction → the value overshoots and rings, so the icon bounces up and
   // down a couple of times (macOS/Plank launch bounce) instead of a flat lift.
@@ -122,8 +124,8 @@ export function DockLayer({ width, height }: { width: number; height: number }) 
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}>
-                  {iconSrc[i]
-                    ? <Svg src={iconSrc[i]!} width={iconSize} height={iconSize} style={{ width: iconSize, height: iconSize }} />
+                  {ICON_SRC[i]
+                    ? <Svg src={ICON_SRC[i]!} width={iconSize} height={iconSize} style={{ width: iconSize, height: iconSize }} />
                     : <Icon size={iconSize} color={app.color} />}
                 </animated.Box>
 

@@ -4,7 +4,7 @@ import { Box, Gif } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
-import { ESC_KEY } from './config';
+import { ESC_KEY, DOCK, FN_LAYER } from './config';
 import { EscKey } from './components/EscKey';
 import { SafeArea } from './components/SafeArea';
 import { BootScreen } from './components/BootScreen';
@@ -51,9 +51,12 @@ export function App({ width, height, keyboard }: { width: number; height: number
           <LayerHost
             keyboard={keyboard}
             fnLayer="fnkeys"
+            fnMode={FN_LAYER.mode}
+            fnLongMs={FN_LAYER.longMs}
+            toggles={[{ key: DOCK.shortcut.key, layer: 'dock', longMs: DOCK.shortcut.longMs }]}
             layers={[
-              { name: 'dock',              component: DockLayer,               leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
-            { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-right'  } },
+              { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'  } },
+              { name: 'dock',              component: DockLayer,               leaving: { outAnim: 'slide-down' }, entering: { inAnim: 'slide-up'   } },
             { name: 'media',             component: MediaScreen,             leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
             { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
             { name: 'brightness-slider', component: BrightnessSliderLayer,   leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },

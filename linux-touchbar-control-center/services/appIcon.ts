@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, existsSync, mkdirSync, writeFileSync, statSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join, isAbsolute, basename } from 'path';
 
 /**
@@ -21,7 +21,6 @@ const ICON_BASES = [
 ];
 const PIXMAPS = '/usr/share/pixmaps';
 const TMP_DIR = '/tmp/.react-drm-icons';
-const TARGET  = 64; // preferred raster size (px) when picking among PNG sizes
 
 /** Read `Theme=` from a named section of a simple INI file. */
 function iniValue(file: string, section: string, key: string): string | null {
@@ -53,29 +52,24 @@ function currentTheme(): string {
 
 const THEME_CHAIN = Array.from(new Set([currentTheme(), 'breeze', 'Papirus', 'Adwaita', 'hicolor']));
 
-interface Hit { path: string; svg: boolean; size: number; }
+// Common raster sizes, in preference order (closest-to-TARGET-ish first).
+const SIZES = [64, 48, 96, 128, 32, 256, 512, 24, 22, 16];
 
-/** Recursively collect `${name}.svg|png` under a theme dir (depth-limited). */
-function walk(dir: string, name: string, out: Hit[], depth = 0): void {
-  if (depth > 5) return;
-  let entries: string[];
-  try { entries = readdirSync(dir); } catch { return; }
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    let isDir = false;
-    try { isDir = statSync(full).isDirectory(); } catch { continue; }
-    if (isDir) { walk(full, name, out, depth + 1); continue; }
-    if (entry === `${name}.svg`) out.push({ path: full, svg: true, size: sizeFromPath(full) });
-    else if (entry === `${name}.png`) out.push({ path: full, svg: false, size: sizeFromPath(full) });
-  }
-}
-
-/** Pull a pixel size out of a theme path like `.../48x48/apps/foo.png`. */
-function sizeFromPath(p: string): number {
-  const m = p.match(/(\d+)x\1/);
-  if (m) return parseInt(m[1], 10);
-  if (/scalable/.test(p)) return 1024; // treat scalable as "largest"
-  return 0;
+/**
+ * Candidate file paths for one (base, theme, name), ordered best-first. This
+ * probes the handful of standard freedesktop layouts with existsSync instead of
+ * crawling the whole theme tree — a few dozen cheap stat()s vs. reading every
+ * file in Papirus/hicolor (which was blocking the first dock switch).
+ */
+function candidates(base: string, theme: string, name: string): string[] {
+  const dir = join(base, theme);
+  const out: string[] = [];
+  out.push(join(dir, 'scalable/apps', `${name}.svg`)); // most themes (Adwaita, Papirus, hicolor)
+  for (const s of SIZES) out.push(join(dir, 'apps', String(s), `${name}.svg`)); // Breeze: apps/<size>/
+  for (const s of SIZES) out.push(join(dir, `${s}x${s}`, 'apps', `${name}.svg`)); // sized svg
+  for (const s of SIZES) out.push(join(dir, `${s}x${s}`, 'apps', `${name}.png`)); // sized raster
+  out.push(join(dir, 'scalable/apps', `${name}-symbolic.svg`));
+  return out;
 }
 
 const cache = new Map<string, string | null>();
@@ -84,30 +78,27 @@ const cache = new Map<string, string | null>();
 function findIcon(name: string): string | null {
   if (cache.has(name)) return cache.get(name)!;
 
-  // Already a usable path?
-  if ((isAbsolute(name) || name.includes('/')) && existsSync(name)) {
-    cache.set(name, name);
-    return name;
-  }
+  const resolve = (): string | null => {
+    // Already a usable path?
+    if ((isAbsolute(name) || name.includes('/')) && existsSync(name)) return name;
 
-  const hits: Hit[] = [];
-  for (const base of ICON_BASES) {
+    // Probe standard layouts: preferred theme first, then fallbacks.
     for (const theme of THEME_CHAIN) {
-      walk(join(base, theme), name, hits);
+      for (const base of ICON_BASES) {
+        for (const p of candidates(base, theme, name)) {
+          if (existsSync(p)) return p;
+        }
+      }
     }
-  }
-  for (const ext of ['svg', 'png']) {
-    const p = join(PIXMAPS, `${name}.${ext}`);
-    if (existsSync(p)) hits.push({ path: p, svg: ext === 'svg', size: ext === 'svg' ? 1024 : 0 });
-  }
+    // Loose files in pixmaps.
+    for (const ext of ['svg', 'png']) {
+      const p = join(PIXMAPS, `${name}.${ext}`);
+      if (existsSync(p)) return p;
+    }
+    return null;
+  };
 
-  // Prefer SVG; among rasters, the size closest to TARGET (then larger).
-  hits.sort((a, b) => {
-    if (a.svg !== b.svg) return a.svg ? -1 : 1;
-    return Math.abs(a.size - TARGET) - Math.abs(b.size - TARGET);
-  });
-
-  const best = hits[0]?.path ?? null;
+  const best = resolve();
   cache.set(name, best);
   return best;
 }
