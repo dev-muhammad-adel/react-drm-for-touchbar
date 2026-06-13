@@ -167,8 +167,35 @@ export async function attachTouchBar(): Promise<void> {
   }
 
   let card = appletbdrmCardNode();
+  let nextReprobe = Date.now() + 2000;
   while (!card) {
     if (Date.now() > deadline) throw new Error('appletbdrm card did not appear');
+
+    // The USB device can reach config 2 before the T2 suspend service has
+    // finished restoring its modules. In that window appletbdrm may probe
+    // once, fail with ETIMEDOUT, and never be probed again even though config
+    // 2 remains active. Re-apply the configuration until a DRM card appears.
+    if (Date.now() >= nextReprobe) {
+      dev = findTouchBarUsb() ?? dev;
+      const node = usbDevNode(dev);
+      let cfg = path.join(dev, 'bConfigurationValue');
+      try {
+        fs.accessSync(node, fs.constants.W_OK);
+        fs.accessSync(cfg, fs.constants.W_OK);
+        if (readConfigValue(dev) === '2')
+          console.warn('[suspend] config 2 active but no DRM card — reprobe');
+        if (readConfigValue(dev) === '') usbReset(node);
+        fs.writeFileSync(cfg, '0');
+        await sleep(500);
+        dev = findTouchBarUsb() ?? dev;
+        cfg = path.join(dev, 'bConfigurationValue');
+        fs.writeFileSync(cfg, '2');
+      } catch (e) {
+        console.warn('[suspend] reprobe attempt failed, retrying:', e instanceof Error ? e.message : e);
+      }
+      nextReprobe = Date.now() + 2000;
+    }
+
     await sleep(250);
     card = appletbdrmCardNode();
   }
