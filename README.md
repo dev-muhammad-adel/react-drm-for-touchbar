@@ -1,93 +1,122 @@
 # react-drm
 
-React renderer targeting Linux DRM/KMS via libdrm + Cairo, built for the Apple Touch Bar on Linux.
+react-drm provides a React renderer for drawing directly to Linux DRM/KMS
+displays using libdrm and Cairo. This repository includes a control center
+that replaces the standard Touch Bar interface on T2 MacBooks running Linux.
 
-## Prerequisites
+The control center provides:
 
-- T2 MacBook with the `appletbdrm` and `hid-appletb-bl` kernel modules available
-- Node.js with native addon support (`node-gyp`)
-- `libdrm`, `libcairo` development headers
-- **No other Touch Bar daemon**: remove `tiny-dfr` / `mac-touchbar-plus` first — it competes for the Touch Bar display and the install below assumes it is gone
+- Function keys and an optional on-screen Escape key
+- Media controls, volume and display brightness
+- Application-aware controls for browsers, media players and file managers
+- CPU, memory, temperature, network and battery information
+- Audio visualization, a focus timer and small games
+- Automatic detach and re-attach during suspend and resume
 
-## Build
+## Requirements
+
+- A T2 MacBook with the `appletbdrm` and `hid-appletb-bl` kernel modules
+- Node.js, npm and a native build toolchain with `node-gyp`, a C++ compiler,
+  `make` and `pkg-config`
+- Development headers for libdrm, Cairo, librsvg and libudev/systemd
+- `brightnessctl` for display brightness
+- `cava` for audio visualization
+- `playerctl` for media controls
+
+react-drm replaces other Touch Bar daemons. Remove `tiny-dfr` or
+`mac-touchbar-plus` before installing it. Some T2 distributions include
+`tiny-dfr` by default.
+
+## Installation
+
+Install the dependencies listed above using your distribution's package
+manager, then build the project:
 
 ```sh
-npm install
+npm ci
 npm run build
 ```
 
-## Run linux-touchbar-control-center (foreground)
+Add your user to the groups required for DRM, input devices and key injection:
 
 ```sh
+sudo usermod -aG video,input "$USER"
+```
+
+Install the udev rules:
+
+```sh
+sudo install -m644 system/99-react-drm.rules /etc/udev/rules.d/
+sudo udevadm control --reload
+sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
+sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
+```
+
+Log out and back in for the new group memberships to take effect.
+
+The supplied user service expects the repository at `~/react-drm`. Edit
+`WorkingDirectory`, `ExecStart` and `ExecStopPost` in
+`system/react-drm.service` if it is stored elsewhere.
+
+Install and enable the service:
+
+```sh
+install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
+systemctl --user daemon-reload
+systemctl --user enable --now react-drm
+```
+
+Check its status and log with:
+
+```sh
+systemctl --user status react-drm
+journalctl --user -u react-drm -b
+```
+
+The service runs without root privileges. It attaches the Touch Bar when the
+graphical session starts, restores the firmware interface when the session
+ends and handles suspend and resume. The firmware function-key strip remains
+available before login and after logout.
+
+## Manual start
+
+Stop the user service before running the control center manually:
+
+```sh
+systemctl --user stop react-drm
 cd linux-touchbar-control-center
-npm install
 npm run dev
 ```
 
-## Install as a service
+## Active window integration
 
-Runs as an unprivileged user service tied
-to your graphical session — no root, no sudo rules. Lifecycle: the firmware
-fn-key strip stays on the Touch Bar from power-on until login (the USB device
-sits in config 1, so the `appletbdrm` driver never loads), the app switches
-the device to config 2 at startup (the kernel auto-loads the driver), and the
-fn strip comes back at logout (the unit's `ExecStopPost` detach). Suspend and
-resume are handled by the app itself: it holds a logind delay inhibitor,
-releases the bar before suspend (the t2 sleep fix can't remove `apple-bce`
-safely while something holds the bar) and re-attaches on resume — the same
-code paths a manual `npm run dev` uses.
+Application-specific controls require an active-window backend. The matching
+backend is selected automatically:
 
-All files live in `system/`; each also carries its install command in its
-header comment. The unit calls the detach helper from the repo and assumes it
-is at `~/react-drm` — edit the paths in `system/react-drm.service` otherwise.
+- GNOME Wayland uses
+  [Window Monitor Pro](https://extensions.gnome.org/extension/8549/window-monitor-pro/),
+  maintained by the react-drm developer
+- KDE Plasma Wayland uses KWin scripting
+- Hyprland uses its IPC socket
+- Xorg uses `xprop`
 
-1. **Device access** — card nodes are `root:video`, evdev needs `input`:
+Window Monitor Pro must be installed and enabled on GNOME Wayland. `xprop`
+must be installed for Xorg sessions.
 
-   ```sh
-   sudo usermod -aG video,input $USER   # re-login to take effect
-   ```
+## Konsole integration
 
-2. **udev rules** — own logind seat for the Touch Bar (keeps the main
-   compositor from claiming it), group-writable USB config switch and
-   backlight, USB runtime PM pinned off (autosuspend deadlocks the
-   `hid_appletb_kbd` driver, wedging the device until reboot — and tools like
-   `powertop --auto-tune` would silently re-enable it):
-
-   ```sh
-   sudo install -m644 system/99-react-drm.rules /etc/udev/rules.d/
-   sudo udevadm control --reload
-   sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
-   ```
-
-3. **User unit** — starts/stops with the graphical session:
-
-   ```sh
-   install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
-   systemctl --user daemon-reload
-   systemctl --user enable react-drm
-   ```
-
-   Make sure `linux-touchbar-control-center/` has its dependencies (`cd linux-touchbar-control-center && npm install`),
-   then reboot — the fn strip should be visible until login, after which
-   react-drm takes the bar. Check with `systemctl --user status react-drm`
-   and `journalctl --user -u react-drm`.
-
-## Konsole D-Bus API (required for the Konsole panel)
-
-The Konsole panel (`linux-touchbar-control-center/layers/leftsideLayers/KonsolePanel.tsx`) sends suggested commands to Konsole via the `org.kde.konsole.Session.sendText` D-Bus method. Since Konsole 22.04 this method (along with `runCommand`) is disabled by default and fails with:
-
-```
-Security sensitive DBus API is disabled in the settings.
-```
-
-To enable it, either check **Settings → Configure Konsole → General → "Enable the security sensitive parts of the DBus API"**, or set it from the command line:
+The Konsole panel can show suggestions without additional configuration.
+Sending commands requires Konsole's security-sensitive D-Bus API:
 
 ```sh
 kwriteconfig6 --file konsolerc --group KonsoleWindow --key EnableSecuritySensitiveDBusAPI true
 ```
 
-The key must be in the `[KonsoleWindow]` group of `~/.config/konsolerc`. Konsole only reads it at startup, so fully quit Konsole afterwards (close all windows — with `UseSingleInstance=true` the process keeps running as long as any window is open) and launch it again.
+The key must be stored in the `[KonsoleWindow]` group of
+`~/.config/konsolerc`. Konsole reads it only at startup, so close all Konsole
+windows before starting it again. With `UseSingleInstance=true`, the process
+continues running while any window remains open.
 
-Read-only methods used for the suggestion list (`getAllDisplayedText`, `foregroundProcessId`) are not gated, so suggestions appear even when sending is blocked.
-
-> **Security note:** this allows any process on your session bus to type into and run commands in your Konsole sessions. Only enable it if you're comfortable with that trade-off.
+Command suggestions use read-only D-Bus methods and work without this setting.
+Enabling the security-sensitive API allows any process on the session bus to
+send text and commands to open Konsole sessions.
