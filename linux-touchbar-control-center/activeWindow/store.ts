@@ -3,6 +3,7 @@ import type { ActiveWindowBackend } from './types';
 import { EMPTY } from './types';
 import { hyprland } from './hyprland';
 import { gnome } from './gnome';
+import { plasma } from './plasma';
 import { xorg } from './xorg';
 import { detectSession } from './detect';
 import { ACTIVE_WINDOW } from '../config';
@@ -13,7 +14,7 @@ import { ACTIVE_WINDOW } from '../config';
 
 type Listener = (w: ActiveWindow) => void;
 
-const BACKENDS = [hyprland, gnome, xorg]; // fallback probe order when detection is inconclusive
+const BACKENDS = [hyprland, gnome, plasma, xorg]; // fallback probe order when detection is inconclusive
 
 // Map the detected session to backends worth starting. Any Xorg session —
 // GNOME included — exposes EWMH window properties over the X protocol, so the
@@ -30,6 +31,7 @@ async function backendsForSession(): Promise<ActiveWindowBackend[]> {
   // Wayland: each compositor needs its own focus source.
   if (s.desktop === 'hyprland') return [hyprland];
   if (s.desktop === 'gnome')    return [gnome];
+  if (s.desktop === 'plasma')   return [plasma]; // KWin scripting
   return BACKENDS; // unknown — probe everything
 }
 

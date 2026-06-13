@@ -11,7 +11,7 @@ import { findHyprDir } from './hyprland';
 export interface Session {
   type: 'wayland' | 'xorg' | 'unknown';
   /** Compositor (Wayland) or desktop (Xorg) when we can tell. */
-  desktop: 'hyprland' | 'gnome' | 'unknown';
+  desktop: 'hyprland' | 'gnome' | 'plasma' | 'unknown';
 }
 
 // Candidate runtime dirs: the env one, the invoking user's when under sudo,
@@ -56,10 +56,26 @@ async function gnomeShellRunning(): Promise<boolean> {
   }
 }
 
+// kwin_wayland/kwin_x11 owns this name on both Wayland and Xorg sessions.
+async function kwinRunning(): Promise<boolean> {
+  let bus: dbus.MessageBus;
+  try { bus = dbus.sessionBus(); } catch { return false; }
+  try {
+    const obj   = await bus.getProxyObject('org.freedesktop.DBus', '/org/freedesktop/DBus');
+    const iface = obj.getInterface('org.freedesktop.DBus');
+    return Boolean(await iface.NameHasOwner('org.kde.KWin'));
+  } catch {
+    return false;
+  } finally {
+    bus.disconnect();
+  }
+}
+
 async function detectDesktop(): Promise<Session['desktop']> {
   if (findHyprDir()) return 'hyprland';
   const xdg = (process.env.XDG_CURRENT_DESKTOP ?? '').toLowerCase();
   if (xdg.includes('gnome') || await gnomeShellRunning()) return 'gnome';
+  if (xdg.includes('kde') || xdg.includes('plasma') || await kwinRunning()) return 'plasma';
   return 'unknown';
 }
 
