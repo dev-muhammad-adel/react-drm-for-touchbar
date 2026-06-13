@@ -2,6 +2,7 @@
 # Install: sudo install -m644 system/99-react-drm.rules /etc/udev/rules.d/
 #          sudo udevadm control --reload
 #          sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
+#          sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
 #
 # Seat assignment: move the Touch Bar display and its touch input to their
 # own logind seat so the main compositor never claims them.
@@ -34,3 +35,6 @@ ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05
 
 # Backlight: let the video group set Touch Bar brightness without sudo.
 ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="appletb_backlight", RUN+="/bin/chown root:video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+
+# Key injection: let members of the input group create the virtual keyboard.
+SUBSYSTEM=="misc", KERNEL=="uinput", GROUP="input", MODE="0660"
