@@ -199,7 +199,10 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
 
   return (
     <Ctx.Provider value={ctx}>
-      <Box style={{ width, height }}>
+      {/* Clip layers to the host box so slide transitions stay inside the
+          layer column — without this they bleed past the left edge (e.g. over
+          the wide-display Esc button that insets this host). */}
+      <Box style={{ width, height, overflow: 'hidden' }}>
         {transition((style, i) => {
           const layer = layers[i];
           if (!layer) return null;

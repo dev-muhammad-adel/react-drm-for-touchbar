@@ -15,6 +15,29 @@ export const DISPLAY = {
   activeBrightness: 2,
 } as const;
 
+// ─── On-screen Esc key ───────────────────────────────────────────────────────
+
+export const ESC_KEY: {
+  minWidth: number;
+  onLayers: 'all' | 'fn';
+  width: number;
+  gap: number;
+} = {
+  // Wide Touch Bars (MacBooks without a physical Esc key) report a wider
+  // panel — the standard bar is 2008 px, the wide variant 2170 px. Show an
+  // on-screen Esc at the far left when the auto-detected display width is at
+  // least this. Set to 0 to always show, Infinity to never.
+  minWidth: 2170,
+  // Where the Esc key shows on wide displays:
+  //   'all' — a fixed Esc button at the far left of every layer
+  //   'fn'  — Esc shows only in the Fn-key layer, sized like the F-keys
+  onLayers: 'fn',
+  // Only used by 'all' mode (the fixed left button); 'fn' mode sizes Esc
+  // like the surrounding F-keys.
+  width:    110,  // px reserved on the left for the Esc button
+  gap:      8,    // px between the Esc button and the layer area
+} as const;
+
 // ─── Touch Bar lifecycle ─────────────────────────────────────────────────────
 
 export const SLEEP = {

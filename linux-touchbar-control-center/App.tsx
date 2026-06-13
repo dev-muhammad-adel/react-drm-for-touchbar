@@ -1,7 +1,10 @@
 import React from 'react';
+import { Box } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
+import { ESC_KEY } from './config';
+import { EscKey } from './components/EscKey';
 import { SafeArea } from './components/SafeArea';
 import { BootScreen } from './components/BootScreen';
 import { SplittedLayer } from './layers/splittedLayer';
@@ -21,13 +24,20 @@ export function App({ width, height, keyboard }: { width: number; height: number
 
   // if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
 
+  // Wide Touch Bars (no physical Esc key) report a wider panel — show a fixed
+  // Esc at the far left and inset the layer area by its width. Only in 'all'
+  // mode; 'fn' mode renders Esc inside the Fn-key layer instead.
+  const showEsc = width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
+
   return (
     <SafeArea width={width} height={height}>
-      {(w, h) => (
-        <LayerHost
-          keyboard={keyboard}
-          fnLayer="fnkeys"
-          layers={[
+      {(w, h) => {
+        const layerW = showEsc ? w - ESC_KEY.width - ESC_KEY.gap : w;
+        const layerHost = (
+          <LayerHost
+            keyboard={keyboard}
+            fnLayer="fnkeys"
+            layers={[
             { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-right'  } },
             { name: 'media',             component: MediaScreen,             leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
             { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
@@ -39,10 +49,20 @@ export function App({ width, height, keyboard }: { width: number; height: number
             { name: 'piano',             component: PianoLayer,              leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
             { name: 'pong',              component: PongLayer,               leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
           ]}
-          width={w}
-          height={h}
-        />
-      )}
+            width={layerW}
+            height={h}
+          />
+        );
+
+        if (!showEsc) return layerHost;
+
+        return (
+          <Box style={{ width: w, height: h, alignItems: 'stretch', gap: ESC_KEY.gap }}>
+            <EscKey width={ESC_KEY.width} height={h} />
+            {layerHost}
+          </Box>
+        );
+      }}
     </SafeArea>
   );
 }
