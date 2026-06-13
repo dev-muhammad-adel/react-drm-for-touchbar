@@ -34,6 +34,7 @@ export interface ButtonProps {
   onTouchStart?: (x: number, y: number) => void;
   onTouchMove?:  (x: number, y: number) => void;
   onTouchEnd?:   (x: number, y: number) => void;
+  onTouchCancel?: () => void;
 }
 
 export function Button({
@@ -56,6 +57,7 @@ export function Button({
   onTouchStart,
   onTouchMove,
   onTouchEnd,
+  onTouchCancel,
   children,
 }: ButtonProps): React.ReactElement {
   const [active, setActive] = useState(false);
@@ -106,6 +108,7 @@ export function Button({
       onTouchCancel: () => {
         if (pressTimerRef.current) { clearTimeout(pressTimerRef.current); pressTimerRef.current = null; }
         setActive(false);
+        onTouchCancel?.();
       },
     });
     return () => registry.unregisterGesture(key);

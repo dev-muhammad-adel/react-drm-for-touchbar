@@ -15,6 +15,7 @@ import { SystemBar } from './layers/systemBar';
 import { AudioSliderLayer } from './layers/audioSlider';
 import { BrightnessSliderLayer } from './layers/brightnessSlider';
 import { GamesLayer } from './layers/gamesLayer';
+import { DockLayer } from './layers/dock';
 import { DinoLayer } from './layers/dino';
 import { PianoLayer } from './layers/piano';
 import { PongLayer } from './layers/pong';
@@ -51,6 +52,7 @@ export function App({ width, height, keyboard }: { width: number; height: number
             keyboard={keyboard}
             fnLayer="fnkeys"
             layers={[
+              { name: 'dock',              component: DockLayer,               leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
             { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'slide-left'  }, entering: { inAnim: 'slide-right'  } },
             { name: 'media',             component: MediaScreen,             leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
             { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },

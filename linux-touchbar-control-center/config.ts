@@ -1,5 +1,9 @@
 import { KEY } from 'react-drm';
 import type { KeyId } from 'react-drm';
+import type { IconType } from 'react-icons';
+import {
+  FaFolder, FaTerminal, FaFirefoxBrowser, FaCode, FaMusic, FaGithub, FaGear,
+} from 'react-icons/fa6';
 
 /**
  * Central configuration for the example app.
@@ -126,3 +130,53 @@ export function browserKeysFor(windowClass: string): BrowserKeymap {
   const overrides = BROWSER_KEY_OVERRIDES[windowClass.toLowerCase()] ?? {};
   return { ...DEFAULT_BROWSER_KEYS, ...overrides };
 }
+
+// ─── App dock (Plank-style) ───────────────────────────────────────────────────
+
+export type DockApp = {
+  id:          string;     // stable React key
+  label:       string;     // app name (for reference / future tooltips)
+  iconName?:   string;     // freedesktop icon name — real app icon from the theme
+  icon:        IconType;   // react-icons fallback when no theme icon is found
+  color:       string;     // tint for the react-icons fallback
+  command:     string;     // executable to launch on tap
+  args?:       string[];   // launch arguments
+  matchClass?: string[];   // window-class substrings that mark this app "running"
+};
+
+/**
+ * The Plank-style dock layer. Edit `apps` to pin/unpin entries — each one is a
+ * launchable command plus the window classes that count as "this app running",
+ * which drives the indicator dot under the icon (matched against the focused
+ * window from the active-window backend).
+ *
+ * Icons use the real app icon from your icon theme via `iconName` (a
+ * freedesktop name like `org.kde.dolphin` or `firefox` — usually the `Icon=`
+ * value in the app's .desktop file). If that name can't be found in the theme,
+ * the dock falls back to the react-icons `icon` glyph.
+ */
+export const DOCK = {
+  iconSize:  50,    // px — icon glyph size
+  slot:      65,    // px — square tap target per app
+  gap:       14,    // px — space between icons
+  lift:      10,    // px — how far an icon rises while pressed (Plank bounce)
+  panel: {
+    color:  'rgba(20, 22, 30, 0.78)', // translucent dock background
+    radius: 20,
+    padX:   20,     // horizontal padding inside the panel
+    padY:   4,      // vertical padding inside the panel
+  },
+  indicator: {
+    color: '#7dd3fc',
+    size:  5,       // running/focused dot diameter
+  },
+  apps: [
+    { id: 'files',    label: 'Files',    iconName: 'org.kde.dolphin',        icon: FaFolder,         color: '#7dd3fc', command: 'dolphin',        matchClass: ['dolphin'] },
+    { id: 'terminal', label: 'Terminal', iconName: 'org.kde.konsole',        icon: FaTerminal,       color: '#e2e8f0', command: 'konsole',        matchClass: ['konsole'] },
+    { id: 'firefox',  label: 'Firefox',  iconName: 'firefox',                icon: FaFirefoxBrowser, color: '#ff9d5c', command: 'firefox',        matchClass: ['firefox'] },
+    { id: 'code',     label: 'Code',     iconName: 'visual-studio-code',     icon: FaCode,           color: '#60a5fa', command: 'code',           matchClass: ['code', 'vscodium'] },
+    { id: 'music',    label: 'Music',    iconName: 'vlc',                    icon: FaMusic,          color: '#c084fc', command: 'vlc',            matchClass: ['vlc'] },
+    { id: 'github',   label: 'GitHub',   iconName: 'github',                 icon: FaGithub,         color: '#e2e8f0', command: 'xdg-open',       args: ['https://github.com'] },
+    { id: 'settings', label: 'Settings', iconName: 'systemsettings',         icon: FaGear,           color: '#94a3b8', command: 'systemsettings', matchClass: ['systemsettings'] },
+  ] as DockApp[],
+};
