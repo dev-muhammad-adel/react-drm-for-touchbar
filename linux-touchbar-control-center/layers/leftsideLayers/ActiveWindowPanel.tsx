@@ -1,7 +1,11 @@
 import React from 'react';
-import { Box, Text, Button } from 'react-drm';
+import { Box, Text, Button, Gif } from 'react-drm';
 import { useLayers } from '..';
 import { useActiveWindow } from '../../hooks/useActiveWindow';
+import path from 'path';
+
+// const APP_ROOT = process.cwd();
+// const BOOT_GIF_PATH = path.join(APP_ROOT, 'public', 'wildcat2.gif');
 
 const ACCENT: Record<string, string> = {
   firefox: '#f97316',
@@ -47,20 +51,19 @@ export function ActiveWindowPanel({ width, height }: { width: number; height: nu
       height={height}
       color="transparent"
       activeColor="transparent"
-      onClick={next}
+      // onClick={next}
     >
-      <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, gap: 10 }}>
-        <Box style={{ width: 3, height: 34, borderRadius: 2, backgroundColor: color }} />
-        <Box style={{ flexDirection: 'column', gap: 2, alignSelf: 'center', height: 37 }}>
-          <Text color={color} fontSize={10} fontFamily="IosevkaTerm Nerd Font">
+      <Box style={{ flex: 1  , borderRadius: 6  , justifyContent: 'center' }}>
+        <Box style={{ width:200,justifyContent:'center' ,flexDirection:'column' }}>
+  
+          {/* <Box  style={{height:20 }}>
+
+          <Text  color={color} fontSize={16} fontFamily="IosevkaTerm Nerd Font">
             {(cls || 'desktop').toUpperCase()}
           </Text>
-          <Text color="#e2e8f0" fontSize={15} fontFamily="IosevkaTerm Nerd Font">
-            {title || 'No active title'}
-          </Text>
-          <Text color="#94a3b8" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
-            Tap to cycle left cards
-          </Text>
+       
+          </Box>
+          */}
         </Box>
       </Box>
     </Button>
