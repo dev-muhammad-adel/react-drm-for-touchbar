@@ -13,64 +13,149 @@ The control center provides:
 - Audio visualization, a focus timer and small games
 - Automatic detach and re-attach during suspend and resume
 
-## Requirements
-
-- A T2 MacBook with the `appletbdrm` and `hid-appletb-bl` kernel modules
-- Node.js, npm and a native build toolchain with `node-gyp`, a C++ compiler,
-  `make` and `pkg-config`
-- Development headers for libdrm, Cairo, librsvg and libudev/systemd
-- `brightnessctl` for display brightness
-- `cava` for audio visualization
-- `playerctl` for media controls
-
-react-drm replaces other Touch Bar daemons. Remove `tiny-dfr` or
-`mac-touchbar-plus` before installing it. Some T2 distributions include
-`tiny-dfr` by default.
-
 ## Installation
 
-Install the dependencies listed above using your distribution's package
-manager, then build the project:
+react-drm replaces the existing Touch Bar interface. `tiny-dfr`,
+`mac-touchbar-plus` and other Touch Bar daemons must not run alongside it.
+
+### Installer
+
+Run the installer as your regular user from the repository root:
+
+```sh
+./install.sh
+```
+
+The installer performs three phases:
+
+1. **Analysis** detects the system, session, hardware, kernel modules,
+   conflicting daemons and required packages. It resolves the complete package
+   transaction without changing the system.
+2. **Purge** stops and removes detected `tiny-dfr` or `mac-touchbar-plus`
+   installations after a separate confirmation.
+3. **Deploy** installs dependencies, builds the current local source, installs
+   the udev rules and user service, and starts react-drm.
+
+It can also update an existing installation. Update the local source using the
+same method used to obtain it, then run the updated `install.sh` again. The
+installer does not download source updates itself.
+
+Supported installer environments:
+
+- Fedora 44 or newer
+- Debian 13 or newer
+- Ubuntu 25.10 or newer and Ubuntu derivatives that provide Node.js 20.19.0
+  or newer
+- Arch Linux and supported Arch derivatives
+- GNOME, KDE Plasma or Hyprland on Wayland
+- Any Xorg desktop with `xprop`
+
+Ubuntu 24.04 is not supported because its repositories provide Node.js 18.
+react-drm requires Node.js 20.19.0 or newer. NixOS is detected but requires a
+native Nix package or module and is not modified by the installer. Other
+Wayland desktops currently lack an active-window backend and are rejected by
+the installer.
+
+Arch-based systems receive a full `pacman -Syu` because partial upgrades are
+unsupported. Debian and Ubuntu package lists and Fedora repository metadata
+are refreshed before package installation.
+
+Run only the non-destructive analysis with:
+
+```sh
+./install.sh analyze
+```
+
+### Uninstall
+
+Run the separate uninstaller from the repository root:
+
+```sh
+./uninstall.sh
+```
+
+It stops and removes the react-drm user service, restores the firmware Touch
+Bar interface and removes the react-drm udev rules. Project files, npm
+dependencies, system packages and `video`/`input` group memberships are left
+unchanged.
+
+### Manual installation
+
+Use this path for unsupported distributions or desktop environments. Package
+names differ between distributions, so install the equivalents of:
+
+- Node.js 20.19.0 or newer, npm and Python 3 for `node-gyp`
+- A C++ compiler, `make` and `pkg-config`
+- Development files for libdrm, Cairo, librsvg and libudev/systemd
+- `brightnessctl`, `cava` and `playerctl`
+- `xprop` when using Xorg
+- systemd/logind and a systemd user session for suspend handling and the
+  supplied service
+
+The kernel must provide `appletbdrm` and `hid-appletb-bl`. Verify both before
+continuing:
+
+```sh
+modinfo appletbdrm
+modinfo hid-appletb-bl
+```
+
+Stop, disable and remove `tiny-dfr`, `mac-touchbar-plus` or any other Touch Bar
+daemon using the method appropriate for your distribution.
+
+Build from the repository root. `npm ci` uses the root lockfile and installs
+the root package together with the `linux-touchbar-control-center` workspace:
 
 ```sh
 npm ci
 npm run build
 ```
 
-Add your user to the groups required for DRM, input devices and key injection:
+`npm ci` may show deprecation warnings for `npmlog`, `are-we-there-yet` and
+`gauge`. They are transitive dependencies of `@benmalka/foxdriver` and do not
+by themselves indicate a failed build.
+
+Add your user to the groups required for DRM access, input devices and key
+injection:
 
 ```sh
 sudo usermod -aG video,input "$USER"
 ```
 
-Install the udev rules:
+Install and apply the udev rules:
 
 ```sh
-sudo install -m644 system/99-react-drm.rules /etc/udev/rules.d/
+sudo install -m 0644 system/99-react-drm.rules /etc/udev/rules.d/99-react-drm.rules
 sudo udevadm control --reload
 sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
 sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
 ```
 
-Log out and back in for the new group memberships to take effect.
+Log out of the desktop session and back in before starting react-drm. Opening a
+new terminal is not sufficient to activate the new supplementary groups.
 
-The supplied user service expects the repository at `~/react-drm`. Edit
-`WorkingDirectory`, `ExecStart` and `ExecStopPost` in
-`system/react-drm.service` if it is stored elsewhere.
-
-Install and enable the service:
+After logging back in, install the service:
 
 ```sh
 install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
+```
+
+The supplied unit expects the repository at `~/react-drm`. If it is stored
+elsewhere, edit `WorkingDirectory`, `ExecStart` and `ExecStopPost` in
+`~/.config/systemd/user/react-drm.service` to use its absolute path.
+
+Then enable and start it:
+
+```sh
 systemctl --user daemon-reload
-systemctl --user enable --now react-drm
+systemctl --user enable --now react-drm.service
 ```
 
 Check its status and log with:
 
 ```sh
-systemctl --user status react-drm
-journalctl --user -u react-drm -b
+systemctl --user status react-drm.service
+journalctl --user -u react-drm.service -b
 ```
 
 The service runs without root privileges. It attaches the Touch Bar when the
@@ -83,7 +168,7 @@ available before login and after logout.
 Stop the user service before running the control center manually:
 
 ```sh
-systemctl --user stop react-drm
+systemctl --user stop react-drm.service
 cd linux-touchbar-control-center
 npm run dev
 ```
@@ -101,7 +186,9 @@ backend is selected automatically:
 - Xorg uses `xprop`
 
 Window Monitor Pro must be installed and enabled on GNOME Wayland. `xprop`
-must be installed for Xorg sessions.
+must be installed for Xorg sessions. Unsupported Wayland desktops can still
+run the Touch Bar UI after manual installation, but application-specific
+controls that depend on the focused window will not work.
 
 ## Konsole integration
 
