@@ -178,7 +178,7 @@ function MemMod({ used, total }: { used: number; total: number }) {
 function TempMod({ temp }: { temp: number | null }) {
   const color = temp !== null ? tempColor(temp) : '#475569';
   return (
-    <Mod width={165}>
+    <Mod width={175}>
       <Label>TEMP</Label>
       <Val color={color}>{temp !== null ? `${temp}°C` : 'N/A'}</Val>
     </Mod>
@@ -193,7 +193,7 @@ function NetMod({ rx, tx, iface }: { rx: number; tx: number; iface: string }) {
       gap: 14,
       paddingHorizontal: 20,
       alignSelf: 'stretch',
-      width: 330,
+      width: 335,
     }}>
       <Label>{iface}</Label>
       <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -305,7 +305,7 @@ function AudioVisSection() {
   const MAX_H = 34;
 
   return (
-    <Box style={{ flex: 1, alignItems: 'flex-end',justifyContent:"center", paddingHorizontal: 8, paddingBottom:18 }}>
+    <Box style={{ flex: 1, alignItems: 'flex-end',justifyContent:"center", paddingHorizontal: 8, paddingBottom:8 }}>
       <Box style={{ alignItems: 'flex-end', gap: GAP  }}>
         {bars.map((v, i) => (
           <Box key={i} style={{

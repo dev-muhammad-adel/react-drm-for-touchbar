@@ -1,17 +1,20 @@
 import React from 'react';
-import { Box, Button, KEY } from 'react-drm';
+import path from 'path';
+import { Box, Button, KEY, Svg } from 'react-drm';
 import {
   MdClose,
   MdBrightness4, MdBrightness7,
   MdMicOff,
   MdSearch,
-  MdBrightness2, MdBrightness6,
   MdSkipPrevious, MdPlayArrow, MdSkipNext,
   MdVolumeOff, MdVolumeDown, MdVolumeUp,
   MdApps,
 } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
 import { keys } from '../services/keyInjector';
+
+const KBD_ILLUM_DOWN_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_down.svg');
+const KBD_ILLUM_UP_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_up.svg');
 
 // ── Actions ────────────────────────────────────────────────────────────────────
 
@@ -107,23 +110,21 @@ export function MediaScreen({ width, height }: { width: number; height: number }
       <Box style={{flexGrow:2 , gap:6}}   >
 
       <Button
-       
              color="#4f4b4f"
           activeColor="#666666"
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('IllumDown')}
       >
-        <MdBrightness2 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <Svg src={KBD_ILLUM_DOWN_ICON} width={ICON_SIZE} height={ICON_SIZE} />
       </Button>
 
       <Button
-       
              color="#4f4b4f"
           activeColor="#666666"
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('IllumUp')}
       >
-        <MdBrightness6 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <Svg src={KBD_ILLUM_UP_ICON} width={ICON_SIZE} height={ICON_SIZE} />
       </Button>
 </Box>
 
