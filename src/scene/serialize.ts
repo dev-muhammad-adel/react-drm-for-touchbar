@@ -19,12 +19,16 @@ function escapeXml(s: string): string {
 }
 
 function svgElToXml(node: SvgElementNode): string {
-  const attrStr = Object.entries(node.attrs)
+  if (!node || node.type !== 'svg_el') return '';
+  const attrStr = Object.entries(node.attrs ?? {})
     .map(([k, v]) => `${k}="${escapeXml(v)}"`)
     .join(' ');
   const open = attrStr ? `<${node.tag} ${attrStr}` : `<${node.tag}`;
-  if (node.children.length === 0) return `${open}/>`;
-  return `${open}>${node.children.map(svgElToXml).join('')}</${node.tag}>`;
+  const inner = (node.children ?? []).map(svgElToXml).join('');
+  const text = node.text != null ? escapeXml(node.text) : '';
+  const body = `${text}${inner}`;
+  if (!body) return `${open}/>`;
+  return `${open}>${body}</${node.tag}>`;
 }
 
 /** Parse any CSS color (named, hex, rgb[a]) to [r, g, b, a] in 0..1. */

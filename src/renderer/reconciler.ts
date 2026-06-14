@@ -63,6 +63,19 @@ const SVG_TAGS = new Set([
   'switch', 'symbol', 'textPath', 'title', 'tspan', 'use', 'view',
 ]);
 
+// SVG element tags that hold text content and collide with react-drm's own
+// element names ('text'). Treated as svg_el only inside an <svg> (see hostContext).
+const SVG_TEXT_TAGS = new Set(['text', 'tspan', 'textPath']);
+
+function svgTextContent(children: unknown): string | undefined {
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return String(children);
+  if (Array.isArray(children) && children.every(c => typeof c === 'string' || typeof c === 'number')) {
+    return children.join('');
+  }
+  return undefined;
+}
+
 function svgAttrsFromProps(props: Record<string, unknown>): Record<string, string> {
   const attrs: Record<string, string> = {};
   for (const [key, val] of Object.entries(props)) {
@@ -73,7 +86,16 @@ function svgAttrsFromProps(props: Record<string, unknown>): Record<string, strin
   return attrs;
 }
 
-function nodeFromProps(type: string, props: Record<string, unknown>): AnyNode {
+function nodeFromProps(type: string, props: Record<string, unknown>, inSvg = false): AnyNode {
+  if (inSvg && type !== 'svg' && (SVG_TAGS.has(type) || SVG_TEXT_TAGS.has(type))) {
+    return {
+      type: 'svg_el',
+      tag: type,
+      attrs: svgAttrsFromProps(props),
+      children: [],
+      text: SVG_TEXT_TAGS.has(type) ? svgTextContent(props.children) : undefined,
+    } as SvgElementNode;
+  }
   if (type === 'box') {
     return {
       type: 'box',
@@ -168,12 +190,13 @@ export const reconciler = ReactReconciler({
   scheduleTimeout: setTimeout,
   cancelTimeout: clearTimeout,
 
-  getRootHostContext: () => ({}),
-  getChildHostContext: (parentCtx: unknown) => parentCtx,
+  getRootHostContext: () => ({ inSvg: false }),
+  getChildHostContext: (parentCtx: { inSvg: boolean }, type: string) =>
+    parentCtx.inSvg || type === 'svg' ? { inSvg: true } : parentCtx,
   getPublicInstance: (instance: AnyNode) => instance,
 
-  createInstance: (type: string, props: Record<string, unknown>) =>
-    nodeFromProps(type, props),
+  createInstance: (type: string, props: Record<string, unknown>, _root: unknown, hostContext: { inSvg: boolean }) =>
+    nodeFromProps(type, props, hostContext.inSvg),
 
   createTextInstance: (text: string) => {
     process.stderr.write(`react-drm: raw text "${text.trim()}" detected — wrap text in <Text>\n`);
@@ -285,7 +308,9 @@ export const reconciler = ReactReconciler({
   ) => {
     if (instance.type === 'text-leaf') return;
     if (instance.type === 'svg_el') {
-      (instance as SvgElementNode).attrs = svgAttrsFromProps(updatePayload);
+      const el = instance as SvgElementNode;
+      el.attrs = svgAttrsFromProps(updatePayload);
+      if (SVG_TEXT_TAGS.has(el.tag)) el.text = svgTextContent(updatePayload.children);
       return;
     }
     if (instance.type === 'svg') {

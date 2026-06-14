@@ -79,6 +79,7 @@ export interface SvgElementNode {
   tag: string;
   attrs: Record<string, string>;
   children: SvgElementNode[];
+  text?: string;
 }
 
 export type SceneNode = BoxNode | TextNode | SvgNode | GifNode | SvgContainerNode;
