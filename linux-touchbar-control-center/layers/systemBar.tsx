@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useAtom } from 'jotai';
+import {
+  POMO_SESSION,
+  pomoElapsedAtom, pomoRunningAtom, pomoSessionsAtom, pomoFlashAtom,
+} from '../hooks/usePomodoro';
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
@@ -320,31 +325,14 @@ function AudioVisSection() {
 }
 
 // ── Pomodoro ──────────────────────────────────────────────────────────────────
-const POMO_SESSION = 25 * 60;
-const POMO_R       = 15;
-const POMO_CIRC    = 2 * Math.PI * POMO_R;
+const POMO_R    = 15;
+const POMO_CIRC = 2 * Math.PI * POMO_R;
 
 function PomodoroSection() {
-  const [elapsed,  setElapsed]  = useState(0);
-  const [running,  setRunning]  = useState(false);
-  const [sessions, setSessions] = useState(0);
-  const [flash,    setFlash]    = useState(false);
-
-  // Tick every second
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setElapsed(e => e + 1), 1000);
-    return () => clearInterval(id);
-  }, [running]);
-
-  // Auto-mark session at every 25-min boundary
-  useEffect(() => {
-    if (elapsed === 0 || elapsed % POMO_SESSION !== 0) return;
-    setSessions(s => s + 1);
-    setFlash(true);
-    const t = setTimeout(() => setFlash(false), 2500);
-    return () => clearTimeout(t);
-  }, [elapsed]);
+  const [elapsed,  setElapsed]  = useAtom(pomoElapsedAtom);
+  const [running,  setRunning]  = useAtom(pomoRunningAtom);
+  const [sessions, setSessions] = useAtom(pomoSessionsAtom);
+  const [flash,    setFlash]    = useAtom(pomoFlashAtom);
 
   // Ring fills over current 25-min block
   const sessionProgress = elapsed === 0 ? 0 : (elapsed % POMO_SESSION) / POMO_SESSION;

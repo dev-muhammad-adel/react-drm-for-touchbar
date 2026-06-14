@@ -20,9 +20,12 @@ import { DinoLayer } from './layers/dino';
 import { PianoLayer } from './layers/piano';
 import { PongLayer } from './layers/pong';
 import { useBootSequence } from './hooks/useBootSequence';
+import { usePomodoroEngine } from './hooks/usePomodoro';
 
 export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
   const { booted, opacity } = useBootSequence();
+
+  usePomodoroEngine();
 
   // if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
 
