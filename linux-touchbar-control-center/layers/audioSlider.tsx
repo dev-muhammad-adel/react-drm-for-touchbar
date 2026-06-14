@@ -3,6 +3,7 @@ import { execFile, execFileSync, spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { MdVolumeOff, MdVolumeDown, MdVolumeUp } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
+import { useLayers } from './index';
 
 // When running as root the session socket isn't inherited — pass it explicitly.
 const PW_ENV: NodeJS.ProcessEnv = {
@@ -85,8 +86,25 @@ function Track({ fill, color }: { fill: number; color: string }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function AudioSliderLayer({ width, height }: { width: number; height: number }) {
+  const { go } = useLayers();
   const [vol, setVol] = useState<number>(() => readVolume());
   const drag = useRef<{ x: number; v: number } | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearHideTimer() {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }
+
+  function scheduleHide() {
+    clearHideTimer();
+    hideTimer.current = setTimeout(() => {
+      drag.current = null;
+      go('splitted', 'slide-down');
+    }, 5000);
+  }
 
   // Sync when volume changes externally (keyboard shortcut, another app).
   // PipeWire/PulseAudio is socket-based so chokidar can't watch it —
@@ -102,7 +120,10 @@ export function AudioSliderLayer({ width, height }: { width: number; height: num
 
     proc.on('error', () => {}); // pactl unavailable — wpctl-only system
 
-    return () => { proc.kill(); };
+    return () => {
+      clearHideTimer();
+      proc.kill();
+    };
   }, []);
 
   function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
@@ -132,9 +153,15 @@ export function AudioSliderLayer({ width, height }: { width: number; height: num
         width={TRACK_W} height={height}
         color="transparent" activeColor="transparent"
         style={{ justifyContent: 'center', alignItems: 'center' }}
-        onTouchStart={(x) => { drag.current = { x, v: vol }; }}
+        onTouchStart={(x) => {
+          clearHideTimer();
+          drag.current = { x, v: vol };
+        }}
         onTouchMove={onMove}
-        onTouchEnd={() => { drag.current = null; }}
+        onTouchEnd={() => {
+          drag.current = null;
+          scheduleHide();
+        }}
       >
         <Track fill={vol} color="#38bdf8" />
       </Button>

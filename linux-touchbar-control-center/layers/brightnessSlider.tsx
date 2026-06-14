@@ -3,6 +3,7 @@ import { execFile, execFileSync } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7 } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
+import { useLayers } from './index';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,8 +51,25 @@ function Track({ fill, color }: { fill: number; color: string }) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function BrightnessSliderLayer({ width, height }: { width: number; height: number }) {
+  const { go } = useLayers();
   const [bright, setBright] = useState<number>(() => readBrightness());
   const drag = useRef<{ x: number; v: number } | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearHideTimer() {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+  }
+
+  function scheduleHide() {
+    clearHideTimer();
+    hideTimer.current = setTimeout(() => {
+      drag.current = null;
+      go('splitted', 'slide-down');
+    }, 5000);
+  }
 
   // Sync when brightness changes externally (keyboard shortcut, another process).
   // sysfs mtime never updates so we compare the actual value on an interval.
@@ -62,7 +80,10 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
         setBright(prev => Math.abs(prev - current) > 0.01 ? current : prev);
       }
     }, 500);
-    return () => clearInterval(id);
+    return () => {
+      clearHideTimer();
+      clearInterval(id);
+    };
   }, []);
 
   function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
@@ -91,9 +112,15 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
         width={TRACK_W} height={height}
         color="transparent" activeColor="transparent"
         style={{ justifyContent: 'center', alignItems: 'center' }}
-        onTouchStart={(x) => { drag.current = { x, v: bright }; }}
+        onTouchStart={(x) => {
+          clearHideTimer();
+          drag.current = { x, v: bright };
+        }}
         onTouchMove={onMove}
-        onTouchEnd={() => { drag.current = null; }}
+        onTouchEnd={() => {
+          drag.current = null;
+          scheduleHide();
+        }}
       >
         <Track fill={bright} color="#fbbf24" />
       </Button>
