@@ -7,7 +7,8 @@ import {
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
-import { MdArrowDownward, MdArrowUpward, MdCancel, MdReplay } from 'react-icons/md';
+import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeviceHub, MdReplay, MdRouter, MdWhatshot, MdWifi } from 'react-icons/md';
+import { CAVA } from '../config';
 import { useLayers } from './index';
 import { BackButton } from '../components/BackButton';
 
@@ -26,22 +27,62 @@ function tempColor(c: number) {
   if (c < 82) return '#fde047';
   return '#f87171';
 }
-function batColor(pct: number, charging: boolean) {
-  if (charging) return '#4ade80';
-  if (pct > 40) return '#94a3b8';
-  if (pct > 15) return '#fde047';
-  return '#f87171';
+type BatteryState = 'Charging' | 'Discharging' | 'Full' | 'Unknown';
+interface BatteryInfo { pct: number; state: BatteryState; }
+
+function batteryState(raw: string): BatteryState {
+  if (raw === 'Charging') return 'Charging';
+  if (raw === 'Discharging') return 'Discharging';
+  if (raw === 'Full') return 'Full';
+  return 'Unknown';
+}
+
+function batteryRange(pct: number): 'critical' | 'low' | 'medium' | 'high' | 'full' {
+  if (pct <= 10) return 'critical';
+  if (pct <= 25) return 'low';
+  if (pct <= 50) return 'medium';
+  if (pct <= 85) return 'high';
+  return 'full';
+}
+
+function batColor(bat: BatteryInfo) {
+  if (bat.state === 'Charging') return '#4ade80';
+  if (bat.state === 'Full') return '#34d399';
+  const range = batteryRange(bat.pct);
+  if (range === 'critical') return '#ef4444';
+  if (range === 'low') return '#f87171';
+  if (range === 'medium') return '#fde047';
+  return '#fff';
 }
 function fmtRate(bps: number) {
   if (bps >= 1e6) return (bps / 1e6).toFixed(1) + 'M';
   if (bps >= 1e3) return (bps / 1e3).toFixed(0) + 'K';
   return bps + 'B';
 }
+const NET_WIDTH_TEST = false;
+const NET_TEST_RX_BPS = 999_900_000;
+const NET_TEST_TX_BPS = 999_900_000;
+
+function sparkPoints(values: number[], width: number, height: number) {
+  const max = Math.max(1, ...values);
+  const step = values.length > 1 ? width / (values.length - 1) : width;
+  return values.map((v, i) => {
+    const x = i * step;
+    const y = height - Math.round((v / max) * height);
+    return `${x},${y}`;
+  }).join(' ');
+}
 function fmtGiB(b: number) { return (b / 1024 ** 3).toFixed(1) + 'G'; }
 function fmtIface(iface: string) {
   const match = iface.match(/^(wlan)(\d+)$/);
   if (!match) return iface;
   return `${match[1]}${match[2].padStart(2, '0')}`;
+}
+
+function ifaceIcon(iface: string) {
+  if (/^(wlan|wifi|wl)/i.test(iface)) return MdWifi;
+  if (/^(eth|enp|eno|ens|tap|tun|usb|lan)/i.test(iface)) return MdRouter;
+  return MdDeviceHub;
 }
 
 // ── System readers ─────────────────────────────────────────────────────────────
@@ -91,9 +132,13 @@ function tickNet(): NetTick {
   }
   return best ?? { iface: '?', rx: 0, tx: 0 };
 }
-function readBattery(): { pct: number; charging: boolean } | null {
+function readBattery(): BatteryInfo | null {
   for (const b of ['/sys/class/power_supply/BAT0', '/sys/class/power_supply/BAT1']) {
-    try { return { pct: parseInt(readFileSync(`${b}/capacity`, 'utf8').trim()), charging: readFileSync(`${b}/status`, 'utf8').trim() === 'Charging' }; } catch { /**/ }
+    try {
+      const pct = parseInt(readFileSync(`${b}/capacity`, 'utf8').trim());
+      const state = batteryState(readFileSync(`${b}/status`, 'utf8').trim());
+      return { pct, state };
+    } catch { /**/ }
   }
   return null;
 }
@@ -117,8 +162,8 @@ const NUM_CORES = tickCpu().length;
 function Mod({ children, width }: { children: React.ReactNode; width: number }) {
   return (
     <Box style={{
-      flexDirection: 'row', alignItems: 'center', gap: 14,
-      // backgroundColor: MOD_BG,
+      flexDirection: 'row', alignItems: 'center', gap: 8,
+      justifyContent: 'center',
       paddingHorizontal: 20,
       alignSelf: 'stretch',
       width,
@@ -157,10 +202,22 @@ function Bar({ fill, color, width = 60 }: { fill: number; color: string; width?:
 function CpuMod({ cores }: { cores: number[] }) {
   const avg   = Math.round(cores.reduce((s, v) => s + v, 0) / cores.length);
   const color = loadColor(avg);
+  const bars = [
+    Math.max(3, Math.round((cores[0] ?? avg) * 0.18)),
+    Math.max(3, Math.round((cores[1] ?? avg) * 0.18)),
+    Math.max(3, Math.round((cores[2] ?? avg) * 0.18)),
+    Math.max(3, Math.round((cores[3] ?? avg) * 0.18)),
+  ];
+
   return (
-    <Mod width={220}>
+    <Mod width={200}>
+      <Box style={{ width: 26, height: 24, flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
+        <Box style={{ width: 5, height: bars[0], backgroundColor: color }} />
+        <Box style={{ width: 5, height: bars[1], backgroundColor: color, opacity: 0.85 }} />
+        <Box style={{ width: 5, height: bars[2], backgroundColor: color, opacity: 0.7 }} />
+        <Box style={{ width: 5, height: bars[3], backgroundColor: color, opacity: 0.55 }} />
+      </Box>
       <Label>CPU</Label>
-      <Bar fill={avg / 100} color={color} />
       <Val color={color}>{`${avg}%`}</Val>
     </Mod>
   );
@@ -170,44 +227,119 @@ function MemMod({ used, total }: { used: number; total: number }) {
   const pct   = total > 0 ? used / total : 0;
   const pctN  = Math.round(pct * 100);
   const color = loadColor(pctN);
+  const fill = Math.max(0, Math.min(1, pct));
+
   return (
-    <Mod width={285}>
+    <Mod width={220}>
+      <Box style={{ width: 36, height: 24, justifyContent: 'center' }}>
+        <Box style={{ width: 32, height: 16, backgroundColor: '#111827' }}>
+          <Box style={{ width: Math.round(32 * fill), height: 16, backgroundColor: color }} />
+        </Box>
+      </Box>
       <Label>MEM</Label>
-      <Bar fill={pct} color={color} />
       <Val color={color}>{`${pctN}%`}</Val>
-      <Label>{fmtGiB(used)}</Label>
     </Mod>
   );
 }
 
 function TempMod({ temp }: { temp: number | null }) {
   const color = temp !== null ? tempColor(temp) : '#475569';
+  const fill = temp !== null ? Math.max(0, Math.min(1, (temp - 30) / 70)) : 0;
+  const r = 10;
+  const circ = 2 * Math.PI * r;
+  const dash = Math.round(circ * fill);
+  const status = temp === null ? 'SENSOR' : temp < 65 ? 'COOL' : temp < 82 ? 'WARM' : 'HOT';
+
   return (
-    <Mod width={175}>
-      <Label>TEMP</Label>
-      <Val color={color}>{temp !== null ? `${temp}°C` : 'N/A'}</Val>
+    <Mod width={235}>
+      <Box style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <svg width={30} height={30} viewBox="0 0 30 30">
+          <circle cx={15} cy={15} r={r} fill="none" stroke="#1f2937" strokeWidth={3} />
+          <circle
+            cx={15}
+            cy={15}
+            r={r}
+            fill="none"
+            stroke={color}
+            strokeWidth={3}
+            strokeDasharray={`${dash} ${Math.round(circ)}`}
+            strokeLinecap="round"
+            transform="rotate(-90 15 15)"
+          />
+          <circle cx={15} cy={15} r={6} fill="#0f172a" />
+        </svg>
+        <MdWhatshot style={{ width: 11, height: 11, marginTop: -20 }} fill={color} stroke="none" />
+      </Box>
+      <Box style={{ gap: 0 }}>
+        <Label>TEMP</Label>
+        <Text style={{ color, fontSize: 12, fontFamily: 'FiraCode Nerd Font Mono' }}>{status}</Text>
+      </Box>
+      <Text style={{ color, fontSize: 20, fontFamily: 'FiraCode Nerd Font Mono' }}>{temp !== null ? `${temp}°C` : 'N/A'}</Text>
     </Mod>
   );
 }
 
 function NetMod({ rx, tx, iface }: { rx: number; tx: number; iface: string }) {
+  const rxValue = NET_WIDTH_TEST ? NET_TEST_RX_BPS : rx;
+  const txValue = NET_WIDTH_TEST ? NET_TEST_TX_BPS : tx;
+
+  const [rxHist, setRxHist] = useState<number[]>(new Array(20).fill(0));
+  const [txHist, setTxHist] = useState<number[]>(new Array(20).fill(0));
+  const NetIcon = ifaceIcon(iface);
+
+  useEffect(() => {
+    setRxHist(prev => [...prev.slice(1), Math.max(0, rxValue)]);
+  }, [rxValue]);
+
+  useEffect(() => {
+    setTxHist(prev => [...prev.slice(1), Math.max(0, txValue)]);
+  }, [txValue]);
+
+  const chartW = 160;
+  const chartH =44;
+  const sharedMax = Math.max(1, ...rxHist, ...txHist);
+  const normalize = (v: number) => Math.round((v / sharedMax) * chartH);
+  const rxPts = rxHist.map((v, i) => {
+    const x = rxHist.length > 1 ? (i * chartW) / (rxHist.length - 1) : chartW;
+    const y = chartH - normalize(v);
+    return `${x},${y}`;
+  }).join(' ');
+  const txPts = txHist.map((v, i) => {
+    const x = txHist.length > 1 ? (i * chartW) / (txHist.length - 1) : chartW;
+    const y = chartH - normalize(v);
+    return `${x},${y}`;
+  }).join(' ');
+  const rxFillW = Math.round(chartW * Math.min(1, Math.max(0, rxValue / sharedMax)));
+  const txFillW = Math.round(chartW * Math.min(1, Math.max(0, txValue / sharedMax)));
+
   return (
     <Box style={{
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
+      gap: 8,
       paddingHorizontal: 20,
       alignSelf: 'stretch',
-      width: 335,
+      width: 266,
     }}>
-      <Label>{iface}</Label>
-      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <MdArrowDownward style={{ width: 16, height: 16 }} fill="#7dd3fc" stroke="none" />
-        <Val color="#7dd3fc">{fmtRate(rx)}</Val>
-      </Box>
-      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        <MdArrowUpward style={{ width: 16, height: 16 }} fill="#fdba74" stroke="none" />
-        <Val color="#fdba74">{fmtRate(tx)}</Val>
+      <NetIcon x={16} y={4} style={{ width: 18, height: 18 }} fill="#cbd5e1" stroke="none" />
+      <svg width={chartW} height={chartH} viewBox={`0 0 ${chartW} ${chartH}`}>
+        <rect x={0} y={0} width={chartW} height={chartH} rx={3} fill="#000" />
+        <rect x={0} y={chartH - 5} width={chartW} height={2} rx={1} fill="#1e293b" />
+        {rxFillW > 0 && <rect x={0} y={chartH - 5} width={rxFillW} height={2} rx={1} fill="#7dd3fc" opacity={0.35} />}
+        {txFillW > 0 && <rect x={0} y={chartH - 2} width={txFillW} height={2} rx={1} fill="#fdba74" opacity={0.35} />}
+        <polyline fill="none" stroke="#7dd3fc" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" points={rxPts} />
+        <polyline fill="none" stroke="#fdba74" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" points={txPts} />
+      </svg>
+      <Box style={{ gap: 1,flexDirection:"column" }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <MdArrowDownward style={{ width: 14, height: 14 }} fill="#7dd3fc" stroke="none" />
+          <Text style={{ color: '#7dd3fc', fontSize: 15, fontFamily: 'FiraCode Nerd Font Mono' }}>{fmtRate(rxValue)}</Text>
+
+        </Box>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <MdArrowUpward style={{ width: 14, height: 14 }} fill="#fdba74" stroke="none" />
+          <Text style={{ color: '#fdba74', fontSize: 15, fontFamily: 'FiraCode Nerd Font Mono' }}>{fmtRate(txValue)}</Text>
+        </Box>
       </Box>
     </Box>
   );
@@ -223,13 +355,108 @@ function HostMod({ uptime }: { uptime: string }) {
   );
 }
 
-function BatMod({ bat }: { bat: { pct: number; charging: boolean } | null }) {
-  if (!bat) return null;
-  const color = batColor(bat.pct, bat.charging);
+function BatteryIcon({ bat }: { bat: BatteryInfo }) {
+  const bodyW = 34;
+  const bodyH = 16;
+  const nubW = 3;
+  const nubH = 7;
+  const level = Math.max(0, Math.min(100, bat.pct));
+  const innerPad = 0;
+  const fillW = Math.max(0, Math.round((bodyW - innerPad * 2) * level / 100));
+  const color = batColor(bat);
+  const range = batteryRange(level);
+  const showCritical = range === 'critical' && bat.state !== 'Charging';
+  const showCharging = bat.state === 'Charging';
+  const showFull = bat.state === 'Full';
+  const bodyY = (20 - bodyH) / 2;
+
   return (
-    <Mod width={215}>
-      <Label>{bat.charging ? 'CHG' : 'BAT'}</Label>
-      <Bar fill={bat.pct / 100} color={color} width={52} />
+    <svg width={40} height={20} viewBox="0 0 40 20">
+      <defs>
+        <linearGradient id="batFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="40%" stopColor={color} stopOpacity="1" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.92" />
+        </linearGradient>
+      </defs>
+
+      <rect x={35} y={(20 - nubH) / 2} width={nubW} height={nubH} rx={1} fill="#9ca3af" />
+      <rect x={0.8} y={bodyY} width={bodyW} height={bodyH} rx={4.5} fill="#0f141a" stroke="#cbd5e1" strokeOpacity={0.65} strokeWidth={1.6} />
+      <rect x={innerPad + 0.8} y={bodyY + innerPad} width={bodyW - innerPad * 2} height={bodyH - innerPad * 2} rx={2.8} fill="#111827" />
+
+      {fillW > 0 && (
+        <rect
+          x={innerPad + 0.8}
+          y={bodyY + innerPad}
+          width={fillW}
+          height={bodyH - innerPad * 2}
+          rx={2.8}
+          fill="url(#batFill)"
+        />
+      )}
+
+      {fillW > 2 && (
+        <rect
+          x={innerPad + 1.6}
+          y={bodyY + innerPad + 1}
+          width={Math.max(0, fillW - 2)}
+          height={Math.max(0, (bodyH - innerPad * 2) / 2 - 1)}
+          rx={2}
+          fill="#ffffff"
+          opacity={0.14}
+        />
+      )}
+
+      {showCharging && (
+        <path
+          d="M17.6 5.4 L15 10.1 H18.1 L15.9 14.6 L22.2 8.8 H18.9 L21 5.4 Z"
+          fill="#e5e7eb"
+          opacity={0.92}
+        />
+      )}
+
+      {showFull && (
+        <path
+          d="M13.8 10.2 L16.5 12.9 L21.4 8"
+          stroke="#e5e7eb"
+          strokeWidth={1.9}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+
+      {showCritical && (
+        <>
+          <rect x={17.2} y={6.4} width={1.8} height={5.1} rx={0.9} fill="#fee2e2" />
+          <rect x={17.2} y={12.5} width={1.8} height={1.8} rx={0.9} fill="#fee2e2" />
+        </>
+      )}
+
+      <circle cx={39} cy={10} r={0.8} fill={color} opacity={0.85} />
+    </svg>
+  );
+}
+
+function BatMod({ bat }: { bat: BatteryInfo | null }) {
+  if (!bat) return null;
+  const color = batColor(bat);
+  const range = batteryRange(bat.pct);
+  const stateText = bat.state === 'Charging'
+    ? 'CHG'
+    : bat.state === 'Full'
+      ? 'FULL'
+      : range === 'critical'
+        ? 'CRIT'
+        : range === 'low'
+          ? 'LOW'
+          : range === 'medium'
+            ? 'MED'
+            : 'HIGH';
+
+  return (
+    <Mod width={140}>
+      {/* <Label>{stateText}</Label> */}
+      <BatteryIcon bat={bat} />
       <Val color={color}>{`${bat.pct}%`}</Val>
     </Mod>
   );
@@ -243,7 +470,7 @@ function ClockMod({ time }: { time: Date }) {
     <Box style={{
        alignItems: 'center', 
       // backgroundColor: '#1e1b4b',
-      paddingHorizontal: 10,
+      paddingHorizontal: 20,
       // alignSelf: 'stretch',
       // borderLeftWidth: 2,
       // borderLeftColor: '#818cf8',
@@ -255,14 +482,14 @@ function ClockMod({ time }: { time: Date }) {
 }
 
 // ── Audio Visualizer ─────────────────────────────────────────────────────────
-const CAVA_BARS = 24;
+const CAVA_BARS = CAVA.bars;
 const CAVA_CFG  = '/tmp/.react-drm-cava.conf';
 
 try {
   writeFileSync(CAVA_CFG, [
     '[general]',
     `bars = ${CAVA_BARS}`,
-    'framerate = 25',
+    `framerate = ${CAVA.framerate}`,
     '[input]',
     'method = pulse',
     'source = auto',
@@ -360,7 +587,7 @@ function PomodoroSection() {
   function reset()  { setElapsed(0); setRunning(false); setSessions(0); setFlash(false); }
 
   return (
-    <Box style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, gap: 12 }}>
+    <Box style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, gap: 8 }}>
       <Button  onClick={toggle} color="transparent" activeColor="#1e293b"
          style={{ alignItems: 'center', justifyContent: 'center' , gap: 8 }}>
         <svg width={38} height={38} viewBox="0 0 38 38">
@@ -395,7 +622,7 @@ function PomodoroSection() {
 interface State {
   cores: number[]; mem: { used: number; total: number }; temp: number | null;
   netRx: number; netTx: number; iface: string;
-  uptime: string; bat: { pct: number; charging: boolean } | null; time: Date;
+  uptime: string; bat: BatteryInfo | null; time: Date;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────

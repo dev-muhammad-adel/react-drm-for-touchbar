@@ -90,6 +90,14 @@ export const DOLPHIN = {
   pollMs:    400, // action-state poll interval (dolphin emits no property-change signals)
 };
 
+// ─── Audio visualizer (CAVA) ────────────────────────────────────────────────
+
+export const CAVA = {
+  // Lower defaults for better overall responsiveness.
+  bars: 24,
+  framerate: 16,
+} as const;
+
 // ─── Browser shortcuts ──────────────────────────────────────────────────────
 
 /**
