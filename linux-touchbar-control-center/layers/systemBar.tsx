@@ -484,6 +484,7 @@ function ClockMod({ time }: { time: Date }) {
 // ── Audio Visualizer ─────────────────────────────────────────────────────────
 const CAVA_BARS = CAVA.bars;
 const CAVA_CFG  = '/tmp/.react-drm-cava.conf';
+const CAVA_MAX_HEIGHT = 34;
 
 try {
   writeFileSync(CAVA_CFG, [
@@ -513,36 +514,41 @@ const BAR_COLORS = Array.from({ length: CAVA_BARS }, (_, i) => {
 });
 
 function AudioVisSection() {
-  const [bars, setBars] = useState<number[]>(new Array(CAVA_BARS).fill(0));
+  const [bars, setBars] = useState<number[]>(new Array(CAVA_BARS).fill(2));
 
   useEffect(() => {
     let partial = Buffer.alloc(0);
+    let previousHeights = new Array(CAVA_BARS).fill(2);
     const proc = spawn('cava', ['-p', CAVA_CFG]);
     proc.stdout?.on('data', (chunk: Buffer) => {
       partial = Buffer.concat([partial, chunk]);
       while (partial.length >= CAVA_BARS) {
         const frame = partial.slice(0, CAVA_BARS);
         partial = partial.slice(CAVA_BARS);
-        const vals: number[] = [];
-        for (let i = 0; i < CAVA_BARS; i++) vals.push(frame[i] / 255);
-        setBars(vals);
+        const heights = Array.from(frame, value =>
+          Math.max(2, Math.round((value / 255) * CAVA_MAX_HEIGHT)),
+        );
+
+        if (!heights.every((height, index) => height === previousHeights[index])) {
+          previousHeights = heights;
+          setBars(heights);
+        }
       }
     });
     return () => { try { proc.kill('SIGTERM'); } catch { /**/ } };
   }, []);
 
-  const isActive = bars.some(b => b > 0.04);
+  const isActive = bars.some(height => height > 2);
   const BAR_W = 7;
   const GAP   = 2;
-  const MAX_H = 34;
 
   return (
     <Box style={{ flex: 1, alignItems: 'flex-end',justifyContent:"center", paddingHorizontal: 8, paddingBottom:8 }}>
       <Box style={{ alignItems: 'flex-end', gap: GAP  }}>
-        {bars.map((v, i) => (
+        {bars.map((barHeight, i) => (
           <Box key={i} style={{
             width: BAR_W,
-            height: Math.max(2, Math.round(v * MAX_H)),
+            height: barHeight,
             backgroundColor: isActive ? BAR_COLORS[i] : '#1e293b',
           }} />
         ))}
