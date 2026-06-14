@@ -15,11 +15,10 @@ const CHIP_GAP = 4;
 
 export function KonsolePanel({ width, height }: { width: number; height: number }) {
   const {
-    connected, sessions, activeId, status, suggestions,
+    connected, tabCount, activeTabIdx, status, suggestions,
     newTab, closeTab, nextTab, prevTab, sendSuggestion,
   } = useKonsole();
 
-  const activeIdx = sessions.findIndex(s => s.id === activeId);
   const ICON_SZ   = Math.round(height * 0.52);
   const DOT_SZ    = 8;
   const middleW   = Math.round(width * 0.65);
@@ -65,7 +64,7 @@ export function KonsolePanel({ width, height }: { width: number; height: number 
       </Btn>
       <Box style={{ width: 40, alignItems: 'center', justifyContent: 'center' }}>
         <Text color="#fff" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
-          {sessions.length > 0 ? `${activeIdx + 1}/${sessions.length}` : '–'}
+          {tabCount > 0 ? `${activeTabIdx + 1}/${tabCount}` : '–'}
         </Text>
       </Box>
       <Btn onClick={nextTab}>

@@ -267,6 +267,14 @@ async function windowInfo(bus: MessageBus, svc: string, winPath: string): Promis
   return { cur: id, list, title };
 }
 
+
+function parseTabViews(hierarchy: string[]): number[][] {
+  return hierarchy.map(entry => {
+    const body = entry.replace(/^\(\d+\)/, '').replace(/\(\d+\)\{/g, '{');
+    return (body.match(/\d+/g) ?? []).map(Number);
+  });
+}
+
 function shortenPath(p: string): string {
   const parts = p.replace(/^~\//, '').split('/').filter(Boolean);
   const prefix = p.startsWith('~') ? '~/' : '/';
@@ -298,6 +306,8 @@ export function useKonsole() {
   const [activeId,    setActiveId]    = useState<number | null>(null);
   const [status,      setStatus]      = useState<SessionStatus>({ cwd: '', isRunning: false, foregroundCmd: '' });
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [tabCount,    setTabCount]    = useState(0);
+  const [activeTabIdx, setActiveTabIdx] = useState(0);
 
   const { pid: activePid } = useActiveWindow();
 
@@ -316,6 +326,8 @@ export function useKonsole() {
   const shellPidRef    = useRef<number | null>(null);
   const sessCache      = useRef<Map<number, ClientInterface>>(new Map());
   const titleMap       = useRef<Map<number, string>>(new Map());
+  const viewSessRef    = useRef<Map<number, number>>(new Map()); // view id → session id (learned)
+  const activeTabRef   = useRef(0);
   const fzfRef         = useRef<Fzf<string[]> | null>(null);
   const histSetRef     = useRef<Set<string>>(new Set());
   const orderedRef     = useRef<string[]>([]);
@@ -519,6 +531,9 @@ export function useKonsole() {
       winPathRef.current = winPath;
       sessCache.current.clear();
       titleMap.current.clear();
+      viewSessRef.current.clear();
+      activeTabRef.current = 0;
+      setActiveTabIdx(0);
 
       // No live setup beyond this: konsole's Window/Session D-Bus interfaces expose
       // no signals (sessionAdded/currentSessionChanged/titleChanged don't exist),
@@ -564,11 +579,15 @@ export function useKonsole() {
             shellPidRef.current   = null;
             sessCache.current.clear();
             titleMap.current.clear();
+            viewSessRef.current.clear();
+            activeTabRef.current = 0;
             histWatcherRef.current?.close();
             setSessions([]);
             setActiveId(null);
             setConnected(false);
             setSuggestions([]);
+            setTabCount(0);
+            setActiveTabIdx(0);
             setStatus({ cwd: '', isRunning: false, foregroundCmd: '' });
           }
         }
@@ -598,10 +617,41 @@ export function useKonsole() {
         const win = windowRef.current;
         const svc = serviceRef.current;
         if (!win || !svc) return;
-        const [rawIds, curRaw] = await Promise.all([win.sessionList(), win.currentSession()]);
+        const [rawIds, curRaw, rawHier] = await Promise.all([
+          win.sessionList(), win.currentSession(), win.viewHierarchy(),
+        ]);
         if (!alive) return;
         const ids   = (rawIds as (string | number)[]).map(Number);
         const curId = Number(curRaw);
+
+        // ── Tab/split accounting ──────────────────────────────────────────────
+        // A konsole tab can hold several split views, each its own session, so
+        // sessionList() over-counts tabs. viewHierarchy() lists one entry per
+        // tab; its length is the real tab count. To know which tab is active we
+        // need the current session's view, but the hierarchy exposes only view
+        // ids while currentSession() is a session id — and konsole offers no
+        // bridge. The mapping is learned by diff (like resolveTarget's pairing):
+        // view ids are monotonic and unique, so a newly appeared view pairs with
+        // a newly appeared session. Session ids ARE reused, so stale pairs are
+        // pruned when their session leaves the list or their view disappears.
+        const tabs      = parseTabViews((rawHier as string[]) ?? []);
+        const flatViews = tabs.flat();
+        const vs        = viewSessRef.current;
+        for (const v of [...vs.keys()]) if (!flatViews.includes(v)) vs.delete(v);
+        for (const [v, s] of [...vs]) if (!ids.includes(s)) vs.delete(v);
+        const newViews = flatViews.filter(v => !vs.has(v)).sort((a, b) => a - b);
+        const mapped   = new Set(vs.values());
+        const newSess  = ids.filter(s => !mapped.has(s)).sort((a, b) => a - b);
+        // Pair in creation order: both view ids (monotonic) and the freshly
+        // created sessions sort ascending into the order they were opened.
+        newViews.forEach((v, i) => { if (i < newSess.length) vs.set(v, newSess[i]); });
+
+        if (tabs.length !== tabCount) setTabCount(tabs.length);
+        const at = tabs.findIndex(views => views.some(v => vs.get(v) === curId));
+        if (at !== -1 && at !== activeTabRef.current) {
+          activeTabRef.current = at;
+          setActiveTabIdx(at);
+        }
 
         let changed = false;
         for (const id of ids) {
@@ -774,6 +824,8 @@ export function useKonsole() {
     connected,
     sessions,
     activeId,
+    tabCount,
+    activeTabIdx,
     status,
     suggestions,
     newTab,
