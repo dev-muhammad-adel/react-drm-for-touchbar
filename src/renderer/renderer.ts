@@ -50,6 +50,12 @@ export interface RenderOptions {
    * Default: 2 (full brightness).
    */
   activeBrightness?: 0 | 1 | 2;
+  /**
+   * Max framebuffer flushes per second. Bursts (e.g. 60fps spring frames)
+   * coalesce into a single trailing flush, keeping the appletbdrm USB
+   * request/response handshake within its timeout window. Default: 30.
+   */
+  flushFps?: number;
 }
 
 export interface RenderResult {
@@ -431,7 +437,7 @@ export function render(
   // blits to FLUSH_FPS_CAP and coalesce bursts (e.g. 60fps spring frames) into a
   // single trailing flush, so the latest frame still lands without overrunning
   // the device's handshake.
-  const MIN_FLUSH_MS = 1000 / 30; // 30fps cap
+  const MIN_FLUSH_MS = 1000 / (options.flushFps ?? 30); // flush-rate cap (default 30fps)
   let lastFlushAt = 0;
   let pendingFlush: ReturnType<typeof setTimeout> | null = null;
 

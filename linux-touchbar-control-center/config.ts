@@ -13,10 +13,11 @@ import {
 // ─── Display ────────────────────────────────────────────────────────────────
 
 export const DISPLAY = {
-  dimSecs:          30,   // seconds of inactivity before dimming
-  offSecs:          60,   // seconds of inactivity before turning off
-  pixelShiftSecs:   300,  // OLED pixel-shift interval
+  dimSecs:          30,   
+  offSecs:          60,   
+  pixelShiftSecs:   300,  
   activeBrightness: 2,
+  flushFps:         30,
 } as const;
 
 // ─── On-screen Esc key ───────────────────────────────────────────────────────

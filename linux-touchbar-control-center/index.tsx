@@ -45,6 +45,7 @@ async function main() {
     keyboardReader:   keyboard,
     appProps:         { keyboard },
     activeBrightness: DISPLAY.activeBrightness,
+    flushFps:         DISPLAY.flushFps,
     //  adaptiveBrightness: true
   });
 
