@@ -52,7 +52,7 @@ function batColor(bat: BatteryInfo) {
   if (range === 'critical') return '#ef4444';
   if (range === 'low') return '#f87171';
   if (range === 'medium') return '#fde047';
-  return '#fff';
+  return '#cccccc';
 }
 function fmtRate(bps: number) {
   if (bps >= 1e6) return (bps / 1e6).toFixed(1) + 'M';
@@ -180,11 +180,11 @@ function Sep() {
 
 // Accent label (the small dim prefix like "CPU", "MEM")
 function Label({ children }: { children: string }) {
-  return <Text style={{ color: '#fff', fontSize: 17, fontFamily: 'FiraCode Nerd Font Mono' }}>{children}</Text>;
+  return <Text style={{ color: '#cccccc', fontSize: 17, fontFamily: 'FiraCode Nerd Font Mono' }}>{children}</Text>;
 }
 
 // Main value text
-function Val({ children, color = '#e2e8f0' }: { children:string; color?: string }) {
+function Val({ children, color = '#cccccc' }: { children:string; color?: string }) {
   return <Text style={{ color, fontSize: 22, fontFamily: 'FiraCode Nerd Font Mono' }}>{children}</Text>;
 }
 
@@ -401,7 +401,7 @@ function BatteryIcon({ bat }: { bat: BatteryInfo }) {
           width={Math.max(0, fillW - 2)}
           height={Math.max(0, (bodyH - innerPad * 2) / 2 - 1)}
           rx={2}
-          fill="#ffffff"
+          fill="#cccccc"
           opacity={0.14}
         />
       )}
@@ -611,7 +611,7 @@ function PomodoroSection() {
       {/* <Box style={{ flexDirection: 'row', gap: 5 }}>
         {([0,1,2,3] as const).map(i => (
           <Box key={i} style={{ width: 30, height: 30, borderRadius: 3,
-            backgroundColor: i < filledDots ? '#f87171' : '#fff' }} />
+            backgroundColor: i < filledDots ? '#f87171' : '#cccccc' }} />
         ))}
       </Box> */}
       {(running || elapsed > 0) && (

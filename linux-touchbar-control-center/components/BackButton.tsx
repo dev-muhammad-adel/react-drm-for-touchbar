@@ -21,7 +21,7 @@ export function BackButton({
       style={{ alignItems: 'center', justifyContent: 'center' }}
       onClick={() => go(to, switchOptions ?? animation)}
     >
-      <MdCancel style={{ width: 40, height: 40 }} fill="#fff" stroke="none" />
+      <MdCancel style={{ width: 40, height: 40 }} fill="#cccccc" stroke="none" />
     </Button>
   );
 }

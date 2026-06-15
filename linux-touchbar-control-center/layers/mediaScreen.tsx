@@ -69,7 +69,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('BrightnessDown')}
       >
-        <MdBrightness4 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdBrightness4 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 
       <Button
@@ -79,7 +79,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('BrightnessUp')}
       >
-        <MdBrightness7 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdBrightness7 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 </Box>
       <Box style={{flexGrow:1}} >
@@ -91,7 +91,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('MicMute')}
       >
-        <MdMicOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdMicOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 </Box>
       <Box style={{flexGrow:1}} >
@@ -103,7 +103,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('Search')}
       >
-        <MdSearch style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdSearch style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 </Box>
 
@@ -137,7 +137,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('PreviousSong')}
       >
-        <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 
       <Button
@@ -147,7 +147,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('PlayPause')}
       >
-        <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 
       <Button
@@ -157,7 +157,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('NextSong')}
       >
-        <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 </Box>
 
@@ -170,7 +170,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('Mute')}
       >
-        <MdVolumeOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdVolumeOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 
       <Button
@@ -180,7 +180,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('VolumeDown')}
       >
-        <MdVolumeDown style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdVolumeDown style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 
       <Button
@@ -190,7 +190,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('VolumeUp')}
       >
-        <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 </Box>
 
@@ -203,7 +203,7 @@ export function MediaScreen({ width, height }: { width: number; height: number }
         style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={() => run('AllApplications')}
       >
-        <MdApps style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#e2e8f0" stroke="none" />
+        <MdApps style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
       </Button>
 </Box> 
 

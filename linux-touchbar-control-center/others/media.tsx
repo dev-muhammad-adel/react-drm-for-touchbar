@@ -279,7 +279,7 @@ function MediaBar({ width, height }: { width: number; height: number }) {
 
       {/* Left panel: track metadata + transport */}
       <Box x={0} y={0} width={ui.leftW} height={height} color="#1f2937" />
-      <Text x={12} y={6} color="#f8fafc" fontSize={18} fontFamily="monospace">NOW</Text>
+      <Text x={12} y={6} color="#cccccc" fontSize={18} fontFamily="monospace">NOW</Text>
       <Text x={64} y={6} color="#f59e0b" fontSize={18} fontFamily="monospace">{track.title}</Text>
       <Text x={12} y={30} color="#93c5fd" fontSize={16} fontFamily="monospace">{track.artist}</Text>
 
@@ -309,7 +309,7 @@ function MediaBar({ width, height }: { width: number; height: number }) {
 
       {/* Right panel: volume */}
       <Box x={ui.rightX} y={0} width={width - ui.rightX} height={height} color="#111827" />
-      <Text x={ui.rightX + 10} y={8} color="#e2e8f0" fontSize={18} fontFamily="monospace">VOL</Text>
+      <Text x={ui.rightX + 10} y={8} color="#cccccc" fontSize={18} fontFamily="monospace">VOL</Text>
       <Text x={ui.rightX + 70} y={8} color="#fda4af" fontSize={18} fontFamily="monospace">{`${volume}%`}</Text>
 
       <Box x={ui.rightX + 10} y={34} width={150} height={10} color="#1e293b" />
