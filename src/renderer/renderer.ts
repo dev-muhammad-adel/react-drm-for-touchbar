@@ -425,6 +425,16 @@ export function render(
   let lastShiftX = NaN;
   let lastShiftY = NaN;
 
+  // Flush-rate cap. appletbdrm runs a synchronous USB request/response handshake
+  // per flush with a 1000ms timeout; driven too fast under load the device misses
+  // the window, the response stream desyncs, and it cascades into a freeze. Cap
+  // blits to FLUSH_FPS_CAP and coalesce bursts (e.g. 60fps spring frames) into a
+  // single trailing flush, so the latest frame still lands without overrunning
+  // the device's handshake.
+  const MIN_FLUSH_MS = 1000 / 30; // 30fps cap
+  let lastFlushAt = 0;
+  let pendingFlush: ReturnType<typeof setTimeout> | null = null;
+
   // Frame profiler — set REACT_DRM_PROFILE=1 to log a per-second breakdown of
   // where each frame's time goes (commits/s, blits/s, layout/serialize/blit ms,
   // draw_svg count). Pairs with the native [native] breakdown (cairo_renderer.cpp,
@@ -439,6 +449,24 @@ export function render(
     prof.commits = prof.blits = prof.layoutMs = prof.serMs = prof.blitMs = prof.svg = prof.cmds = 0;
   }, 1000);
 
+  // The actual blit (always the current lastCmds + shift). Guarded so a deferred
+  // trailing flush can't fire after suspend / screen-off.
+  function doBlit(): void {
+    if (pendingFlush) { clearTimeout(pendingFlush); pendingFlush = null; }
+    if (suspended || state === 'off') return;
+    lastFlushAt = performance.now();
+    if (PROFILE) {
+      const t = performance.now();
+      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+      prof.blitMs += performance.now() - t;
+      prof.blits++;
+      prof.svg += lastCmds.reduce((n, c) => n + (c.cmd === 'draw_svg' ? 1 : 0), 0);
+      prof.cmds += lastCmds.length;
+    } else {
+      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+    }
+  }
+
   function renderCurrent(force = false): void {
     if (suspended) return;       // DRM fd is closed during system sleep
     if (state === 'off') return; // screen stays on the black frame already rendered
@@ -450,15 +478,15 @@ export function render(
     lastSig = sig;
     lastShiftX = shiftX;
     lastShiftY = shiftY;
-    if (PROFILE) {
-      const t = performance.now();
-      display.render(shiftCmds(lastCmds, shiftX, shiftY));
-      prof.blitMs += performance.now() - t;
-      prof.blits++;
-      prof.svg += lastCmds.reduce((n, c) => n + (c.cmd === 'draw_svg' ? 1 : 0), 0);
-      prof.cmds += lastCmds.length;
-    } else {
-      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+
+    // Rate cap: flush now if enough time has passed (or forced); otherwise
+    // schedule a single trailing flush. A burst collapses to one flush that
+    // picks up the latest lastCmds when it fires.
+    const since = performance.now() - lastFlushAt;
+    if (force || since >= MIN_FLUSH_MS) {
+      doBlit();
+    } else if (!pendingFlush) {
+      pendingFlush = setTimeout(doBlit, MIN_FLUSH_MS - since);
     }
   }
 
@@ -586,6 +614,7 @@ export function render(
   function suspend(): void {
     if (suspended) return;
     suspended = true;
+    if (pendingFlush) { clearTimeout(pendingFlush); pendingFlush = null; }
     clearTimers();
     stopLid();
     stopPointer();
@@ -613,6 +642,7 @@ export function render(
     unmount: () => {
       setRepaint(null);
       reconciler.updateContainer(null, root, null, null);
+      if (pendingFlush) { clearTimeout(pendingFlush); pendingFlush = null; }
       clearTimers();
       if (shiftTimer) clearInterval(shiftTimer);
       stopLid();

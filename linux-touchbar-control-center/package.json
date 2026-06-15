@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx index.tsx ",
-    "dev:profile": "REACT_DRM_PROFILE=1  tsx index.tsx ",
+    "dev:profile": "DRM_DAMAGE_LOG=1 REACT_DRM_PROFILE=1  tsx index.tsx ",
     "start": "npm run build && tsx ./dist/index.js",
     "build": "tsc -p tsconfig.json"
   },
