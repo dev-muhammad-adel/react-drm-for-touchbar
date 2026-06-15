@@ -3,7 +3,7 @@ import { Worker } from 'worker_threads';
 import React from 'react';
 import { reconciler } from './reconciler';
 import { setRepaint } from './invalidate';
-import { serializeScene } from '../scene/serialize';
+import { serializeScene, frameSignature } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
@@ -418,9 +418,24 @@ export function render(
   let dimTimer:  ReturnType<typeof setTimeout> | null = null;
   let offTimer:  ReturnType<typeof setTimeout> | null = null;
 
-  function renderCurrent(): void {
+  // Blit deduplication: skip display.render() when the frame is byte-identical
+  // to what's already on screen (same commands + same pixel-shift). Makes idle
+  // output free at the DRM level — cava silence, resting springs, no-op commits.
+  let lastSig: string | null = '\0'; // sentinel: never matches a real frame
+  let lastShiftX = NaN;
+  let lastShiftY = NaN;
+
+  function renderCurrent(force = false): void {
     if (suspended) return;       // DRM fd is closed during system sleep
     if (state === 'off') return; // screen stays on the black frame already rendered
+    const sig = frameSignature(lastCmds);
+    if (!force && sig !== null && sig === lastSig
+        && shiftX === lastShiftX && shiftY === lastShiftY) {
+      return; // identical frame already on screen — skip the blit
+    }
+    lastSig = sig;
+    lastShiftX = shiftX;
+    lastShiftY = shiftY;
     display.render(shiftCmds(lastCmds, shiftX, shiftY));
   }
 
@@ -455,7 +470,7 @@ export function render(
     state = 'active';
     clearTimers();
     if (wasOff || wasInactive) backlight.on(adaptive, activeLevel);
-    if (wasOff) renderCurrent(); // restore content with correct shift after black screen
+    if (wasOff) renderCurrent(true); // screen was cleared to black — force a repaint past the dedup cache
     startIdleTimers();
   }
 
@@ -564,7 +579,7 @@ export function render(
     if (ownKeyboardWatch) stopKeyboard = watchKeyboard(wake);
     backlight.on(adaptive, activeLevel);
     startIdleTimers();
-    renderCurrent();
+    renderCurrent(true); // display was closed during suspend — force a repaint past the dedup cache
     console.log('[react-drm] resumed');
   }
 

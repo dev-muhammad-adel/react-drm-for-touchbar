@@ -14,6 +14,20 @@ export type DrawCommand =
   | { cmd: 'draw_image'; x: number; y: number; w: number; h: number; sw: number; sh: number; data: Buffer; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
 
+/**
+ * Cheap structural signature of a frame for blit deduplication.
+ * Returns null when the frame contains an animated image (draw_image / GIF) —
+ * those mutate their Buffer in place, so we never dedup them.
+ */
+export function frameSignature(cmds: DrawCommand[]): string | null {
+  const parts: string[] = [];
+  for (const c of cmds) {
+    if (c.cmd === 'draw_image') return null; // GIF animating → always render
+    parts.push(JSON.stringify(c));
+  }
+  return parts.join('|');
+}
+
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -32,10 +46,16 @@ function svgElToXml(node: SvgElementNode): string {
 }
 
 /** Parse any CSS color (named, hex, rgb[a]) to [r, g, b, a] in 0..1. */
+const colorCache = new Map<string, [number, number, number, number]>();
 export function parseColor(color: string): [number, number, number, number] {
+  // The same palette strings recur on every command of every frame; parsing
+  // them with color-string each time is a hot spot. Cache by string.
+  let cached = colorCache.get(color);
+  if (cached) return cached;
   const rgba = colorString.get.rgb(color);
-  if (!rgba) return [1, 1, 1, 1];
-  return [rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3]];
+  cached = rgba ? [rgba[0] / 255, rgba[1] / 255, rgba[2] / 255, rgba[3]] : [1, 1, 1, 1];
+  colorCache.set(color, cached);
+  return cached;
 }
 
 function zIndexOf(node: SceneNode): number {
