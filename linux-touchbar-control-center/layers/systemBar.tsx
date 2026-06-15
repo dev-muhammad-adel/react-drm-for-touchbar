@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useAtom } from 'jotai';
 import {
   POMO_SESSION,
@@ -6,7 +6,8 @@ import {
 } from '../hooks/usePomodoro';
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
-import { Box, Text, Button } from 'react-drm';
+import { Box, Text, Button, LayoutContext, NativeDrawContext, DisplaySizeContext } from 'react-drm';
+import type { BoxNode } from 'react-drm';
 import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeviceHub, MdReplay, MdRouter, MdWhatshot, MdWifi } from 'react-icons/md';
 import { CAVA, SYSTEMBAR } from '../config';
 import { useLayers } from './index';
@@ -513,44 +514,66 @@ const BAR_COLORS = Array.from({ length: CAVA_BARS }, (_, i) => {
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 });
 
+const BAR_W = 7;
+const GAP   = 2;
+const hexRgb = (hex: string): [number, number, number] => {
+  const n = parseInt(hex.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+};
+const BAR_RGB      = BAR_COLORS.flatMap(hexRgb);                              // flat r,g,b per bar (active)
+const INACTIVE_RGB = Array.from({ length: CAVA_BARS }, () => hexRgb('#1e293b')).flat();
+
 function AudioVisSection() {
-  const [bars, setBars] = useState<number[]>(new Array(CAVA_BARS).fill(2));
+  const layoutRef  = useContext(LayoutContext);
+  const native     = useContext(NativeDrawContext);
+  const { height: dispH } = useContext(DisplaySizeContext);
+  const barsRef    = useRef<BoxNode>(null);
+  const heightsRef = useRef<number[]>(new Array(CAVA_BARS).fill(2));
+  const [, force]  = useState(0);
 
   useEffect(() => {
     let partial = Buffer.alloc(0);
-    let previousHeights = new Array(CAVA_BARS).fill(2);
+    let prev = new Array(CAVA_BARS).fill(2);
     const proc = spawn('cava', ['-p', CAVA_CFG]);
     proc.stdout?.on('data', (chunk: Buffer) => {
-      partial = Buffer.concat([partial, chunk]);
-      while (partial.length >= CAVA_BARS) {
-        const frame = partial.slice(0, CAVA_BARS);
-        partial = partial.slice(CAVA_BARS);
-        const heights = Array.from(frame, value =>
-          Math.max(2, Math.round((value / 255) * CAVA_MAX_HEIGHT)),
-        );
+      partial = partial.length ? Buffer.concat([partial, chunk]) : chunk;
+      const whole = partial.length - (partial.length % CAVA_BARS);
+      if (whole < CAVA_BARS) return;
+      const frame = partial.slice(whole - CAVA_BARS, whole); // newest complete frame
+      partial = whole < partial.length ? partial.slice(whole) : Buffer.alloc(0);
+      const heights = Array.from(frame, v => Math.max(2, Math.round((v / 255) * CAVA_MAX_HEIGHT)));
+      if (heights.every((h, i) => h === prev[i])) return;
+      prev = heights;
+      heightsRef.current = heights;
 
-        if (!heights.every((height, index) => height === previousHeights[index])) {
-          previousHeights = heights;
-          setBars(heights);
-        }
+      // Native fast path: draw straight into the FB at the bars' laid-out box
+      // (off the React commit loop → no full-tree layout/serialize). The box's
+      // bottom edge + centered x are stable (bottom/center-aligned), so coords
+      // are correct even between commits.
+      const node = barsRef.current;
+      const box = node ? layoutRef.current.get(node) : undefined;
+      if (native && box) {
+        const active = heights.some(h => h > 2);
+        native.drawBars({
+          x0: box.x, baseY: box.y + box.h, barW: BAR_W, gap: GAP, fullHeight: dispH,
+          bg: [0, 0, 0], heights, colors: active ? BAR_RGB : INACTIVE_RGB,
+        });
+      } else {
+        force(n => n + 1); // no native/layout yet → fall back to a React re-render
       }
     });
     return () => { try { proc.kill('SIGTERM'); } catch { /**/ } };
-  }, []);
+  }, [native, dispH, layoutRef]);
 
-  const isActive = bars.some(height => height > 2);
-  const BAR_W = 7;
-  const GAP   = 2;
-
+  // React render (from the ref) keeps the bars correct on commits + establishes
+  // the layout box native reads; the native path overdraws live between commits.
+  const bars = heightsRef.current;
+  const isActive = bars.some(h => h > 2);
   return (
-    <Box style={{ flex: 1, alignItems: 'flex-end',justifyContent:"center", paddingHorizontal: 8, paddingBottom:8 }}>
-      <Box style={{ alignItems: 'flex-end', gap: GAP  }}>
-        {bars.map((barHeight, i) => (
-          <Box key={i} style={{
-            width: BAR_W,
-            height: barHeight,
-            backgroundColor: isActive ? BAR_COLORS[i] : '#1e293b',
-          }} />
+    <Box style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: 8, paddingBottom: 8 }}>
+      <Box ref={barsRef} style={{ alignItems: 'flex-end', gap: GAP }}>
+        {bars.map((h, i) => (
+          <Box key={i} style={{ width: BAR_W, height: h, backgroundColor: isActive ? BAR_COLORS[i] : '#1e293b' }} />
         ))}
       </Box>
     </Box>

@@ -24,8 +24,8 @@ public:
   uint32_t  height()       const { return rotate90_ ? fb_width_  : fb_height_; }
   bool      rotate90()     const { return rotate90_; }
 
-  // Notify the driver the framebuffer has changed (required for USB/non-scanout displays).
-  void dirty();
+
+  void dirty(const drmModeClip* clips = nullptr, uint32_t count = 0);
 
 private:
   int       fd_        = -1;

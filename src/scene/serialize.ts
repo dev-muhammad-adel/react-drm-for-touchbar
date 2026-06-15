@@ -28,6 +28,46 @@ export function frameSignature(cmds: DrawCommand[]): string | null {
   return parts.join('|');
 }
 
+export interface Rect { x: number; y: number; w: number; h: number; }
+
+function cmdBox(c: DrawCommand): Rect | 'full' | null {
+  switch (c.cmd) {
+    case 'fill_rect': case 'stroke_rect': case 'clip_push':
+    case 'draw_svg':  case 'draw_image':
+      return { x: c.x, y: c.y, w: c.w, h: c.h };
+    case 'clip_pop': return null;
+    default: return 'full'; // clear / overlay / shadow / text
+  }
+}
+
+function cmdEq(a: DrawCommand, b: DrawCommand): boolean {
+  if (a.cmd !== b.cmd) return false;
+  if (a.cmd === 'draw_image') return false; // animating buffer — always re-flush
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+
+export function damageRects(prev: DrawCommand[] | null, next: DrawCommand[]): Rect[] | null {
+  if (!prev || prev.length !== next.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, changed = false;
+  for (let i = 0; i < next.length; i++) {
+    if (cmdEq(prev[i], next[i])) continue;
+    changed = true;
+    for (const c of [prev[i], next[i]]) {
+      const b = cmdBox(c);
+      if (b === 'full') return null;
+      if (b === null) continue;
+      if (b.x < minX) minX = b.x;
+      if (b.y < minY) minY = b.y;
+      if (b.x + b.w > maxX) maxX = b.x + b.w;
+      if (b.y + b.h > maxY) maxY = b.y + b.h;
+    }
+  }
+  if (!changed) return [];
+  if (maxX < minX) return null;
+  return [{ x: minX, y: minY, w: maxX - minX, h: maxY - minY }];
+}
+
 function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }

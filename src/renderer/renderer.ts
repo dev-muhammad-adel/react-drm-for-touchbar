@@ -3,12 +3,13 @@ import { Worker } from 'worker_threads';
 import React from 'react';
 import { reconciler } from './reconciler';
 import { setRepaint } from './invalidate';
-import { serializeScene, frameSignature } from '../scene/serialize';
+import { serializeScene, frameSignature, damageRects } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
-import { DisplaySizeContext } from '../scene/display-context';
+import { DisplaySizeContext, NativeDrawContext } from '../scene/display-context';
+import type { NativeDraw } from '../scene/display-context';
 import { TouchReader } from '../native/input';
 import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
@@ -56,6 +57,8 @@ export interface RenderOptions {
    * request/response handshake within its timeout window. Default: 30.
    */
   flushFps?: number;
+
+  partialFlush?: boolean;
 }
 
 export interface RenderResult {
@@ -441,6 +444,14 @@ export function render(
   let lastFlushAt = 0;
   let pendingFlush: ReturnType<typeof setTimeout> | null = null;
 
+  // Opt-in partial flush (off by default — partial DirtyFB desyncs appletbdrm
+  // under load → freeze; see RenderOptions.partialFlush). When on, flush only
+  // the changed region; a pixel-shift change forces whole-FB.
+  const PARTIAL = options.partialFlush ?? false;
+  let prevCmds: DrawCommand[] | null = null;
+  let prevShiftX = NaN;
+  let prevShiftY = NaN;
+
   // Frame profiler — set REACT_DRM_PROFILE=1 to log a per-second breakdown of
   // where each frame's time goes (commits/s, blits/s, layout/serialize/blit ms,
   // draw_svg count). Pairs with the native [native] breakdown (cairo_renderer.cpp,
@@ -461,17 +472,42 @@ export function render(
     if (pendingFlush) { clearTimeout(pendingFlush); pendingFlush = null; }
     if (suspended || state === 'off') return;
     lastFlushAt = performance.now();
+
+    // Whole-FB by default; partial only when opted in AND the pixel-shift is
+    // unchanged (a shift moves the whole frame → must repaint all).
+    let clips: { x: number; y: number; w: number; h: number }[] | undefined;
+    if (PARTIAL && prevCmds && shiftX === prevShiftX && shiftY === prevShiftY) {
+      const d = damageRects(prevCmds, lastCmds);
+      if (d && d.length) {
+        // Full-screen-HEIGHT band: keep only the changed horizontal extent, span
+        // the full height. On the 90°-rotated panel this is a contiguous run of
+        // full FB rows — the shape mac-touchbar-plus's full-height clips produce.
+        let minX = Infinity, maxX = -Infinity;
+        for (const r of d) { if (r.x < minX) minX = r.x; if (r.x + r.w > maxX) maxX = r.x + r.w; }
+        clips = [{ x: minX + shiftX, y: 0, w: maxX - minX, h: display.height }];
+      }
+      // d === null → whole-FB (clips left undefined)
+    }
+    prevCmds = lastCmds;
+    prevShiftX = shiftX;
+    prevShiftY = shiftY;
+
     if (PROFILE) {
       const t = performance.now();
-      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+      display.render(shiftCmds(lastCmds, shiftX, shiftY), clips);
       prof.blitMs += performance.now() - t;
       prof.blits++;
       prof.svg += lastCmds.reduce((n, c) => n + (c.cmd === 'draw_svg' ? 1 : 0), 0);
       prof.cmds += lastCmds.length;
     } else {
-      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+      display.render(shiftCmds(lastCmds, shiftX, shiftY), clips);
     }
   }
+
+  
+  const nativeDraw: NativeDraw = {
+    drawBars: (o) => { if (!suspended && state !== 'off') display.drawBars(o); },
+  };
 
   function renderCurrent(force = false): void {
     if (suspended) return;       // DRM fd is closed during system sleep
@@ -571,7 +607,9 @@ export function render(
     const wrapped = React.createElement(
       TouchRegistryContext.Provider, { value: registry },
       React.createElement(DisplaySizeContext.Provider, { value: { width: display.width, height: display.height } },
-        React.createElement(LayoutContext.Provider, { value: layoutRef }, el),
+        React.createElement(NativeDrawContext.Provider, { value: nativeDraw },
+          React.createElement(LayoutContext.Provider, { value: layoutRef }, el),
+        ),
       ),
     );
     reconciler.updateContainer(wrapped, root, null, null);

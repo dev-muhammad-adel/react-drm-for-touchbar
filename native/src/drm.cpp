@@ -128,12 +128,14 @@ void DrmDevice::setup() {
     throw std::runtime_error("drmModeSetCrtc failed — display may be in use by a compositor");
 }
 
-void DrmDevice::dirty() {
-  // Try the lightweight dirty-FB path first (works if driver supports it).
-  if (drmModeDirtyFB(fd_, fb_id_, nullptr, 0) == 0)
+void DrmDevice::dirty(const drmModeClip* clips, uint32_t count) {
+  // Lightweight dirty-FB path. With clips, only those FB rects are flushed
+  // (count==0 = whole FB). drmModeDirtyFB takes a non-const ptr but doesn't
+  // modify the clips.
+  if (drmModeDirtyFB(fd_, fb_id_, const_cast<drmModeClip*>(clips), count) == 0)
     return;
 
   // Fallback: re-issue SetCrtc, which forces the driver's update callback.
-  // Required for drivers (e.g. appletbdrm) whose FB lacks a dirty hook.
+  // Required for drivers whose FB lacks a dirty hook (full-frame only).
   drmModeSetCrtc(fd_, crtc_id_, fb_id_, 0, 0, &conn_id_, 1, &mode_);
 }

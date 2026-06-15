@@ -160,6 +160,53 @@ static std::string strProp(const Napi::Object& obj, const char* key) {
   return val.As<Napi::String>().Utf8Value();
 }
 
+
+void CairoRenderer::drawBars(Napi::Env env, const Napi::Object& opts) {
+  (void)env;
+  cairo_surface_t* surf = cairo_image_surface_create_for_data(
+    buf_, CAIRO_FORMAT_ARGB32, (int)fb_w_, (int)fb_h_, (int)stride_);
+  if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) { cairo_surface_destroy(surf); return; }
+  cairo_t* cr = cairo_create(surf);
+  if (rotate90_) {
+    cairo_matrix_t m;
+    m.xx = 0; m.xy = -1; m.x0 = (double)fb_w_;
+    m.yx = 1; m.yy = 0;  m.y0 = 0;
+    cairo_set_matrix(cr, &m);
+  }
+
+  const double x0 = numProp(opts, "x0"), baseY = numProp(opts, "baseY");
+  const double barW = numProp(opts, "barW"), gap = numProp(opts, "gap");
+  const double fullH = numProp(opts, "fullHeight");
+  Napi::Array heights = opts.Get("heights").As<Napi::Array>();
+  Napi::Array colors  = opts.Get("colors").As<Napi::Array>();
+  Napi::Array bg      = opts.Get("bg").As<Napi::Array>();
+  const uint32_t n = heights.Length();
+  const double bandW = n ? n * barW + (n - 1) * gap : 0;
+
+  // Clear the bars band (full height → contiguous FB rows after rotation).
+  cairo_set_source_rgb(cr,
+    bg.Get((uint32_t)0).ToNumber().DoubleValue(),
+    bg.Get((uint32_t)1).ToNumber().DoubleValue(),
+    bg.Get((uint32_t)2).ToNumber().DoubleValue());
+  cairo_rectangle(cr, x0, 0, bandW, fullH);
+  cairo_fill(cr);
+
+  for (uint32_t i = 0; i < n; i++) {
+    const double h = heights.Get(i).ToNumber().DoubleValue();
+    if (h <= 0) continue;
+    cairo_set_source_rgb(cr,
+      colors.Get(i * 3).ToNumber().DoubleValue(),
+      colors.Get(i * 3 + 1).ToNumber().DoubleValue(),
+      colors.Get(i * 3 + 2).ToNumber().DoubleValue());
+    cairo_rectangle(cr, x0 + i * (barW + gap), baseY - h, barW, h);
+    cairo_fill(cr);
+  }
+
+  cairo_destroy(cr);
+  cairo_surface_flush(surf);
+  cairo_surface_destroy(surf);
+}
+
 void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
   // Cairo ARGB32 maps directly to DRM XRGB8888 on little-endian:
   // both store pixels as [B, G, R, _] in memory.

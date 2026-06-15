@@ -44,9 +44,19 @@ function loadNative(): NativeModule {
   );
 }
 
+export interface DamageRect { x: number; y: number; w: number; h: number; }
+
+export interface BarsOpts {
+  x0: number; baseY: number; barW: number; gap: number; fullHeight: number;
+  bg: [number, number, number];
+  heights: number[];   // px, bottom-aligned at baseY
+  colors: number[];    // flat r,g,b per bar
+}
+
 interface NativeHandle {
   setup(): { width: number; height: number };
-  render(commands: DrawCommand[]): void;
+  render(commands: DrawCommand[], clips?: DamageRect[]): void;
+  drawBars(opts: BarsOpts): void;
   screenshot(filePath: string): void;
   getWidth(): number;
   getHeight(): number;
@@ -82,8 +92,15 @@ export class DrmDisplay {
     console.log(`[react-drm] DRM display ready: ${this.width}×${this.height} on ${resolvedPath}`);
   }
 
-  render(commands: DrawCommand[]): void {
-    this.handle.render(commands);
+  // clips: damage rects (logical coords) for partial flush. Omit → whole-FB.
+  render(commands: DrawCommand[], clips?: DamageRect[]): void {
+    this.handle.render(commands, clips);
+  }
+
+  // Draw an audio-bar strip natively + flush only its full-height band.
+  // Bypasses the React commit loop (no layout/serialize) for cheap bar updates.
+  drawBars(opts: BarsOpts): void {
+    this.handle.drawBars(opts);
   }
 
   /** Write the currently displayed frame to a PNG file (logical orientation). */

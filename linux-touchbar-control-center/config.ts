@@ -18,6 +18,7 @@ export const DISPLAY = {
   pixelShiftSecs:   300,  
   activeBrightness: 2,
   flushFps:         30,
+  partialFlush:     false,
 } as const;
 
 // ─── On-screen Esc key ───────────────────────────────────────────────────────
@@ -113,7 +114,7 @@ export const CAVA = {
   // commit+blit while bars move). 12 is a good CPU/smoothness balance; drop to
   // 10 for even less CPU, raise toward 30 for smoother bars.
   bars: 24,
-  framerate: 12,
+  framerate: 24,
 } as const;
 
 // ─── Browser shortcuts ──────────────────────────────────────────────────────

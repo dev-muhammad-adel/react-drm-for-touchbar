@@ -33,8 +33,8 @@ export type { SceneNode, BoxNode, TextNode, SvgNode, GifNode, SvgContainerNode, 
 export type { Style } from './scene/style';
 export { LayoutContext } from './scene/layout-context';
 export type { LayoutRef } from './scene/layout-context';
-export { DisplaySizeContext } from './scene/display-context';
-export type { DisplaySize } from './scene/display-context';
+export { DisplaySizeContext, NativeDrawContext } from './scene/display-context';
+export type { DisplaySize, NativeDraw } from './scene/display-context';
 export { SAFE_INSET, SAFE_INSET_X, SAFE_INSET_Y } from './scene/safe-area';
 export type { SafeAreaInsets } from './scene/safe-area';
 export { renderHot } from './dev/hot-reload';
