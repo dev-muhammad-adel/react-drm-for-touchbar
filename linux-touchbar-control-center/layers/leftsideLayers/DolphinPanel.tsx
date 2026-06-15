@@ -105,7 +105,7 @@ export function DolphinPanel({ width, height }: { width: number; height: number 
           onClick={() => openDir(p.path)}
         >
           <MdFolder style={{ width: 18, height: 18 }} fill={ACCENT} stroke="none" />
-          <Text color="#e2e8f0" fontSize={13} fontFamily="IosevkaTerm Nerd Font">{p.title}</Text>
+          <Text color="#cccccc" fontSize={13} fontFamily="IosevkaTerm Nerd Font">{p.title}</Text>
         </Button>
       ))}
 

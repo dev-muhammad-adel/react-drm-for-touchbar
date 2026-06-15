@@ -63,7 +63,7 @@ export function KonsolePanel({ width, height }: { width: number; height: number 
         <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={GREEN} stroke="none" />
       </Btn>
       <Box style={{ width: 40, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color="#fff" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
+        <Text color="#cccccc" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
           {tabCount > 0 ? `${activeTabIdx + 1}/${tabCount}` : '–'}
         </Text>
       </Box>

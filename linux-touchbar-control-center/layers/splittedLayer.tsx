@@ -55,11 +55,11 @@ const SPLITTED_LEFT_LAYERS: Layer[] = [
 ];
 
 const MEDIA_BTNS: { icon: React.ReactElement; cmd?: MediaCmd  }[] = [
-  { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,   },
-  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,   },
-  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,  },
-  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />,  },
-  { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#f1f5f9" stroke="none" />, cmd: 'play-pause'       },
+  { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,   },
+  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,   },
+  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,  },
+  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,  },
+  { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, cmd: 'play-pause'       },
   { icon: <MdSportsEsports     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#4ade80" stroke="none" />    },
 ];
 

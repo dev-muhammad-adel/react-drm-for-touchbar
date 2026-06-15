@@ -198,11 +198,11 @@ export const DOCK = {
   },
   apps: [
     { id: 'files',    label: 'Files',    iconName: 'org.kde.dolphin',        icon: FaFolder,         color: '#7dd3fc', command: 'dolphin',        matchClass: ['dolphin'] },
-    { id: 'terminal', label: 'Terminal', iconName: 'org.kde.konsole',        icon: FaTerminal,       color: '#e2e8f0', command: 'konsole',        matchClass: ['konsole'] },
+    { id: 'terminal', label: 'Terminal', iconName: 'org.kde.konsole',        icon: FaTerminal,       color: '#cccccc', command: 'konsole',        matchClass: ['konsole'] },
     { id: 'firefox',  label: 'Firefox',  iconName: 'firefox',                icon: FaFirefoxBrowser, color: '#ff9d5c', command: 'firefox',        matchClass: ['firefox'] },
     { id: 'code',     label: 'Code',     iconName: 'visual-studio-code',     icon: FaCode,           color: '#60a5fa', command: 'code',           matchClass: ['code', 'vscodium'] },
     { id: 'music',    label: 'Music',    iconName: 'vlc',                    icon: FaMusic,          color: '#c084fc', command: 'vlc',            matchClass: ['vlc'] },
-    { id: 'github',   label: 'GitHub',   iconName: 'github',                 icon: FaGithub,         color: '#e2e8f0', command: 'xdg-open',       args: ['https://github.com'] },
+    { id: 'github',   label: 'GitHub',   iconName: 'github',                 icon: FaGithub,         color: '#cccccc', command: 'xdg-open',       args: ['https://github.com'] },
     { id: 'settings', label: 'Settings', iconName: 'systemsettings',         icon: FaGear,           color: '#94a3b8', command: 'systemsettings', matchClass: ['systemsettings'] },
   ] as DockApp[],
 

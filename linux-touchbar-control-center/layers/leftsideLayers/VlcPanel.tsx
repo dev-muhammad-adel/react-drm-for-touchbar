@@ -21,7 +21,7 @@ export function VlcPanel({ width, height }: { width: number; height: number }) {
           <Text color="#fb923c" fontSize={10} fontFamily="IosevkaTerm Nerd Font">
             VLC
           </Text>
-          <Text color="#e2e8f0" fontSize={15} fontFamily="IosevkaTerm Nerd Font">
+          <Text color="#cccccc" fontSize={15} fontFamily="IosevkaTerm Nerd Font">
             {title || 'VLC media player'}
           </Text>
           <Text color="#94a3b8" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
