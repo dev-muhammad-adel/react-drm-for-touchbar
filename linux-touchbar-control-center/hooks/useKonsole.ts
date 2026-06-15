@@ -7,6 +7,7 @@ import { KEY } from 'react-drm';
 import dbus, { MessageBus, ClientInterface } from 'dbus-next';
 import { Fzf, byLengthAsc } from 'fzf';
 import { useActiveWindow } from './useActiveWindow';
+import { KONSOLE } from '../config';
 
 // ── History ──────────────────────────────────────────────────────────────────
 
@@ -757,7 +758,7 @@ export function useKonsole() {
           setSuggestions([]);
         }
       } catch {}
-    }, 300);
+    }, KONSOLE.pollMs);
 
     return () => {
       alive = false;

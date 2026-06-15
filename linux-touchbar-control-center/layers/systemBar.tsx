@@ -8,7 +8,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeviceHub, MdReplay, MdRouter, MdWhatshot, MdWifi } from 'react-icons/md';
-import { CAVA } from '../config';
+import { CAVA, SYSTEMBAR } from '../config';
 import { useLayers } from './index';
 import { BackButton } from '../components/BackButton';
 
@@ -654,7 +654,7 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
         });
         prevCpu = nextCpu; prevNet = nextNet; prevTime = now;
       } catch { /**/ }
-    }, 1000);
+    }, SYSTEMBAR.statsPollMs);
     return () => clearInterval(id);
   }, []);
 

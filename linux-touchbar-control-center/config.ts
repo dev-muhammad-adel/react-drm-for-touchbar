@@ -86,16 +86,33 @@ export const SCREENSHOT = {
 // ─── Dolphin panel ──────────────────────────────────────────────────────────
 
 export const DOLPHIN = {
-  maxPlaces: 5,   // quick-jump place chips shown in the panel
-  pollMs:    400, // action-state poll interval (dolphin emits no property-change signals)
+  maxPlaces: 5,    // quick-jump place chips shown in the panel
+  pollMs:    1000, // action-state poll interval (dolphin emits no property-change signals)
+};
+
+// ─── Konsole panel ──────────────────────────────────────────────────────────
+
+export const KONSOLE = {
+  pollMs: 1000, // tab/session sync interval (konsole emits no D-Bus signals)
+};
+
+// ─── System bar ─────────────────────────────────────────────────────────────
+
+export const SYSTEMBAR = {
+  // CPU/mem/net/temp refresh. Each tick is a full systembar re-render+blit, so
+  // this drives idle cost; 2s reads fine for a status strip.
+  statsPollMs: 2000,
 };
 
 // ─── Audio visualizer (CAVA) ────────────────────────────────────────────────
 
 export const CAVA = {
   // Lower defaults for better overall responsiveness.
+  // framerate drives active-audio CPU almost linearly (each frame = a full
+  // commit+blit while bars move). 12 is a good CPU/smoothness balance; drop to
+  // 10 for even less CPU, raise toward 30 for smoother bars.
   bars: 24,
-  framerate: 16,
+  framerate: 12,
 } as const;
 
 // ─── Browser shortcuts ──────────────────────────────────────────────────────
