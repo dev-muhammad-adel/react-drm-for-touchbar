@@ -425,6 +425,20 @@ export function render(
   let lastShiftX = NaN;
   let lastShiftY = NaN;
 
+  // Frame profiler — set REACT_DRM_PROFILE=1 to log a per-second breakdown of
+  // where each frame's time goes (commits/s, blits/s, layout/serialize/blit ms,
+  // draw_svg count). Pairs with the native [native] breakdown (cairo_renderer.cpp,
+  // binding.cpp). Off by default; kept as a standing diagnostic tool.
+  const PROFILE = !!process.env.REACT_DRM_PROFILE;
+  const prof = { commits: 0, blits: 0, layoutMs: 0, serMs: 0, blitMs: 0, svg: 0, cmds: 0 };
+  if (PROFILE) setInterval(() => {
+    const c = prof.commits || 1, b = prof.blits || 1;
+    console.log(`[profile] commits/s=${prof.commits} blits/s=${prof.blits} | `
+      + `layout=${(prof.layoutMs/c).toFixed(2)}ms ser=${(prof.serMs/c).toFixed(2)}ms blit=${(prof.blitMs/b).toFixed(2)}ms | `
+      + `draw_svg/frame=${(prof.svg/c).toFixed(1)} cmds/frame=${(prof.cmds/c).toFixed(0)}`);
+    prof.commits = prof.blits = prof.layoutMs = prof.serMs = prof.blitMs = prof.svg = prof.cmds = 0;
+  }, 1000);
+
   function renderCurrent(force = false): void {
     if (suspended) return;       // DRM fd is closed during system sleep
     if (state === 'off') return; // screen stays on the black frame already rendered
@@ -436,7 +450,16 @@ export function render(
     lastSig = sig;
     lastShiftX = shiftX;
     lastShiftY = shiftY;
-    display.render(shiftCmds(lastCmds, shiftX, shiftY));
+    if (PROFILE) {
+      const t = performance.now();
+      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+      prof.blitMs += performance.now() - t;
+      prof.blits++;
+      prof.svg += lastCmds.reduce((n, c) => n + (c.cmd === 'draw_svg' ? 1 : 0), 0);
+      prof.cmds += lastCmds.length;
+    } else {
+      display.render(shiftCmds(lastCmds, shiftX, shiftY));
+    }
   }
 
   function clearTimers(): void {
@@ -491,9 +514,12 @@ export function render(
 
   container._onCommit = () => {
     if (!yogaReady()) return; // pre-engine commits are re-rendered once yoga loads
+    const t0 = PROFILE ? performance.now() : 0;
     const layout   = computeLayoutYoga(container, container.width, container.height);
+    const t1 = PROFILE ? performance.now() : 0;
     layoutRef.current = layout;
     const commands = serializeScene(container, layout);
+    if (PROFILE) { prof.commits++; prof.layoutMs += t1 - t0; prof.serMs += performance.now() - t1; }
     lastCmds = commands;
     renderCurrent(); // respects current dim/off state
   };

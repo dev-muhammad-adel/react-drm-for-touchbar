@@ -4,9 +4,29 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <cstdlib>
+#include <chrono>
+#include <cstdio>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+// Native blit profiler (REACT_DRM_PROFILE=1). Splits CairoRenderer::render into
+// per-command-type buckets (text vs shapes vs svg vs image) and prints a periodic
+// summary, so the blit cost can be attributed. Off by default; kept as a standing
+// diagnostic tool (pairs with the JS [profile] line and the drm-flush timing in
+// binding.cpp).
+namespace {
+  const bool kBlitProf = std::getenv("REACT_DRM_PROFILE") != nullptr;
+  double pShape = 0, pText = 0, pSvg = 0, pImage = 0, pOther = 0, pTotal = 0;
+  int    pFrames = 0;
+  using Clock = std::chrono::steady_clock;
+  inline double msSince(Clock::time_point t) {
+    return std::chrono::duration<double, std::milli>(Clock::now() - t).count();
+  }
+  // RAII: adds the scope's elapsed ms to a bucket (covers all `continue` paths).
+  struct Acc { double& a; Clock::time_point t0; Acc(double& x) : a(x), t0(Clock::now()) {} ~Acc() { a += msSince(t0); } };
+}
 
 // Per-corner rounded rect: tl=top-left, tr=top-right, br=bottom-right, bl=bottom-left
 static void rounded_rect(cairo_t* cr, double x, double y, double w, double h,
@@ -101,6 +121,32 @@ static void draw_shadow(cairo_t* cr,
 CairoRenderer::CairoRenderer(uint8_t* buf, uint32_t fb_w, uint32_t fb_h, uint32_t stride, bool rotate90)
   : buf_(buf), fb_w_(fb_w), fb_h_(fb_h), stride_(stride), rotate90_(rotate90) {}
 
+CairoRenderer::~CairoRenderer() {
+  for (auto& entry : svg_lru_) cairo_surface_destroy(entry.second);
+}
+
+// SVG bitmap cache (bounded LRU). Cap is generous — icons/glyphs number in the
+// low tens; changing-src SVGs evict the least-recently-used entry.
+static constexpr size_t kSvgCacheMax = 64;
+
+cairo_surface_t* CairoRenderer::svgGet(const std::string& key) {
+  auto it = svg_index_.find(key);
+  if (it == svg_index_.end()) return nullptr;
+  svg_lru_.splice(svg_lru_.begin(), svg_lru_, it->second); // promote to MRU
+  return it->second->second;
+}
+
+void CairoRenderer::svgPut(const std::string& key, cairo_surface_t* surf) {
+  svg_lru_.emplace_front(key, surf);
+  svg_index_[key] = svg_lru_.begin();
+  if (svg_lru_.size() > kSvgCacheMax) {
+    auto& victim = svg_lru_.back();
+    cairo_surface_destroy(victim.second);
+    svg_index_.erase(victim.first);
+    svg_lru_.pop_back();
+  }
+}
+
 // Helper: safely read a number property from a JS object.
 static double numProp(const Napi::Object& obj, const char* key) {
   auto val = obj.Get(key);
@@ -143,11 +189,20 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
     cairo_set_matrix(cr, &m);
   }
 
+  Clock::time_point _renderT0 = kBlitProf ? Clock::now() : Clock::time_point{};
+
   uint32_t len = commands.Length();
   for (uint32_t i = 0; i < len; ++i) {
     if (!commands.Get(i).IsObject()) continue;
     Napi::Object cmd = commands.Get(i).As<Napi::Object>();
     std::string type = strProp(cmd, "cmd");
+
+    double* _bucket = &pOther;
+    if      (type == "text")       _bucket = &pText;
+    else if (type == "draw_svg")   _bucket = &pSvg;
+    else if (type == "draw_image") _bucket = &pImage;
+    else                           _bucket = &pShape; // fill/stroke/shadow/clip/clear/overlay
+    Acc _acc(*_bucket); // times this command (incl. NAPI prop reads) into its bucket
 
     if (type == "clear") {
       cairo_set_source_rgb(cr, numProp(cmd, "r"), numProp(cmd, "g"), numProp(cmd, "b"));
@@ -264,30 +319,55 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       std::string src = strProp(cmd, "src");
       if (src.empty()) continue;
 
-      GError *gerr = nullptr;
-      RsvgHandle *handle = nullptr;
+      int iw = (int)lround(w), ih = (int)lround(h);
+      if (iw <= 0 || ih <= 0) continue;
+      // Don't cache very large surfaces (e.g. full-bar SVGs) — bound memory and
+      // avoid expensive one-off bitmaps; those render directly.
+      const bool cacheable = (long)iw * ih <= 512 * 256;
+      const std::string key = cacheable
+        ? src + '|' + std::to_string(iw) + 'x' + std::to_string(ih) : std::string();
 
-      if (src[0] == '<') {
-        // Inline SVG markup
-        handle = rsvg_handle_new_from_data(
-          reinterpret_cast<const guint8*>(src.data()),
-          static_cast<gsize>(src.size()), &gerr);
-      } else {
-        // File path
-        handle = rsvg_handle_new_from_file(src.c_str(), &gerr);
+      cairo_surface_t* bmp = cacheable ? svgGet(key) : nullptr;
+      if (!bmp) {
+        GError *gerr = nullptr;
+        RsvgHandle *handle = (src[0] == '<')
+          ? rsvg_handle_new_from_data(reinterpret_cast<const guint8*>(src.data()),
+                                      static_cast<gsize>(src.size()), &gerr)
+          : rsvg_handle_new_from_file(src.c_str(), &gerr);
+        if (!handle) { if (gerr) g_error_free(gerr); continue; }
+
+        if (cacheable) {
+          // Rasterize once into an offscreen surface at integer size; future
+          // frames just composite it.
+          bmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, iw, ih);
+          cairo_t* bcr = cairo_create(bmp);
+          RsvgRectangle vp = { 0, 0, (double)iw, (double)ih };
+          GError *rerr = nullptr;
+          rsvg_handle_render_document(handle, bcr, &vp, &rerr);
+          if (rerr) g_error_free(rerr);
+          cairo_destroy(bcr);
+          g_object_unref(handle);
+          svgPut(key, bmp); // cache owns the surface (destroyed on evict / dtor)
+        } else {
+          // Uncacheable: render straight to the framebuffer, no caching.
+          cairo_save(cr);
+          RsvgRectangle vp = { x, y, w, h };
+          GError *rerr = nullptr;
+          rsvg_handle_render_document(handle, cr, &vp, &rerr);
+          if (rerr) g_error_free(rerr);
+          cairo_restore(cr);
+          g_object_unref(handle);
+          continue;
+        }
       }
 
-      if (!handle) {
-        if (gerr) g_error_free(gerr);
-        continue;
-      }
-
+      // Composite the cached bitmap at (x, y). The active transform (incl. the
+      // rotate90 scanout matrix) applies to the composite just as it would to a
+      // direct render.
       cairo_save(cr);
-      RsvgRectangle viewport = { x, y, w, h };
-      rsvg_handle_render_document(handle, cr, &viewport, &gerr);
-      if (gerr) g_error_free(gerr);
+      cairo_set_source_surface(cr, bmp, x, y);
+      cairo_paint(cr);
       cairo_restore(cr);
-      g_object_unref(handle);
 
     } else if (type == "draw_image") {
       // Raw pixels (premultiplied ARGB32 / BGRA on little-endian) scaled into
@@ -333,6 +413,17 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
   cairo_destroy(cr);
   cairo_surface_flush(surf);
   cairo_surface_destroy(surf);
+
+  if (kBlitProf) {
+    pTotal += msSince(_renderT0);
+    if (++pFrames >= 30) {
+      fprintf(stderr,
+        "[native] render avg/frame: total=%.2fms | shapes=%.2f text=%.2f svg=%.2f image=%.2f other=%.2f (ms)\n",
+        pTotal / pFrames, pShape / pFrames, pText / pFrames, pSvg / pFrames, pImage / pFrames, pOther / pFrames);
+      pTotal = pShape = pText = pSvg = pImage = pOther = 0;
+      pFrames = 0;
+    }
+  }
 }
 
 void CairoRenderer::screenshot(const std::string& path) {

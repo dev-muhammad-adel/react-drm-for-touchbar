@@ -2,6 +2,9 @@
 #include <memory>
 #include <cerrno>
 #include <cstring>
+#include <cstdlib>
+#include <cstdio>
+#include <chrono>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -66,7 +69,18 @@ private:
       Napi::TypeError::New(env, "render() expects an array of draw commands").ThrowAsJavaScriptException();
 
     renderer_->render(env, info[0].As<Napi::Array>());
-    drm_->dirty();
+    // Profiler (REACT_DRM_PROFILE=1): time the DRM scanout flush separately from
+    // the cairo render. Off by default; standing diagnostic (see cairo_renderer.cpp).
+    static const bool prof = std::getenv("REACT_DRM_PROFILE") != nullptr;
+    if (prof) {
+      auto t0 = std::chrono::steady_clock::now();
+      drm_->dirty();
+      static double acc = 0; static int n = 0;
+      acc += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+      if (++n >= 30) { fprintf(stderr, "[native] drm flush avg/frame: %.2fms\n", acc / n); acc = 0; n = 0; }
+    } else {
+      drm_->dirty();
+    }
     return env.Undefined();
   }
 
