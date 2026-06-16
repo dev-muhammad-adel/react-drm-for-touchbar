@@ -1,9 +1,10 @@
 import fs from 'fs';
+import os from 'os';
 import { Worker } from 'worker_threads';
 import React from 'react';
 import { reconciler } from './reconciler';
 import { setRepaint } from './invalidate';
-import { serializeScene, frameSignature, damageRects } from '../scene/serialize';
+import { serializeScene, frameSignature, damageRects, toBinaryBuffer } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
@@ -334,20 +335,7 @@ class Backlight {
 // Smooth bidirectional sweep: X travels ±11 px over pixelShiftSecs, Y follows a
 // sinusoidal path. Pauses ~1 s at each endpoint before reversing direction.
 // Larger range than a tight orbit — covers more pixel area with no visible jump.
-
-function shiftCmds(cmds: DrawCommand[], dx: number, dy: number): DrawCommand[] {
-  if (dx === 0 && dy === 0) return cmds;
-  return cmds.map(cmd => {
-    switch (cmd.cmd) {
-      case 'clear':
-      case 'overlay':
-      case 'clip_pop':
-        return cmd;           // no coordinates to shift
-      default:
-        return { ...cmd, x: cmd.x + dx, y: cmd.y + dy };
-    }
-  });
-}
+// The shift is folded into toBinaryBuffer() at encode time (no separate pass).
 
 // ── Renderer ──────────────────────────────────────────────────────────────────
 
@@ -366,6 +354,7 @@ export function render(
 
   const registry  = new TouchRegistry();
   const layoutRef: { current: Map<SceneNode, LayoutBox> } = { current: new Map() };
+  let layoutValid = false;
 
   const container: RootContainer = {
     type: 'root',
@@ -457,13 +446,55 @@ export function render(
   // draw_svg count). Pairs with the native [native] breakdown (cairo_renderer.cpp,
   // binding.cpp). Off by default; kept as a standing diagnostic tool.
   const PROFILE = !!process.env.REACT_DRM_PROFILE;
-  const prof = { commits: 0, blits: 0, layoutMs: 0, serMs: 0, blitMs: 0, svg: 0, cmds: 0 };
+  const cpuCores = Math.max(1, os.cpus().length);
+  let cpuPrev = process.cpuUsage();
+  let wallPrev = performance.now();
+  const cpuWindow: number[] = [];
+  const prof = {
+    commits: 0,
+    blits: 0,
+    partialBlits: 0,   // blits that flushed a band instead of the whole FB
+    bandFracSum: 0,    // sum of (band width / display width) over partial blits
+    fullLayout: 0,
+    skippedLayout: 0,
+    layoutMs: 0,
+    serMs: 0,
+    blitMs: 0,
+    svg: 0,
+    cmds: 0,
+  };
   if (PROFILE) setInterval(() => {
+    const now = performance.now();
+    const cpu = process.cpuUsage(cpuPrev);
+    const wallMs = Math.max(1, now - wallPrev);
+    const cpuMs = (cpu.user + cpu.system) / 1000;
+    const cpuPct1Core = (cpuMs / wallMs) * 100;
+    const cpuPctAllCores = cpuPct1Core / cpuCores;
+    cpuWindow.push(cpuPct1Core);
+    if (cpuWindow.length > 10) cpuWindow.shift();
+    const cpuAvg10s = cpuWindow.reduce((s, v) => s + v, 0) / cpuWindow.length;
+    cpuPrev = process.cpuUsage();
+    wallPrev = now;
+
     const c = prof.commits || 1, b = prof.blits || 1;
+    const skipPct = ((prof.skippedLayout / c) * 100).toFixed(0);
     console.log(`[profile] commits/s=${prof.commits} blits/s=${prof.blits} | `
+      + `layout(full=${prof.fullLayout}, skip=${prof.skippedLayout}, skip%=${skipPct}) | `
       + `layout=${(prof.layoutMs/c).toFixed(2)}ms ser=${(prof.serMs/c).toFixed(2)}ms blit=${(prof.blitMs/b).toFixed(2)}ms | `
-      + `draw_svg/frame=${(prof.svg/c).toFixed(1)} cmds/frame=${(prof.cmds/c).toFixed(0)}`);
-    prof.commits = prof.blits = prof.layoutMs = prof.serMs = prof.blitMs = prof.svg = prof.cmds = 0;
+      + `draw_svg/frame=${(prof.svg/c).toFixed(1)} cmds/frame=${(prof.cmds/c).toFixed(0)} | `
+      + `partial=${prof.partialBlits}/${prof.blits} band=${prof.partialBlits ? ((prof.bandFracSum/prof.partialBlits)*100).toFixed(0) : '—'}% | `
+      + `cpu(1core)=${cpuPct1Core.toFixed(1)}% cpu(10s)=${cpuAvg10s.toFixed(1)}% cpu(all-cores)=${cpuPctAllCores.toFixed(1)}%`);
+    prof.commits = 0;
+    prof.blits = 0;
+    prof.partialBlits = 0;
+    prof.bandFracSum = 0;
+    prof.fullLayout = 0;
+    prof.skippedLayout = 0;
+    prof.layoutMs = 0;
+    prof.serMs = 0;
+    prof.blitMs = 0;
+    prof.svg = 0;
+    prof.cmds = 0;
   }, 1000);
 
   // The actual blit (always the current lastCmds + shift). Guarded so a deferred
@@ -485,6 +516,7 @@ export function render(
         let minX = Infinity, maxX = -Infinity;
         for (const r of d) { if (r.x < minX) minX = r.x; if (r.x + r.w > maxX) maxX = r.x + r.w; }
         clips = [{ x: minX + shiftX, y: 0, w: maxX - minX, h: display.height }];
+        if (PROFILE) { prof.partialBlits++; prof.bandFracSum += (maxX - minX) / display.width; }
       }
       // d === null → whole-FB (clips left undefined)
     }
@@ -494,13 +526,13 @@ export function render(
 
     if (PROFILE) {
       const t = performance.now();
-      display.render(shiftCmds(lastCmds, shiftX, shiftY), clips);
+      display.renderBinary(toBinaryBuffer(lastCmds, shiftX, shiftY), clips);
       prof.blitMs += performance.now() - t;
       prof.blits++;
       prof.svg += lastCmds.reduce((n, c) => n + (c.cmd === 'draw_svg' ? 1 : 0), 0);
       prof.cmds += lastCmds.length;
     } else {
-      display.render(shiftCmds(lastCmds, shiftX, shiftY), clips);
+      display.renderBinary(toBinaryBuffer(lastCmds, shiftX, shiftY), clips);
     }
   }
 
@@ -589,18 +621,23 @@ export function render(
   if (dimMs > 0) startIdleTimers();
   // ──────────────────────────────────────────────────────────────────────────
 
-  container._onCommit = () => {
+  container._onCommit = (needsLayout = true) => {
     if (!yogaReady()) return; // pre-engine commits are re-rendered once yoga loads
     const t0 = PROFILE ? performance.now() : 0;
-    const layout   = computeLayoutYoga(container, container.width, container.height);
+    if (needsLayout || !layoutValid) {
+      layoutRef.current = computeLayoutYoga(container, container.width, container.height);
+      layoutValid = true;
+      if (PROFILE) prof.fullLayout++;
+    } else if (PROFILE) {
+      prof.skippedLayout++;
+    }
     const t1 = PROFILE ? performance.now() : 0;
-    layoutRef.current = layout;
-    const commands = serializeScene(container, layout);
+    const commands = serializeScene(container, layoutRef.current);
     if (PROFILE) { prof.commits++; prof.layoutMs += t1 - t0; prof.serMs += performance.now() - t1; }
     lastCmds = commands;
     renderCurrent(); // respects current dim/off state
   };
-  setRepaint(() => container._onCommit?.());
+  setRepaint((needsLayout = false) => container._onCommit?.(needsLayout));
 
   const root = reconciler.createContainer(
     container, 0, null, false, null, 'react-drm',

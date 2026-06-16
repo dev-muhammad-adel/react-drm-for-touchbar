@@ -72,6 +72,8 @@ export interface SvgContainerNode {
   attrs: Record<string, string>;
   children: SceneNode[];        // always empty; satisfies SceneNode interface
   svgChildren: SvgElementNode[];
+  /** @internal Cached serialized SVG markup — cleared on tree mutation, rebuilt on first serialize. */
+  _cachedSrc?: string;
 }
 
 export interface SvgElementNode {
@@ -80,6 +82,8 @@ export interface SvgElementNode {
   attrs: Record<string, string>;
   children: SvgElementNode[];
   text?: string;
+  /** @internal Set on attach so commitUpdate can climb to the owning <svg> and clear its `_cachedSrc`. */
+  _parent?: SvgContainerNode | SvgElementNode;
 }
 
 export type SceneNode = BoxNode | TextNode | SvgNode | GifNode | SvgContainerNode;
@@ -90,5 +94,5 @@ export interface RootContainer {
   children: SceneNode[];
   width: number;
   height: number;
-  _onCommit?: () => void;
+  _onCommit?: (needsLayout?: boolean) => void;
 }

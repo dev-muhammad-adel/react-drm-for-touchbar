@@ -14,18 +14,41 @@ export type DrawCommand =
   | { cmd: 'draw_image'; x: number; y: number; w: number; h: number; sw: number; sh: number; data: Buffer; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'overlay'; a: number };  // black veil 0=transparent … 1=opaque
 
+function cmdSignature(c: Exclude<DrawCommand, { cmd: 'draw_image' }>): string {
+  switch (c.cmd) {
+    case 'clear':
+      return `c:${c.r},${c.g},${c.b}`;
+    case 'fill_rect':
+      return `fr:${c.x},${c.y},${c.w},${c.h},${c.r},${c.g},${c.b},${c.a},${c.tl},${c.tr},${c.br},${c.bl}`;
+    case 'stroke_rect':
+      return `sr:${c.x},${c.y},${c.w},${c.h},${c.r},${c.g},${c.b},${c.a},${c.tl},${c.tr},${c.br},${c.bl},${c.lineWidth},${c.borderStyle}`;
+    case 'shadow':
+      return `sh:${c.x},${c.y},${c.w},${c.h},${c.tl},${c.tr},${c.br},${c.bl},${c.r},${c.g},${c.b},${c.a},${c.dx},${c.dy},${c.blur}`;
+    case 'clip_push':
+      return `cp:${c.x},${c.y},${c.w},${c.h},${c.tl},${c.tr},${c.br},${c.bl}`;
+    case 'clip_pop':
+      return 'co';
+    case 'text':
+      return `t:${c.x},${c.y},${c.r},${c.g},${c.b},${c.a},${c.size},${c.family},${c.text},${c.bold ? 1 : 0},${c.italic ? 1 : 0},${c.align},${c.containerX},${c.containerW},${c.lineHeight}`;
+    case 'draw_svg':
+      return `svg:${c.x},${c.y},${c.w},${c.h},${c.src}`;
+    case 'overlay':
+      return `o:${c.a}`;
+  }
+}
+
 /**
  * Cheap structural signature of a frame for blit deduplication.
  * Returns null when the frame contains an animated image (draw_image / GIF) —
  * those mutate their Buffer in place, so we never dedup them.
  */
 export function frameSignature(cmds: DrawCommand[]): string | null {
-  const parts: string[] = [];
+  let out = '';
   for (const c of cmds) {
     if (c.cmd === 'draw_image') return null; // GIF animating → always render
-    parts.push(JSON.stringify(c));
+    out += `${cmdSignature(c)};`;
   }
-  return parts.join('|');
+  return out;
 }
 
 export interface Rect { x: number; y: number; w: number; h: number; }
@@ -36,14 +59,110 @@ function cmdBox(c: DrawCommand): Rect | 'full' | null {
     case 'draw_svg':  case 'draw_image':
       return { x: c.x, y: c.y, w: c.w, h: c.h };
     case 'clip_pop': return null;
-    default: return 'full'; // clear / overlay / shadow / text
+    case 'text': {
+      // Horizontal extent for the full-height damage band (only x/w are used by
+      // the band; y/h are ignored). Over-estimate to avoid stale fragments:
+      // cover the container (aligned text lives inside it) AND a generous
+      // per-glyph advance for left-aligned/overflowing text. damageRects unions
+      // both the old and new command's box, so shrinking text is covered too.
+      const est = c.text.length * c.size * 0.75;
+      const x0  = Math.min(c.x, c.containerX);
+      const x1  = Math.max(c.x + est, c.containerX + c.containerW);
+      return { x: x0, y: c.y, w: x1 - x0, h: c.lineHeight || c.size * 1.5 };
+    }
+    default: return 'full'; // clear / overlay / shadow
   }
 }
 
 function cmdEq(a: DrawCommand, b: DrawCommand): boolean {
   if (a.cmd !== b.cmd) return false;
   if (a.cmd === 'draw_image') return false; // animating buffer — always re-flush
-  return JSON.stringify(a) === JSON.stringify(b);
+
+  switch (a.cmd) {
+    case 'clear':
+      return a.r === (b as typeof a).r
+        && a.g === (b as typeof a).g
+        && a.b === (b as typeof a).b;
+    case 'fill_rect':
+      return a.x === (b as typeof a).x
+        && a.y === (b as typeof a).y
+        && a.w === (b as typeof a).w
+        && a.h === (b as typeof a).h
+        && a.r === (b as typeof a).r
+        && a.g === (b as typeof a).g
+        && a.b === (b as typeof a).b
+        && a.a === (b as typeof a).a
+        && a.tl === (b as typeof a).tl
+        && a.tr === (b as typeof a).tr
+        && a.br === (b as typeof a).br
+        && a.bl === (b as typeof a).bl;
+    case 'stroke_rect':
+      return a.x === (b as typeof a).x
+        && a.y === (b as typeof a).y
+        && a.w === (b as typeof a).w
+        && a.h === (b as typeof a).h
+        && a.r === (b as typeof a).r
+        && a.g === (b as typeof a).g
+        && a.b === (b as typeof a).b
+        && a.a === (b as typeof a).a
+        && a.tl === (b as typeof a).tl
+        && a.tr === (b as typeof a).tr
+        && a.br === (b as typeof a).br
+        && a.bl === (b as typeof a).bl
+        && a.lineWidth === (b as typeof a).lineWidth
+        && a.borderStyle === (b as typeof a).borderStyle;
+    case 'shadow':
+      return a.x === (b as typeof a).x
+        && a.y === (b as typeof a).y
+        && a.w === (b as typeof a).w
+        && a.h === (b as typeof a).h
+        && a.tl === (b as typeof a).tl
+        && a.tr === (b as typeof a).tr
+        && a.br === (b as typeof a).br
+        && a.bl === (b as typeof a).bl
+        && a.r === (b as typeof a).r
+        && a.g === (b as typeof a).g
+        && a.b === (b as typeof a).b
+        && a.a === (b as typeof a).a
+        && a.dx === (b as typeof a).dx
+        && a.dy === (b as typeof a).dy
+        && a.blur === (b as typeof a).blur;
+    case 'clip_push':
+      return a.x === (b as typeof a).x
+        && a.y === (b as typeof a).y
+        && a.w === (b as typeof a).w
+        && a.h === (b as typeof a).h
+        && a.tl === (b as typeof a).tl
+        && a.tr === (b as typeof a).tr
+        && a.br === (b as typeof a).br
+        && a.bl === (b as typeof a).bl;
+    case 'clip_pop':
+      return true;
+    case 'text':
+      return a.x === (b as typeof a).x
+        && a.y === (b as typeof a).y
+        && a.r === (b as typeof a).r
+        && a.g === (b as typeof a).g
+        && a.b === (b as typeof a).b
+        && a.a === (b as typeof a).a
+        && a.size === (b as typeof a).size
+        && a.family === (b as typeof a).family
+        && a.text === (b as typeof a).text
+        && a.bold === (b as typeof a).bold
+        && a.italic === (b as typeof a).italic
+        && a.align === (b as typeof a).align
+        && a.containerX === (b as typeof a).containerX
+        && a.containerW === (b as typeof a).containerW
+        && a.lineHeight === (b as typeof a).lineHeight;
+    case 'draw_svg':
+      return a.x === (b as typeof a).x
+        && a.y === (b as typeof a).y
+        && a.w === (b as typeof a).w
+        && a.h === (b as typeof a).h
+        && a.src === (b as typeof a).src;
+    case 'overlay':
+      return a.a === (b as typeof a).a;
+  }
 }
 
 
@@ -165,7 +284,13 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
                                   .sort((a, b) => zIndexOf(a) - zIndexOf(b));
 
     const childOffsetX = offsetX + (node.scrollX ?? 0);
-    for (const child of [...absNeg, ...flow, ...absPos]) emitNode(child, cmds, layout, lb, childOffsetX);
+    // Fast path: most boxes have only flow children — skip the three filter
+    // passes (and their temporary array allocations) when none are absolute.
+    if (!node.children.some(isAbsolute)) {
+      for (const child of node.children) emitNode(child, cmds, layout, lb, childOffsetX);
+    } else {
+      for (const child of [...absNeg, ...flow, ...absPos]) emitNode(child, cmds, layout, lb, childOffsetX);
+    }
     if (clip) cmds.push({ cmd: 'clip_pop' });
   } else if (node.type === 'text') {
     const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
@@ -198,10 +323,15 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
   } else if (node.type === 'svg') {
     const svgNode = node as SvgContainerNode;
     const lb = layout.get(node) ?? { x: svgNode.x ?? 0, y: svgNode.y ?? 0, w: svgNode.width, h: svgNode.height };
-    const attrs = { xmlns: 'http://www.w3.org/2000/svg', ...svgNode.attrs };
-    const attrStr = Object.entries(attrs).map(([k, v]) => `${k}="${escapeXml(v)}"`).join(' ');
-    const inner = svgNode.svgChildren.map(svgElToXml).join('');
-    cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: `<svg ${attrStr}>${inner}</svg>` });
+    // Build (and cache) the serialized SVG markup once; reuse on every subsequent
+    // frame until the node or its children are mutated (reconciler clears _cachedSrc).
+    if (!svgNode._cachedSrc) {
+      const attrs = { xmlns: 'http://www.w3.org/2000/svg', ...svgNode.attrs };
+      const attrStr = Object.entries(attrs).map(([k, v]) => `${k}="${escapeXml(v)}"`).join(' ');
+      const inner = svgNode.svgChildren.map(svgElToXml).join('');
+      svgNode._cachedSrc = `<svg ${attrStr}>${inner}</svg>`;
+    }
+    cmds.push({ cmd: 'draw_svg', x: lb.x, y: lb.y, w: lb.w, h: lb.h, src: svgNode._cachedSrc });
   }
 }
 
@@ -212,4 +342,162 @@ export function serializeScene(
   const cmds: DrawCommand[] = [{ cmd: 'clear', r: 0, g: 0, b: 0 }];
   for (const child of root.children) emitNode(child, cmds, layout);
   return cmds;
+}
+
+// ── Binary command buffer ────────────────────────────────────────────────────
+// Encodes a DrawCommand[] into a compact Float64Array + string table + buffer
+// table.  The native renderBinary() reads straight from typed-array memory
+// offsets instead of walking JS object properties, cutting N-API overhead for
+// frames with many commands.
+
+/** Integer command-type codes packed into the binary buffer. */
+export const CMD_TYPE = {
+  CLEAR:       0,
+  FILL_RECT:   1,
+  STROKE_RECT: 2,
+  SHADOW:      3,
+  CLIP_PUSH:   4,
+  CLIP_POP:    5,
+  TEXT:        6,
+  DRAW_SVG:    7,
+  DRAW_IMAGE:  8,
+  OVERLAY:     9,
+} as const;
+
+/** Float64 words per command slot. */
+export const BINARY_STRIDE = 22;
+//  [0]     cmd_type  (CMD_TYPE integer)
+//  [1..16] numeric fields (layout below per command type)
+//  [17]    str0_idx  (string-table index, or -1)
+//  [18]    str1_idx
+//  [19]    str2_idx
+//  [20]    buf_idx   (Buffer-table index for draw_image, or -1)
+//  [21]    reserved (0)
+//
+//  CLEAR:       [1]=r [2]=g [3]=b
+//  OVERLAY:     [1]=a
+//  CLIP_POP:    (no fields)
+//  CLIP_PUSH:   [1]=x [2]=y [3]=w [4]=h [5]=tl [6]=tr [7]=br [8]=bl
+//  FILL_RECT:   [1]=x [2]=y [3]=w [4]=h [5]=r [6]=g [7]=b [8]=a [9]=tl [10]=tr [11]=br [12]=bl
+//  STROKE_RECT: [1]=x [2]=y [3]=w [4]=h [5]=r [6]=g [7]=b [8]=a [9]=tl [10]=tr [11]=br [12]=bl [13]=lineWidth  str0=borderStyle
+//  SHADOW:      [1]=x [2]=y [3]=w [4]=h [5]=tl [6]=tr [7]=br [8]=bl [9]=r [10]=g [11]=b [12]=a [13]=dx [14]=dy [15]=blur
+//  TEXT:        [1]=x [2]=y [3]=r [4]=g [5]=b [6]=a [7]=size [8]=containerX [9]=containerW [10]=lineHeight [11]=bold [12]=italic  str0=family str1=text str2=align
+//  DRAW_SVG:    [1]=x [2]=y [3]=w [4]=h  str0=src
+//  DRAW_IMAGE:  [1]=x [2]=y [3]=w [4]=h [5]=sw [6]=sh [7]=tl [8]=tr [9]=br [10]=bl  buf0=data
+
+export interface BinaryFrame {
+  data: Float32Array;
+  strings: string[];
+  buffers: Buffer[];
+}
+
+// Reused across frames to avoid per-frame allocations. renderBinary() consumes
+// the frame synchronously before the next toBinaryBuffer() call, so a single
+// shared pool + string/buffer tables are safe to recycle. Float32 (not 64) —
+// coords/colors/flags/indices all fit exactly, halving the JS→native copy.
+let _pool = new Float32Array(0);
+const _strings: string[] = [];
+const _buffers: Buffer[]  = [];
+const _strIdx = new Map<string, number>();
+
+/**
+ * Encode DrawCommand[] into a compact BinaryFrame.
+ * shiftX / shiftY are applied to the x/y fields of positional commands in-place,
+ * eliminating the shiftCmds() intermediate array allocation.
+ */
+export function toBinaryBuffer(cmds: DrawCommand[], shiftX = 0, shiftY = 0): BinaryFrame {
+  const need = cmds.length * BINARY_STRIDE;
+  if (_pool.length < need) _pool = new Float32Array(Math.ceil(need * 1.5));
+  const data = _pool;
+
+  const strings = _strings; strings.length = 0;
+  const buffers = _buffers; buffers.length = 0;
+  const strIdx  = _strIdx;  strIdx.clear();
+  function intern(s: string): number {
+    let i = strIdx.get(s);
+    if (i === undefined) { i = strings.length; strings.push(s); strIdx.set(s, i); }
+    return i;
+  }
+
+  for (let ci = 0; ci < cmds.length; ci++) {
+    const c    = cmds[ci];
+    const base = ci * BINARY_STRIDE;
+    // Default string/buffer indices to -1 (none).
+    data[base + 17] = -1; data[base + 18] = -1; data[base + 19] = -1; data[base + 20] = -1;
+
+    switch (c.cmd) {
+      case 'clear':
+        data[base]   = CMD_TYPE.CLEAR;
+        data[base+1] = c.r; data[base+2] = c.g; data[base+3] = c.b;
+        break;
+      case 'overlay':
+        data[base]   = CMD_TYPE.OVERLAY;
+        data[base+1] = c.a;
+        break;
+      case 'clip_pop':
+        data[base] = CMD_TYPE.CLIP_POP;
+        break;
+      case 'clip_push':
+        data[base]   = CMD_TYPE.CLIP_PUSH;
+        data[base+1] = c.x + shiftX; data[base+2] = c.y + shiftY;
+        data[base+3] = c.w;          data[base+4] = c.h;
+        data[base+5] = c.tl; data[base+6] = c.tr; data[base+7] = c.br; data[base+8] = c.bl;
+        break;
+      case 'fill_rect':
+        data[base]    = CMD_TYPE.FILL_RECT;
+        data[base+1]  = c.x + shiftX; data[base+2] = c.y + shiftY;
+        data[base+3]  = c.w;          data[base+4] = c.h;
+        data[base+5]  = c.r; data[base+6] = c.g; data[base+7] = c.b; data[base+8] = c.a;
+        data[base+9]  = c.tl; data[base+10] = c.tr; data[base+11] = c.br; data[base+12] = c.bl;
+        break;
+      case 'stroke_rect':
+        data[base]    = CMD_TYPE.STROKE_RECT;
+        data[base+1]  = c.x + shiftX; data[base+2] = c.y + shiftY;
+        data[base+3]  = c.w;          data[base+4] = c.h;
+        data[base+5]  = c.r; data[base+6] = c.g; data[base+7] = c.b; data[base+8] = c.a;
+        data[base+9]  = c.tl; data[base+10] = c.tr; data[base+11] = c.br; data[base+12] = c.bl;
+        data[base+13] = c.lineWidth;
+        data[base+17] = intern(c.borderStyle);
+        break;
+      case 'shadow':
+        data[base]    = CMD_TYPE.SHADOW;
+        data[base+1]  = c.x + shiftX; data[base+2] = c.y + shiftY;
+        data[base+3]  = c.w;          data[base+4] = c.h;
+        data[base+5]  = c.tl; data[base+6] = c.tr; data[base+7] = c.br; data[base+8] = c.bl;
+        data[base+9]  = c.r;  data[base+10] = c.g; data[base+11] = c.b; data[base+12] = c.a;
+        data[base+13] = c.dx; data[base+14] = c.dy; data[base+15] = c.blur;
+        break;
+      case 'text':
+        data[base]    = CMD_TYPE.TEXT;
+        data[base+1]  = c.x + shiftX;     data[base+2]  = c.y + shiftY;
+        data[base+3]  = c.r;               data[base+4]  = c.g;
+        data[base+5]  = c.b;               data[base+6]  = c.a;
+        data[base+7]  = c.size;            data[base+8]  = c.containerX + shiftX;
+        data[base+9]  = c.containerW;      data[base+10] = c.lineHeight;
+        data[base+11] = c.bold   ? 1 : 0;  data[base+12] = c.italic ? 1 : 0;
+        data[base+17] = intern(c.family);
+        data[base+18] = intern(c.text);
+        data[base+19] = intern(c.align);
+        break;
+      case 'draw_svg':
+        data[base]   = CMD_TYPE.DRAW_SVG;
+        data[base+1] = c.x + shiftX; data[base+2] = c.y + shiftY;
+        data[base+3] = c.w;          data[base+4] = c.h;
+        data[base+17] = intern(c.src);
+        break;
+      case 'draw_image':
+        data[base]   = CMD_TYPE.DRAW_IMAGE;
+        data[base+1] = c.x + shiftX; data[base+2] = c.y + shiftY;
+        data[base+3] = c.w;          data[base+4] = c.h;
+        data[base+5] = c.sw;         data[base+6] = c.sh;
+        data[base+7] = c.tl; data[base+8] = c.tr; data[base+9] = c.br; data[base+10] = c.bl;
+        data[base+20] = buffers.length;
+        buffers.push(c.data);
+        break;
+    }
+  }
+
+  // subarray (a view, no copy) so ElementLength on the native side reflects the
+  // actual command count, not the over-allocated pool capacity.
+  return { data: data.subarray(0, need), strings, buffers };
 }

@@ -23,13 +23,14 @@ class DrmDisplayWrapper : public Napi::ObjectWrap<DrmDisplayWrapper> {
 public:
   static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     Napi::Function func = DefineClass(env, "DrmDisplay", {
-      InstanceMethod("setup",      &DrmDisplayWrapper::Setup),
-      InstanceMethod("render",     &DrmDisplayWrapper::Render),
-      InstanceMethod("drawBars",   &DrmDisplayWrapper::DrawBars),
-      InstanceMethod("screenshot", &DrmDisplayWrapper::Screenshot),
-      InstanceMethod("getWidth",   &DrmDisplayWrapper::GetWidth),
-      InstanceMethod("getHeight",  &DrmDisplayWrapper::GetHeight),
-      InstanceMethod("close",      &DrmDisplayWrapper::Close),
+      InstanceMethod("setup",         &DrmDisplayWrapper::Setup),
+      InstanceMethod("render",         &DrmDisplayWrapper::Render),
+      InstanceMethod("renderBinary",   &DrmDisplayWrapper::RenderBinary),
+      InstanceMethod("drawBars",       &DrmDisplayWrapper::DrawBars),
+      InstanceMethod("screenshot",     &DrmDisplayWrapper::Screenshot),
+      InstanceMethod("getWidth",       &DrmDisplayWrapper::GetWidth),
+      InstanceMethod("getHeight",      &DrmDisplayWrapper::GetHeight),
+      InstanceMethod("close",          &DrmDisplayWrapper::Close),
     });
     exports.Set("DrmDisplay", func);
     return exports;
@@ -127,6 +128,61 @@ private:
   // Draw the audio bars directly into the FB + dirty ONLY a full-height band
   // (contiguous FB rows — the shape appletbdrm accepts). Off the React commit
   // loop, so bar updates don't trigger full-tree layout/serialize.
+  Napi::Value RenderBinary(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) { Napi::TypeError::New(env, "Call setup() before renderBinary()").ThrowAsJavaScriptException(); return env.Undefined(); }
+    if (info.Length() < 3
+        || !info[0].IsTypedArray()
+        || !info[1].IsArray()
+        || !info[2].IsArray()) {
+      Napi::TypeError::New(env, "renderBinary(data: Float32Array, strings: string[], buffers: Buffer[], clips?: DamageRect[])").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    renderer_->renderBinary(env,
+      info[0].As<Napi::Float32Array>(),
+      info[1].As<Napi::Array>(),
+      info[2].As<Napi::Array>());
+
+    // Optional damage clips (info[3]) — same logic as Render().
+    std::vector<drmModeClip> clips;
+    if (info.Length() >= 4 && info[3].IsArray()) {
+      Napi::Array arr = info[3].As<Napi::Array>();
+      const uint32_t n = arr.Length();
+      const int fbw = (int)drm_->fb_width(), fbh = (int)drm_->fb_height();
+      const bool rot = drm_->rotate90();
+      clips.reserve(n);
+      for (uint32_t j = 0; j < n; j++) {
+        Napi::Value v = arr.Get(j);
+        if (!v.IsObject()) continue;
+        Napi::Object o = v.As<Napi::Object>();
+        double x = o.Get("x").ToNumber().DoubleValue();
+        double y = o.Get("y").ToNumber().DoubleValue();
+        double w = o.Get("w").ToNumber().DoubleValue();
+        double h = o.Get("h").ToNumber().DoubleValue();
+        double lx1=x-1,ly1=y-1,lx2=x+w+1,ly2=y+h+1;
+        int fx1,fy1,fx2,fy2;
+        if (rot) { fx1=(int)std::floor(fbw-ly2); fy1=(int)std::floor(lx1); fx2=(int)std::ceil(fbw-ly1); fy2=(int)std::ceil(lx2); }
+        else     { fx1=(int)std::floor(lx1); fy1=(int)std::floor(ly1); fx2=(int)std::ceil(lx2); fy2=(int)std::ceil(ly2); }
+        fx1=std::max(0,std::min(fx1,fbw)); fx2=std::max(0,std::min(fx2,fbw));
+        fy1=std::max(0,std::min(fy1,fbh)); fy2=std::max(0,std::min(fy2,fbh));
+        if (fx2>fx1 && fy2>fy1) clips.push_back(drmModeClip{(uint16_t)fx1,(uint16_t)fy1,(uint16_t)fx2,(uint16_t)fy2});
+      }
+    }
+    const drmModeClip* cp = clips.empty() ? nullptr : clips.data();
+    const uint32_t cn = (uint32_t)clips.size();
+    static const bool prof = std::getenv("REACT_DRM_PROFILE") != nullptr;
+    if (prof) {
+      auto t0 = std::chrono::steady_clock::now();
+      drm_->dirty(cp, cn);
+      static double acc2=0; static int n2=0;
+      acc2 += std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-t0).count();
+      if (++n2 >= 30) { fprintf(stderr,"[native] drm flush avg/frame: %.2fms\n",acc2/n2); acc2=0; n2=0; }
+    } else {
+      drm_->dirty(cp, cn);
+    }
+    return env.Undefined();
+  }
+
   Napi::Value DrawBars(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!renderer_) { Napi::TypeError::New(env, "Call setup() before drawBars()").ThrowAsJavaScriptException(); return env.Undefined(); }

@@ -86,6 +86,16 @@ function svgAttrsFromProps(props: Record<string, unknown>): Record<string, strin
   return attrs;
 }
 
+// An svg_el's attr/text change makes the owning <svg>'s cached markup stale.
+// svg_el has no direct container ref, so climb _parent to the <svg> and clear it.
+function clearSvgCacheFor(el: SvgElementNode): void {
+  let p: SvgContainerNode | SvgElementNode | undefined = el._parent;
+  while (p) {
+    if (p.type === 'svg') { (p as SvgContainerNode)._cachedSrc = undefined; return; }
+    p = (p as SvgElementNode)._parent;
+  }
+}
+
 function nodeFromProps(type: string, props: Record<string, unknown>, inSvg = false): AnyNode {
   if (inSvg && type !== 'svg' && (SVG_TAGS.has(type) || SVG_TEXT_TAGS.has(type))) {
     return {
@@ -210,10 +220,13 @@ export const reconciler = ReactReconciler({
       return;
     }
     if (parent.type === 'svg') {
+      (child as SvgElementNode)._parent = parent;
       (parent as SvgContainerNode).svgChildren.push(child as SvgElementNode);
+      (parent as SvgContainerNode)._cachedSrc = undefined;
       return;
     }
     if (parent.type === 'svg_el') {
+      (child as SvgElementNode)._parent = parent;
       (parent as SvgElementNode).children.push(child as SvgElementNode);
       return;
     }
@@ -255,10 +268,13 @@ export const reconciler = ReactReconciler({
   appendChild: (parent: AnyNode, child: AnyNode) => {
     if (parent.type === 'text-leaf' || child.type === 'text-leaf') return;
     if (parent.type === 'svg') {
+      (child as SvgElementNode)._parent = parent;
       (parent as SvgContainerNode).svgChildren.push(child as SvgElementNode);
+      (parent as SvgContainerNode)._cachedSrc = undefined;
       return;
     }
     if (parent.type === 'svg_el') {
+      (child as SvgElementNode)._parent = parent;
       (parent as SvgElementNode).children.push(child as SvgElementNode);
       return;
     }
@@ -267,12 +283,15 @@ export const reconciler = ReactReconciler({
   insertBefore: (parent: AnyNode, child: AnyNode, before: AnyNode) => {
     if (parent.type === 'text-leaf' || child.type === 'text-leaf') return;
     if (parent.type === 'svg') {
+      (child as SvgElementNode)._parent = parent;
       const arr = (parent as SvgContainerNode).svgChildren;
       const idx = arr.indexOf(before as SvgElementNode);
       arr.splice(idx === -1 ? 0 : idx, 0, child as SvgElementNode);
+      (parent as SvgContainerNode)._cachedSrc = undefined;
       return;
     }
     if (parent.type === 'svg_el') {
+      (child as SvgElementNode)._parent = parent;
       const arr = (parent as SvgElementNode).children;
       const idx = arr.indexOf(before as SvgElementNode);
       arr.splice(idx === -1 ? 0 : idx, 0, child as SvgElementNode);
@@ -288,6 +307,7 @@ export const reconciler = ReactReconciler({
       const arr = (parent as SvgContainerNode).svgChildren;
       const idx = arr.indexOf(child as SvgElementNode);
       if (idx !== -1) arr.splice(idx, 1);
+      (parent as SvgContainerNode)._cachedSrc = undefined;
       return;
     }
     if (parent.type === 'svg_el') {
@@ -311,6 +331,7 @@ export const reconciler = ReactReconciler({
       const el = instance as SvgElementNode;
       el.attrs = svgAttrsFromProps(updatePayload);
       if (SVG_TEXT_TAGS.has(el.tag)) el.text = svgTextContent(updatePayload.children);
+      clearSvgCacheFor(el); // child attr/text changed → owning <svg> markup is stale
       return;
     }
     if (instance.type === 'svg') {
@@ -319,6 +340,7 @@ export const reconciler = ReactReconciler({
       Object.assign(instance, updated);
       (instance as SvgContainerNode).svgChildren = svgChildren;
       (instance as SvgContainerNode).children = [];
+      (instance as SvgContainerNode)._cachedSrc = undefined; // invalidate cached markup
       return;
     }
     const updated = nodeFromProps(type, updatePayload);

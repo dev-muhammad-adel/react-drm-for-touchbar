@@ -2,19 +2,24 @@
 // adapter (src/spring.ts), which writes animated values straight into scene
 // nodes each frame instead of going through a React commit.
 
-let repaint: (() => void) | null = null;
+let repaint: ((needsLayout?: boolean) => void) | null = null;
 let scheduled = false;
+let scheduledNeedsLayout = false;
 
-export function setRepaint(fn: (() => void) | null): void {
+export function setRepaint(fn: ((needsLayout?: boolean) => void) | null): void {
   repaint = fn;
 }
 
 /** Request a repaint after mutating scene nodes directly. Batched per tick. */
-export function invalidate(): void {
-  if (scheduled || !repaint) return;
+export function invalidate(needsLayout = false): void {
+  if (!repaint) return;
+  scheduledNeedsLayout = scheduledNeedsLayout || needsLayout;
+  if (scheduled) return;
   scheduled = true;
   queueMicrotask(() => {
     scheduled = false;
-    repaint?.();
+    const nl = scheduledNeedsLayout;
+    scheduledNeedsLayout = false;
+    repaint?.(nl);
   });
 }

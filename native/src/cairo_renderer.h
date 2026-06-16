@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 struct _cairo_surface; // forward decl — avoids pulling cairo into this header
+struct _cairo;         // forward decl for the cairo drawing context
 
 class CairoRenderer {
 public:
@@ -15,6 +16,11 @@ public:
 
   // Executes a JS array of draw-command objects against the framebuffer.
   void render(Napi::Env env, Napi::Array commands);
+
+  // Binary render path: reads commands from a Float64Array with fixed-stride
+  // slots instead of walking JS object properties — eliminates per-property
+  // N-API hash lookups for numeric fields.
+  void renderBinary(Napi::Env env, Napi::Float32Array data, Napi::Array strings, Napi::Array buffers);
 
 
   
@@ -41,4 +47,31 @@ private:
   std::unordered_map<std::string, SvgList::iterator> svg_index_;
   _cairo_surface* svgGet(const std::string& key);
   void svgPut(const std::string& key, _cairo_surface* surf);
+
+  // Text bitmap cache: rasterize each unique (text, family, size, color, weight,
+  // slant) to its own image surface once, then composite it each frame instead
+  // of re-shaping + re-rendering glyphs via cairo_show_text — which the profiler
+  // showed dominating the blit. Color is baked in (so it's part of the key);
+  // alpha is applied at composite time. Metrics are cached alongside so the
+  // alignment/baseline math needs no per-frame text_extents (the shaping step).
+  struct TextEntry {
+    _cairo_surface* surf;
+    double width;      // ink advance width (cairo_text_extents.width)
+    double xBearing;   // cairo_text_extents.x_bearing
+    double ascent;     // cairo_font_extents.ascent
+    double descent;    // cairo_font_extents.descent
+    double pad;        // surface margin baked around the glyphs
+  };
+  using TextList = std::list<std::pair<std::string, TextEntry>>;
+  TextList text_lru_;
+  std::unordered_map<std::string, TextList::iterator> text_index_;
+  const TextEntry* textGet(const std::string& key);
+  const TextEntry* textPut(const std::string& key, const TextEntry& e);
+
+  // Reused per-renderer surface + context — created once in the constructor,
+  // kept alive across frames. Avoids repeated alloc/free overhead and,
+  // critically, preserves Cairo's per-context scaled-font cache so font
+  // metrics lookups are never cold.
+  _cairo_surface* surf_ = nullptr;
+  _cairo*         cr_   = nullptr;
 };

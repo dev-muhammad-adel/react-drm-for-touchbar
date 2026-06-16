@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { loadAddon } from './load-addon';
-import type { DrawCommand } from '../scene/serialize';
+import type { DrawCommand, BinaryFrame } from '../scene/serialize';
 
 function resolveCardPath(devicePath?: string): string {
   if (devicePath) return devicePath;
@@ -42,6 +42,7 @@ export interface BarsOpts {
 interface NativeHandle {
   setup(): { width: number; height: number };
   render(commands: DrawCommand[], clips?: DamageRect[]): void;
+  renderBinary(data: Float32Array, strings: string[], buffers: Buffer[], clips?: DamageRect[]): void;
   drawBars(opts: BarsOpts): void;
   screenshot(filePath: string): void;
   getWidth(): number;
@@ -81,6 +82,12 @@ export class DrmDisplay {
   // clips: damage rects (logical coords) for partial flush. Omit → whole-FB.
   render(commands: DrawCommand[], clips?: DamageRect[]): void {
     this.handle.render(commands, clips);
+  }
+
+  // Binary render path: passes a Float64Array command buffer + string/buffer
+  // tables to native, cutting N-API property-lookup overhead vs the JS-object path.
+  renderBinary(frame: BinaryFrame, clips?: DamageRect[]): void {
+    this.handle.renderBinary(frame.data, frame.strings, frame.buffers, clips);
   }
 
   // Draw an audio-bar strip natively + flush only its full-height band.

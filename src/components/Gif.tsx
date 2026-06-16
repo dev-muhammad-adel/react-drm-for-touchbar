@@ -137,7 +137,7 @@ export function Gif(props: GifProps): React.ReactElement {
       node.frame  = fr.data;
       node.frameW = dec.w;
       node.frameH = dec.h;
-      invalidate();
+      invalidate(false);
     };
 
     // Self-scheduling by each frame's own delay (GIFs aren't a fixed rate).
