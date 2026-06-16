@@ -48,6 +48,7 @@ export const KEY = {
   RIGHT:         106,
   UP:            103,
   DOWN:          108,
+  HOME:          102,
   ENTER:          28,
   ESC:             1,
   BACKSPACE:      14,

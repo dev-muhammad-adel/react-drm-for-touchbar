@@ -26,6 +26,8 @@ static const int EXTRA_KEYS[] = {
   17, 19, 20,      // KEY_W, KEY_R, KEY_T
   // Arrow keys
   103, 105, 106, 108, // KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_DOWN
+  // Navigation keys
+  102,             // KEY_HOME
   // Extra useful keys
   28,              // KEY_ENTER
    1,              // KEY_ESC
