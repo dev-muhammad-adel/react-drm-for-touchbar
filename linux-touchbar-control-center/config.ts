@@ -128,6 +128,7 @@ export type BrowserKeymap = {
   back:     number[];
   forward:  number[];
   reload:   number[];
+  home:     number[];
   newTab:   number[];
   closeTab: number[];
   nextTab:  number[];
@@ -139,6 +140,7 @@ export const DEFAULT_BROWSER_KEYS: BrowserKeymap = {
   back:     [KEY.LEFTALT,  KEY.LEFT],
   forward:  [KEY.LEFTALT,  KEY.RIGHT],
   reload:   [KEY.LEFTCTRL, KEY.KEY_R],
+  home:     [KEY.LEFTALT,  KEY.HOME],
   newTab:   [KEY.LEFTCTRL, KEY.KEY_T],
   closeTab: [KEY.LEFTCTRL, KEY.KEY_W],
   nextTab:  [KEY.LEFTCTRL, KEY.TAB],
