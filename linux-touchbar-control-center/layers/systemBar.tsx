@@ -280,21 +280,11 @@ function TempMod({ temp }: { temp: number | null }) {
   );
 }
 
-function NetMod({ rx, tx, iface }: { rx: number; tx: number; iface: string }) {
+function NetMod({ rx, tx, iface, rxHist, txHist }: { rx: number; tx: number; iface: string; rxHist: number[]; txHist: number[] }) {
   const rxValue = NET_WIDTH_TEST ? NET_TEST_RX_BPS : rx;
   const txValue = NET_WIDTH_TEST ? NET_TEST_TX_BPS : tx;
 
-  const [rxHist, setRxHist] = useState<number[]>(new Array(20).fill(0));
-  const [txHist, setTxHist] = useState<number[]>(new Array(20).fill(0));
   const NetIcon = ifaceIcon(iface);
-
-  useEffect(() => {
-    setRxHist(prev => [...prev.slice(1), Math.max(0, rxValue)]);
-  }, [rxValue]);
-
-  useEffect(() => {
-    setTxHist(prev => [...prev.slice(1), Math.max(0, txValue)]);
-  }, [txValue]);
 
   const chartW = 160;
   const chartH =44;
@@ -651,6 +641,7 @@ function PomodoroSection() {
 interface State {
   cores: number[]; mem: { used: number; total: number }; temp: number | null;
   netRx: number; netTx: number; iface: string;
+  rxHist: number[]; txHist: number[];
   uptime: string; bat: BatteryInfo | null; time: Date;
 }
 
@@ -660,20 +651,28 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
 
   const [s, setS] = useState<State>({
     cores: new Array(NUM_CORES).fill(0), mem: readMem(), temp: readTemp(),
-    netRx: 0, netTx: 0, iface: '', uptime: readUptime(), bat: INIT_BAT, time: new Date(),
+    netRx: 0, netTx: 0, iface: '', rxHist: new Array(20).fill(0), txHist: new Array(20).fill(0),
+    uptime: readUptime(), bat: INIT_BAT, time: new Date(),
   });
 
   useEffect(() => {
     let prevCpu = tickCpu(), prevNet = tickNet(), prevTime = Date.now();
+    // Net history lives here (not in NetMod via effects) so one poll = one
+    // commit. Child effects pushing history would add a second render+blit per
+    // tick, which showed up as a hitch in the audio bars on the stats timer.
+    let rxHist = new Array(20).fill(0), txHist = new Array(20).fill(0);
     const id = setInterval(() => {
       try {
         const nextCpu = tickCpu(), nextNet = tickNet(), now = Date.now();
         const dt = Math.max(0.2, (now - prevTime) / 1000);
+        const netRx = Math.max(0, Math.round((nextNet.rx - prevNet.rx) / dt));
+        const netTx = Math.max(0, Math.round((nextNet.tx - prevNet.tx) / dt));
+        rxHist = [...rxHist.slice(1), netRx];
+        txHist = [...txHist.slice(1), netTx];
         setS({
           cores: calcUsage(prevCpu, nextCpu), mem: readMem(), temp: readTemp(),
-          netRx: Math.max(0, Math.round((nextNet.rx - prevNet.rx) / dt)),
-          netTx: Math.max(0, Math.round((nextNet.tx - prevNet.tx) / dt)),
-          iface: nextNet.iface, uptime: readUptime(), bat: readBattery(), time: new Date(),
+          netRx, netTx, iface: nextNet.iface, rxHist, txHist,
+          uptime: readUptime(), bat: readBattery(), time: new Date(),
         });
         prevCpu = nextCpu; prevNet = nextNet; prevTime = now;
       } catch { /**/ }
@@ -706,7 +705,7 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
       <Sep />
       <TempMod temp={s.temp} />
       <Sep />
-      <NetMod  rx={s.netRx} tx={s.netTx} iface={s.iface} />
+      <NetMod  rx={s.netRx} tx={s.netTx} iface={s.iface} rxHist={s.rxHist} txHist={s.txHist} />
       {/* <Sep /> */}
       {/* <HostMod uptime={s.uptime} /> */}
       {HAS_BAT && <Sep />}
