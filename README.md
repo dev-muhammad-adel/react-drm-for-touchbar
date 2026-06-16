@@ -34,7 +34,7 @@ The installer performs three phases:
 2. **Purge** stops and removes detected `tiny-dfr` or `mac-touchbar-plus`
    installations after a separate confirmation.
 3. **Deploy** installs dependencies, builds the current local source, installs
-   the udev rules and user service, and starts react-drm.
+   the udev rules and production user service, and starts react-drm.
 
 It can also update an existing installation. Update the local source using the
 same method used to obtain it, then run the updated `install.sh` again. The
@@ -142,7 +142,9 @@ install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
 
 The supplied unit expects the repository at `~/react-drm`. If it is stored
 elsewhere, edit `WorkingDirectory`, `ExecStart` and `ExecStopPost` in
-`~/.config/systemd/user/react-drm.service` to use its absolute path.
+`~/.config/systemd/user/react-drm.service` to use its absolute path. The unit
+runs the compiled app with `node dist/index.js` and sets `NODE_ENV=production`;
+it does not run the TypeScript entrypoint or hot reload watcher.
 
 Then enable and start it:
 
@@ -172,6 +174,9 @@ systemctl --user stop react-drm.service
 cd linux-touchbar-control-center
 npm run dev
 ```
+
+`npm run dev` is the development entrypoint and keeps hot reload enabled. The
+installed systemd service uses the compiled production build instead.
 
 ## Active window integration
 
