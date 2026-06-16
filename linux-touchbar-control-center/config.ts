@@ -140,7 +140,7 @@ export const DEFAULT_BROWSER_KEYS: BrowserKeymap = {
   back:     [KEY.LEFTALT,  KEY.LEFT],
   forward:  [KEY.LEFTALT,  KEY.RIGHT],
   reload:   [KEY.LEFTCTRL, KEY.KEY_R],
-  home:     [KEY.LEFTALT,  KEY.HOME],
+  home:     [KEY.LEFTALT,  102],
   newTab:   [KEY.LEFTCTRL, KEY.KEY_T],
   closeTab: [KEY.LEFTCTRL, KEY.KEY_W],
   nextTab:  [KEY.LEFTCTRL, KEY.TAB],
