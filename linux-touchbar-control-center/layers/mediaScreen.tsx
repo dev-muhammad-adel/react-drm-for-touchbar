@@ -1,212 +1,214 @@
-import React from 'react';
-import path from 'path';
-import { Box, Button, KEY, Svg } from 'react-drm';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import { spawn } from 'child_process';
+import { writeFileSync } from 'fs';
+import { Box, Button, KEY, DisplaySizeContext, LayoutContext, NativeDrawContext } from 'react-drm';
+import type { BoxNode } from 'react-drm';
 import {
-  MdClose,
-  MdBrightness4, MdBrightness7,
-  MdMicOff,
-  MdSearch,
   MdSkipPrevious, MdPlayArrow, MdSkipNext,
   MdVolumeOff, MdVolumeDown, MdVolumeUp,
-  MdApps,
 } from 'react-icons/md';
 import { BackButton } from '../components/BackButton';
+import { CAVA } from '../config';
 import { keys } from '../services/keyInjector';
 
-const KBD_ILLUM_DOWN_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_down.svg');
-const KBD_ILLUM_UP_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_up.svg');
-
-// ── Actions ────────────────────────────────────────────────────────────────────
-
 type Action =
-  | 'Macro1'
-  | 'BrightnessDown' | 'BrightnessUp'
-  | 'MicMute'
-  | 'Search'
-  | 'IllumDown' | 'IllumUp'
   | 'PreviousSong' | 'PlayPause' | 'NextSong'
-  | 'Mute' | 'VolumeDown' | 'VolumeUp'
-  | 'AllApplications'
-  | 'Unknown';
+  | 'Mute' | 'VolumeDown' | 'VolumeUp';
 
 function run(action: Action) {
   switch (action) {
-    case 'BrightnessDown':   return keys.pressKey(KEY.BRIGHTNESSDOWN);
-    case 'BrightnessUp':     return keys.pressKey(KEY.BRIGHTNESSUP);
-    case 'MicMute':          return keys.pressKey(KEY.MICMUTE);
-    case 'Search':           return keys.pressKey(KEY.SEARCH);
-    case 'IllumDown':        return keys.pressKey(KEY.KBDILLUMDOWN);
-    case 'IllumUp':          return keys.pressKey(KEY.KBDILLUMUP);
-    case 'PreviousSong':     return keys.pressKey(KEY.PREVIOUSSONG);
-    case 'PlayPause':        return keys.pressKey(KEY.PLAYPAUSE);
-    case 'NextSong':         return keys.pressKey(KEY.NEXTSONG);
-    case 'Mute':             return keys.pressKey(KEY.MUTE);
-    case 'VolumeDown':       return keys.pressKey(KEY.VOLUMEDOWN);
-    case 'VolumeUp':         return keys.pressKey(KEY.VOLUMEUP);
-    case 'AllApplications':  return keys.pressKey(KEY.LEFTMETA);
+    case 'PreviousSong': return keys.pressKey(KEY.PREVIOUSSONG);
+    case 'PlayPause': return keys.pressKey(KEY.PLAYPAUSE);
+    case 'NextSong': return keys.pressKey(KEY.NEXTSONG);
+    case 'Mute': return keys.pressKey(KEY.MUTE);
+    case 'VolumeDown': return keys.pressKey(KEY.VOLUMEDOWN);
+    case 'VolumeUp': return keys.pressKey(KEY.VOLUMEUP);
   }
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
-
-const BTN_SIZE  = 60;
 const ICON_SIZE = 30;
+const BTN_BG = '#4f4b4f';
+const BTN_ACTIVE_BG = '#666666';
+const BTN_W = 130;
+
+const VIS_BARS = CAVA.bars * 2;
+const VIS_CFG = '/tmp/.react-drm-cava-media.conf';
+const VIS_MAX_HEIGHT = 34;
+const VIS_BAR_W = 10;
+const VIS_GAP = 3;
+const VIS_WIDTH = VIS_BARS * VIS_BAR_W + (VIS_BARS - 1) * VIS_GAP;
+
+try {
+  writeFileSync(VIS_CFG, [
+    '[general]',
+    `bars = ${VIS_BARS}`,
+    `framerate = ${CAVA.framerate}`,
+    '[input]',
+    'method = pulse',
+    'source = auto',
+    '[output]',
+    'method = raw',
+    'raw_target = /dev/stdout',
+    'data_format = binary',
+    'channels = mono',
+    'bit_format = 8bit',
+  ].join('\n'));
+} catch { /**/ }
+
+const VIS_COLORS = Array.from({ length: VIS_BARS }, (_, i) => {
+  const t = i / (VIS_BARS - 1);
+  let r: number;
+  let g: number;
+  let b: number;
+  if (t < 0.5) {
+    const u = t / 0.5;
+    r = Math.round(59 + u * (236 - 59));
+    g = Math.round(130 + u * (72 - 130));
+    b = Math.round(246 + u * (153 - 246));
+  } else {
+    const u = (t - 0.5) / 0.5;
+    r = Math.round(236 + u * (251 - 236));
+    g = Math.round(72 + u * (146 - 72));
+    b = Math.round(153 + u * (60 - 153));
+  }
+  const hex = (v: number) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, '0');
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+});
+
+const hexRgb = (hex: string): [number, number, number] => {
+  const n = parseInt(hex.slice(1), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+};
+
+const VIS_RGB = VIS_COLORS.flatMap(hexRgb);
+const VIS_INACTIVE_RGB = Array.from({ length: VIS_BARS }, () => hexRgb('#1e293b')).flat();
+
+function Btn({
+  onClick,
+  children,
+  radiusLeft = false,
+  radiusRight = false,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+  radiusLeft?: boolean;
+  radiusRight?: boolean;
+}) {
+  return (
+    <Button
+      color={BTN_BG}
+      activeColor={BTN_ACTIVE_BG}
+      width={BTN_W}
+      style={{
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderTopLeftRadius: radiusLeft ? 10 : 0,
+        borderBottomLeftRadius: radiusLeft ? 10 : 0,
+        borderTopRightRadius: radiusRight ? 10 : 0,
+        borderBottomRightRadius: radiusRight ? 10 : 0,
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function MediaAudioVis() {
+  const layoutRef = useContext(LayoutContext);
+  const native = useContext(NativeDrawContext);
+  const { height: dispH } = useContext(DisplaySizeContext);
+  const barsRef = useRef<BoxNode>(null);
+  const heightsRef = useRef<number[]>(new Array(VIS_BARS).fill(2));
+  const [, force] = useState(0);
+
+  useEffect(() => {
+    let partial: Buffer = Buffer.alloc(0);
+    let prev = new Array(VIS_BARS).fill(2);
+    const proc = spawn('cava', ['-p', VIS_CFG]);
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      partial = partial.length ? Buffer.concat([partial, chunk]) : chunk;
+      const whole = partial.length - (partial.length % VIS_BARS);
+      if (whole < VIS_BARS) return;
+      const frame = partial.slice(whole - VIS_BARS, whole);
+      partial = whole < partial.length ? partial.slice(whole) : Buffer.alloc(0);
+      const heights = Array.from(frame, v => Math.max(2, Math.round((v / 255) * VIS_MAX_HEIGHT)));
+      if (heights.every((h, i) => h === prev[i])) return;
+      prev = heights;
+      heightsRef.current = heights;
+
+      const node = barsRef.current;
+      const box = node ? layoutRef.current.get(node) : undefined;
+      if (native && box) {
+        const active = heights.some(h => h > 2);
+        native.drawBars({
+          x0: box.x,
+          baseY: box.y + box.h,
+          barW: VIS_BAR_W,
+          gap: VIS_GAP,
+          fullHeight: dispH,
+          bg: [0, 0, 0],
+          heights,
+          colors: active ? VIS_RGB : VIS_INACTIVE_RGB,
+        });
+      } else {
+        force(n => n + 1);
+      }
+    });
+    return () => { try { proc.kill('SIGTERM'); } catch { /**/ } };
+  }, [native, dispH, layoutRef]);
+
+  const bars = heightsRef.current;
+  const isActive = bars.some(h => h > 2);
+
+  return (
+    <Box style={{ width: VIS_WIDTH, alignItems: 'flex-end', justifyContent: 'flex-end', paddingBottom: 8 }}>
+      <Box ref={barsRef} style={{ flexDirection: 'row', alignItems: 'flex-end', gap: VIS_GAP }}>
+        {bars.map((h, i) => (
+          <Box
+            key={i}
+            style={{ width: VIS_BAR_W, height: h, backgroundColor: isActive ? VIS_COLORS[i] : '#1e293b' }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
+}
 
 export function MediaScreen({ width, height }: { width: number; height: number }) {
   return (
-    <Box style={{ flex: 1,gap: 30 }}>
-
+    <Box style={{ flex: 1, gap: 30 }}>
       <BackButton animation="slide-right" />
 
+      <Box style={{ flexGrow: 3, flexDirection: 'row', alignItems: 'stretch', gap: 2 }}>
+        <Box style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'flex-end', paddingRight: 14 }}>
+          <MediaAudioVis />
+        </Box>
 
+        <Box style={{ flexDirection: 'row', gap: 2 }}>
+          <Btn onClick={() => run('PreviousSong')} radiusLeft>
+            <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
+          </Btn>
+          <Btn onClick={() => run('PlayPause')}>
+            <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
+          </Btn>
+          <Btn onClick={() => run('NextSong')} radiusRight>
+            <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
+          </Btn>
+        </Box>
 
-      <Box style={{flexGrow:2 , gap:6}} >
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('BrightnessDown')}
-      >
-        <MdBrightness4 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('BrightnessUp')}
-      >
-        <MdBrightness7 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-</Box>
-      <Box style={{flexGrow:1}} >
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('MicMute')}
-      >
-        <MdMicOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-</Box>
-      <Box style={{flexGrow:1}} >
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('Search')}
-      >
-        <MdSearch style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-</Box>
-
-      <Box style={{flexGrow:2 , gap:6}}   >
-
-      <Button
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('IllumDown')}
-      >
-        <Svg src={KBD_ILLUM_DOWN_ICON} width={ICON_SIZE} height={ICON_SIZE} />
-      </Button>
-
-      <Button
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('IllumUp')}
-      >
-        <Svg src={KBD_ILLUM_UP_ICON} width={ICON_SIZE} height={ICON_SIZE} />
-      </Button>
-</Box>
-
-      <Box style={{flexGrow:3 , gap:6}} >
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('PreviousSong')}
-      >
-        <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('PlayPause')}
-      >
-        <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('NextSong')}
-      >
-        <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-</Box>
-
-      <Box style={{flexGrow:3 , gap:6}} >
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('Mute')}
-      >
-        <MdVolumeOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('VolumeDown')}
-      >
-        <MdVolumeDown style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('VolumeUp')}
-      >
-        <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-</Box>
-
-      <Box style={{flexGrow: 1}} >
-
-      <Button
-       
-             color="#4f4b4f"
-          activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('AllApplications')}
-      >
-        <MdApps style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
-</Box> 
-
+        <Box style={{ flexDirection: 'row', gap: 2 }}>
+          <Btn onClick={() => run('Mute')} radiusLeft>
+            <MdVolumeOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
+          </Btn>
+          <Btn onClick={() => run('VolumeDown')}>
+            <MdVolumeDown style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
+          </Btn>
+          <Btn onClick={() => run('VolumeUp')} radiusRight>
+            <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
+          </Btn>
+        </Box>
+      </Box>
     </Box>
   );
 }

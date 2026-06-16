@@ -1,26 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { execFile, execFileSync } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
-import { MdBrightness4, MdBrightness6, MdBrightness7 } from 'react-icons/md';
-import { BackButton } from '../components/BackButton';
+import { MdBrightness4, MdBrightness6, MdBrightness7, MdKeyboard } from 'react-icons/md';
 import { useLayers } from './index';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function readBrightness(): number {
+const DISPLAY_DEVICE = 'gmux_backlight';
+const KEYBOARD_DEVICE = 'apple::kbd_backlight';
+const AUTO_HIDE_MS = 5000;
+
+function readBrightness(device: string): number {
   try {
-    const cur = parseInt(execFileSync('brightnessctl', ['get'], { encoding: 'utf8' }).trim());
-    const max = parseInt(execFileSync('brightnessctl', ['max'], { encoding: 'utf8' }).trim());
+    const cur = parseInt(execFileSync('brightnessctl', ['--device', device, 'get'], { encoding: 'utf8' }).trim());
+    const max = parseInt(execFileSync('brightnessctl', ['--device', device, 'max'], { encoding: 'utf8' }).trim());
     return max > 0 ? Math.min(1, cur / max) : 0.5;
   } catch { return 0.5; }
 }
 
-function applyBrightness(pct: number): void {
-  execFile('brightnessctl', ['set', `${Math.max(1, Math.round(pct * 100))}%`], () => {});
-}
-
-function Sep() {
-  return <Box style={{ width: 1, height: 28, backgroundColor: '#1e293b' }} />;
+function applyBrightness(device: string, pct: number, minimumPct: number): void {
+  const value = Math.max(minimumPct, Math.round(pct * 100));
+  execFile('brightnessctl', ['--device', device, 'set', `${value}%`], () => {});
 }
 
 // ── Track ─────────────────────────────────────────────────────────────────────
@@ -48,12 +48,77 @@ function Track({ fill, color }: { fill: number; color: string }) {
   );
 }
 
+interface BrightnessControlProps {
+  label: string;
+  value: number;
+  color: string;
+  icon: React.ReactNode;
+  dragRef: React.MutableRefObject<{ x: number; v: number } | null>;
+  onChange: (value: number) => void;
+  onInteractionStart: () => void;
+  onInteractionEnd: () => void;
+}
+
+function BrightnessControl({
+  label,
+  value,
+  color,
+  icon,
+  dragRef,
+  onChange,
+  onInteractionStart,
+  onInteractionEnd,
+}: BrightnessControlProps) {
+  function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
+
+  function onMove(x: number) {
+    if (!dragRef.current) return;
+    const next = clamp(dragRef.current.v + (x - dragRef.current.x) / TRACK_W);
+    onChange(next);
+    dragRef.current = { x, v: next };
+  }
+
+  return (
+    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Box style={{ width: 92, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        {icon}
+        <Text style={{ fontSize: 13, color: '#64748b', fontFamily: 'IosevkaTerm Nerd Font' }}>{label}</Text>
+      </Box>
+
+      <Button
+        width={TRACK_W}
+        height={60}
+        color="transparent"
+        activeColor="transparent"
+        style={{ justifyContent: 'center', alignItems: 'center' }}
+        onTouchStart={(x) => {
+          onInteractionStart();
+          dragRef.current = { x, v: value };
+        }}
+        onTouchMove={onMove}
+        onTouchEnd={() => {
+          dragRef.current = null;
+          onInteractionEnd();
+        }}
+      >
+        <Track fill={value} color={color} />
+      </Button>
+
+      <Text style={{ width: 52, fontSize: 18, color: '#94a3b8', fontFamily: 'IosevkaTerm Nerd Font' }}>
+        {`${Math.round(value * 100)}%`}
+      </Text>
+    </Box>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function BrightnessSliderLayer({ width, height }: { width: number; height: number }) {
   const { go } = useLayers();
-  const [bright, setBright] = useState<number>(() => readBrightness());
-  const drag = useRef<{ x: number; v: number } | null>(null);
+  const [displayBrightness, setDisplayBrightness] = useState(() => readBrightness(DISPLAY_DEVICE));
+  const [keyboardBrightness, setKeyboardBrightness] = useState(() => readBrightness(KEYBOARD_DEVICE));
+  const displayDrag = useRef<{ x: number; v: number } | null>(null);
+  const keyboardDrag = useRef<{ x: number; v: number } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function clearHideTimer() {
@@ -66,18 +131,22 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
   function scheduleHide() {
     clearHideTimer();
     hideTimer.current = setTimeout(() => {
-      drag.current = null;
+      displayDrag.current = null;
+      keyboardDrag.current = null;
       go('splitted', 'slide-down');
-    }, 5000);
+    }, AUTO_HIDE_MS);
   }
 
-  // Sync when brightness changes externally (keyboard shortcut, another process).
-  // sysfs mtime never updates so we compare the actual value on an interval.
   useEffect(() => {
+    scheduleHide();
     const id = setInterval(() => {
-      if (!drag.current) {
-        const current = readBrightness();
-        setBright(prev => Math.abs(prev - current) > 0.01 ? current : prev);
+      if (!displayDrag.current) {
+        const current = readBrightness(DISPLAY_DEVICE);
+        setDisplayBrightness(previous => Math.abs(previous - current) > 0.01 ? current : previous);
+      }
+      if (!keyboardDrag.current) {
+        const current = readBrightness(KEYBOARD_DEVICE);
+        setKeyboardBrightness(previous => Math.abs(previous - current) > 0.01 ? current : previous);
       }
     }, 500);
     return () => {
@@ -86,48 +155,46 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
     };
   }, []);
 
-  function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
-  function update(v: number) { setBright(v); applyBrightness(v); }
-
-  function onMove(x: number) {
-    if (!drag.current) return;
-    const nv = clamp(drag.current.v + (x - drag.current.x) / TRACK_W);
-    update(nv);
-    drag.current = { x, v: nv };
+  function updateDisplay(value: number) {
+    setDisplayBrightness(value);
+    applyBrightness(DISPLAY_DEVICE, value, 1);
   }
 
-  const BrightIcon = bright < 0.3 ? MdBrightness4 : bright < 0.7 ? MdBrightness6 : MdBrightness7;
+  function updateKeyboard(value: number) {
+    setKeyboardBrightness(value);
+    applyBrightness(KEYBOARD_DEVICE, value, 0);
+  }
+
+  const DisplayIcon = displayBrightness < 0.3
+    ? MdBrightness4
+    : displayBrightness < 0.7
+      ? MdBrightness6
+      : MdBrightness7;
 
   return (
-    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-      <BackButton to="splitted" animation="slide-down" />
-      <Sep />
-
-      <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <BrightIcon style={{ width: 28, height: 28 }} fill="#fbbf24" stroke="none" />
-        <Text style={{ fontSize: 13, color: '#64748b', fontFamily: 'IosevkaTerm Nerd Font' }}>BRIGHT</Text>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+      <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+        <BrightnessControl
+          label="KEYS"
+          value={keyboardBrightness}
+          color="#7dd3fc"
+          icon={<MdKeyboard style={{ width: 28, height: 28 }} fill="#7dd3fc" stroke="none" />}
+          dragRef={keyboardDrag}
+          onChange={updateKeyboard}
+          onInteractionStart={clearHideTimer}
+          onInteractionEnd={scheduleHide}
+        />
+        <BrightnessControl
+          label="DISPLAY"
+          value={displayBrightness}
+          color="#fbbf24"
+          icon={<DisplayIcon style={{ width: 28, height: 28 }} fill="#fbbf24" stroke="none" />}
+          dragRef={displayDrag}
+          onChange={updateDisplay}
+          onInteractionStart={clearHideTimer}
+          onInteractionEnd={scheduleHide}
+        />
       </Box>
-
-      <Button
-        width={TRACK_W} height={height}
-        color="transparent" activeColor="transparent"
-        style={{ justifyContent: 'center', alignItems: 'center' }}
-        onTouchStart={(x) => {
-          clearHideTimer();
-          drag.current = { x, v: bright };
-        }}
-        onTouchMove={onMove}
-        onTouchEnd={() => {
-          drag.current = null;
-          scheduleHide();
-        }}
-      >
-        <Track fill={bright} color="#fbbf24" />
-      </Button>
-
-      <Text style={{ width: 52, fontSize: 18, color: '#94a3b8', fontFamily: 'IosevkaTerm Nerd Font' }}>
-        {`${Math.round(bright * 100)}%`}
-      </Text>
     </Box>
   );
 }

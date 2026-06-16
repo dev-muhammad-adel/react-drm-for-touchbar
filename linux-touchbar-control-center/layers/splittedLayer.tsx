@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { execFile } from 'child_process';
-import { Box, Text, Button } from 'react-drm';
+import { Box, Button, KEY } from 'react-drm';
 import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
-import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSportsEsports } from 'react-icons/md';
+import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdMicOff, MdSearch } from 'react-icons/md';
 import { LayerHost, useLayers } from '.';
 import type { Layer, LayerHostHandle } from '.';
 import { useActiveWindow } from '../hooks/useActiveWindow';
@@ -11,6 +11,7 @@ import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
 import { VlcPanel } from './leftsideLayers/VlcPanel';
 import { DolphinPanel } from './leftsideLayers/DolphinPanel';
+import { keys } from '../services/keyInjector';
 
 
 // ── Media control ─────────────────────────────────────────────────────────────
@@ -54,20 +55,26 @@ const SPLITTED_LEFT_LAYERS: Layer[] = [
   { name: 'dolphin', component: DolphinPanel,      animation: 'fade' },
 ];
 
-const MEDIA_BTNS: { icon: React.ReactElement; cmd?: MediaCmd; width: number; color: string; activeColor: string }[] = [
-  { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40 ,color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130 , color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130 , color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130 , color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, cmd: 'play-pause', width: 100 , color:"#4f4b4f" , activeColor:"#666666"},
+const MEDIA_BTNS: {
+  icon: React.ReactElement;
+  width: number;
+  color: string;
+  activeColor: string;
+  onClick: () => void;
+}[] = [
+  { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40, color: '#4f4b4f', activeColor: '#666666', onClick: () => {} },
+  { icon: <FaLinux style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130, color: '#4f4b4f', activeColor: '#666666', onClick: () => {} },
+  { icon: <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130, color: '#4f4b4f', activeColor: '#666666', onClick: () => {} },
+  { icon: <MdWbSunny style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130, color: '#4f4b4f', activeColor: '#666666', onClick: () => {} },
+  { icon: <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130, color: '#4f4b4f', activeColor: '#666666', onClick: () => {} },
+  { icon: <MdMicOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130, color: '#4f4b4f', activeColor: '#666666', onClick: () => keys.pressKey(KEY.MICMUTE) },
+  { icon: <MdSearch style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130, color: '#4f4b4f', activeColor: '#666666', onClick: () => keys.pressKey(KEY.SEARCH) },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// Right panel width: 5 buttons (40+130+130+130+100) + 4×2px gaps
+// Right panel width: sum(button widths) + 2px gaps between buttons
 const RIGHT_W =MEDIA_BTNS.reduce((sum, b) => sum + b.width, 0) + (MEDIA_BTNS.length - 1) * 2;
-const NAV_W   = 28;
-
 export function SplittedLayer({ width, height }: { width: number; height: number }) {
   const { go } = useLayers(); // outer context — navigates top-level layers
   const leftRef = useRef<LayerHostHandle>(null);
@@ -97,7 +104,7 @@ export function SplittedLayer({ width, height }: { width: number; height: number
       >
         {MEDIA_BTNS.map((btn, idx) => (
           <Button
-            key={`${btn.cmd}-${idx}`}
+            key={idx}
             width={btn.width}
                color={ btn.color}
           activeColor={ btn.activeColor}
@@ -107,7 +114,8 @@ export function SplittedLayer({ width, height }: { width: number; height: number
               idx === 1 ? () => go('systembar', 'slide-up') :
               idx === 2 ? () => go('audio-slider', 'slide-up') :
               idx === 3 ? () => go('brightness-slider', 'slide-up') :
-              () => playerctl(btn.cmd as MediaCmd)
+              idx === 4 ? () => playerctl('play-pause') :
+              btn.onClick
             }
             style={{
               alignItems: 'center',

@@ -121,7 +121,7 @@ export const CAVA = {
   // framerate drives active-audio CPU almost linearly (each frame = a full
   // commit+blit while bars move). 12 is a good CPU/smoothness balance; drop to
   // 10 for even less CPU, raise toward 30 for smoother bars.
-  bars: 32,
+  bars: 24,
   framerate: 24,
 } as const;
 
