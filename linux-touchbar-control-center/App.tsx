@@ -17,7 +17,6 @@ import { BrightnessSliderLayer } from './layers/brightnessSlider';
 import { GamesLayer } from './layers/gamesLayer';
 import { DockLayer } from './layers/dock';
 import { DinoLayer } from './layers/dino';
-import { PianoLayer } from './layers/piano';
 import { PongLayer } from './layers/pong';
 import { useBootSequence } from './hooks/useBootSequence';
 import { usePomodoroEngine } from './hooks/usePomodoro';
@@ -66,10 +65,6 @@ export function App({ width, height, keyboard }: { width: number; height: number
             { name: 'brightness-slider', component: BrightnessSliderLayer,   leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
             { name: 'fnkeys',            component: FnKeys,                  leaving: { outAnim: 'fade', duration: 0 }, entering: { inAnim: 'fade', duration: 0 } },
             { name: 'systembar',         component: SystemBar,               leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
-            { name: 'games',             component: GamesLayer,              leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
-            { name: 'dino',              component: DinoLayer,               leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
-            { name: 'piano',             component: PianoLayer,              leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
-            { name: 'pong',              component: PongLayer,               leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
           ]}
             width={layerW}
             height={h}

@@ -8,7 +8,8 @@ import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button, LayoutContext, NativeDrawContext, DisplaySizeContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
-import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeviceHub, MdReplay, MdRouter, MdWhatshot, MdWifi } from 'react-icons/md';
+import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeveloperBoard, MdDeviceHub, MdMemory, MdReplay, MdRouter, MdThermostat, MdWhatshot, MdWifi } from 'react-icons/md';
+import type { IconType } from 'react-icons';
 import { CAVA, SYSTEMBAR } from '../config';
 import { useLayers } from './index';
 import { BackButton } from '../components/BackButton';
@@ -198,86 +199,45 @@ function Bar({ fill, color, width = 60 }: { fill: number; color: string; width?:
   );
 }
 
+// Rolling-history length used by the net sparkline.
+const HIST_LEN = 24;
+
+// Push v onto a fixed-length ring (drops the oldest). Pure — returns a new array.
+function pushHist(hist: number[], v: number): number[] {
+  return [...hist.slice(1), v];
+}
+
 // ── Modules ───────────────────────────────────────────────────────────────────
 
-function CpuMod({ cores }: { cores: number[] }) {
-  const avg   = Math.round(cores.reduce((s, v) => s + v, 0) / cores.length);
-  const color = loadColor(avg);
-  const bars = [
-    Math.max(3, Math.round((cores[0] ?? avg) * 0.18)),
-    Math.max(3, Math.round((cores[1] ?? avg) * 0.18)),
-    Math.max(3, Math.round((cores[2] ?? avg) * 0.18)),
-    Math.max(3, Math.round((cores[3] ?? avg) * 0.18)),
-  ];
-
+// Clean, uniform stat tile: colored icon + value. Left-aligned + fixed width so
+// CPU/MEM/TEMP line up into matching columns. The icon stands in for the label.
+function StatTile({ icon: Icon, value, color }: {
+  icon: IconType; value: string; color: string;
+}) {
   return (
-    <Mod width={200}>
-      <Box style={{ width: 26, height: 24, flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
-        <Box style={{ width: 5, height: bars[0], backgroundColor: color }} />
-        <Box style={{ width: 5, height: bars[1], backgroundColor: color, opacity: 0.85 }} />
-        <Box style={{ width: 5, height: bars[2], backgroundColor: color, opacity: 0.7 }} />
-        <Box style={{ width: 5, height: bars[3], backgroundColor: color, opacity: 0.55 }} />
-      </Box>
-      <Label>CPU</Label>
-      <Val color={color}>{`${avg}%`}</Val>
-    </Mod>
+    <Box style={{
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      paddingHorizontal: 20, alignSelf: 'stretch', width: 130,
+    }}>
+      <Icon style={{ width: 26, height: 26 }} fill={color} stroke="none" />
+      <Text style={{ color, fontSize: 22, fontFamily: 'FiraCode Nerd Font Mono' }}>{value}</Text>
+    </Box>
   );
 }
 
-function MemMod({ used, total }: { used: number; total: number }) {
-  const pct   = total > 0 ? used / total : 0;
-  const pctN  = Math.round(pct * 100);
-  const color = loadColor(pctN);
-  const fill = Math.max(0, Math.min(1, pct));
+function CpuMod({ cores }: { cores: number[] }) {
+  const avg = Math.round(cores.reduce((s, v) => s + v, 0) / cores.length);
+  return <StatTile icon={MdDeveloperBoard} value={`${avg}%`} color={loadColor(avg)} />;
+}
 
-  return (
-    <Mod width={220}>
-      <Box style={{ width: 36, height: 24, justifyContent: 'center' }}>
-        <Box style={{ width: 32, height: 16, backgroundColor: '#111827' }}>
-          <Box style={{ width: Math.round(32 * fill), height: 16, backgroundColor: color }} />
-        </Box>
-      </Box>
-      <Label>MEM</Label>
-      <Val color={color}>{`${pctN}%`}</Val>
-    </Mod>
-  );
+function MemMod({ used, total }: { used: number; total: number }) {
+  const pctN = total > 0 ? Math.round((used / total) * 100) : 0;
+  return <StatTile icon={MdMemory} value={`${pctN}%`} color={loadColor(pctN)} />;
 }
 
 function TempMod({ temp }: { temp: number | null }) {
   const color = temp !== null ? tempColor(temp) : '#475569';
-  const fill = temp !== null ? Math.max(0, Math.min(1, (temp - 30) / 70)) : 0;
-  const r = 10;
-  const circ = 2 * Math.PI * r;
-  const dash = Math.round(circ * fill);
-  const status = temp === null ? 'SENSOR' : temp < 65 ? 'COOL' : temp < 82 ? 'WARM' : 'HOT';
-
-  return (
-    <Mod width={235}>
-      <Box style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <svg width={30} height={30} viewBox="0 0 30 30">
-          <circle cx={15} cy={15} r={r} fill="none" stroke="#1f2937" strokeWidth={3} />
-          <circle
-            cx={15}
-            cy={15}
-            r={r}
-            fill="none"
-            stroke={color}
-            strokeWidth={3}
-            strokeDasharray={`${dash} ${Math.round(circ)}`}
-            strokeLinecap="round"
-            transform="rotate(-90 15 15)"
-          />
-          <circle cx={15} cy={15} r={6} fill="#0f172a" />
-        </svg>
-        <MdWhatshot style={{ width: 11, height: 11, marginTop: -20 }} fill={color} stroke="none" />
-      </Box>
-      <Box style={{ gap: 0 }}>
-        <Label>TEMP</Label>
-        <Text style={{ color, fontSize: 12, fontFamily: 'FiraCode Nerd Font Mono' }}>{status}</Text>
-      </Box>
-      <Text style={{ color, fontSize: 20, fontFamily: 'FiraCode Nerd Font Mono' }}>{temp !== null ? `${temp}°C` : 'N/A'}</Text>
-    </Mod>
-  );
+  return <StatTile icon={MdThermostat} value={temp !== null ? `${temp}°C` : 'N/A'} color={color} />;
 }
 
 function NetMod({ rx, tx, iface, rxHist, txHist }: { rx: number; tx: number; iface: string; rxHist: number[]; txHist: number[] }) {
@@ -504,8 +464,8 @@ const BAR_COLORS = Array.from({ length: CAVA_BARS }, (_, i) => {
   return `#${hex(r)}${hex(g)}${hex(b)}`;
 });
 
-const BAR_W = 7;
-const GAP   = 2;
+const BAR_W = 10;
+const GAP   = 3;
 const hexRgb = (hex: string): [number, number, number] => {
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
@@ -651,24 +611,25 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
 
   const [s, setS] = useState<State>({
     cores: new Array(NUM_CORES).fill(0), mem: readMem(), temp: readTemp(),
-    netRx: 0, netTx: 0, iface: '', rxHist: new Array(20).fill(0), txHist: new Array(20).fill(0),
+    netRx: 0, netTx: 0, iface: '',
+    rxHist: new Array(HIST_LEN).fill(0), txHist: new Array(HIST_LEN).fill(0),
     uptime: readUptime(), bat: INIT_BAT, time: new Date(),
   });
 
   useEffect(() => {
     let prevCpu = tickCpu(), prevNet = tickNet(), prevTime = Date.now();
-    // Net history lives here (not in NetMod via effects) so one poll = one
-    // commit. Child effects pushing history would add a second render+blit per
-    // tick, which showed up as a hitch in the audio bars on the stats timer.
-    let rxHist = new Array(20).fill(0), txHist = new Array(20).fill(0);
+    // All rolling histories live here (not in child effects) so one poll = one
+    // commit. A child effect pushing history adds a second render+blit per tick,
+    // which showed up as a hitch in the audio bars on the stats timer.
+    let rxHist = new Array(HIST_LEN).fill(0), txHist = new Array(HIST_LEN).fill(0);
     const id = setInterval(() => {
       try {
         const nextCpu = tickCpu(), nextNet = tickNet(), now = Date.now();
         const dt = Math.max(0.2, (now - prevTime) / 1000);
         const netRx = Math.max(0, Math.round((nextNet.rx - prevNet.rx) / dt));
         const netTx = Math.max(0, Math.round((nextNet.tx - prevNet.tx) / dt));
-        rxHist = [...rxHist.slice(1), netRx];
-        txHist = [...txHist.slice(1), netTx];
+        rxHist = pushHist(rxHist, netRx);
+        txHist = pushHist(txHist, netTx);
         setS({
           cores: calcUsage(prevCpu, nextCpu), mem: readMem(), temp: readTemp(),
           netRx, netTx, iface: nextNet.iface, rxHist, txHist,

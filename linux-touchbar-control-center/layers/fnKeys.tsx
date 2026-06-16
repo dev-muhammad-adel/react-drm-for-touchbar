@@ -24,7 +24,7 @@ export function FnKeys({ width, height }: { width: number; height: number }) {
   const showEsc = displayWidth >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'fn';
 
   return (
-    <Box style={{ flex: 1, alignItems: 'stretch', gap: 6, paddingHorizontal: 8 }}>
+    <Box style={{ flex: 1, alignItems: 'stretch', gap: 6, paddingHorizontal: 8 , backgroundColor: '#000' }}>
 
       {/* <BackButton /> */}
 

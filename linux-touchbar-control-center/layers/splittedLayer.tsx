@@ -60,13 +60,13 @@ const MEDIA_BTNS: { icon: React.ReactElement; cmd?: MediaCmd  }[] = [
   { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,  },
   { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,  },
   { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, cmd: 'play-pause'       },
-  { icon: <MdSportsEsports     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#4ade80" stroke="none" />    },
+  // { icon: <MdSportsEsports     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#4ade80" stroke="none" />    },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// Right panel width: 6 buttons (25+130+130+130+130+100) + 5×2px gaps
-const RIGHT_W = 655 + 10;
+// Right panel width: 6 buttons (40+130+130+130+100) + 5×2px gaps
+const RIGHT_W = 530 + 10;
 const NAV_W   = 28;
 
 export function SplittedLayer({ width, height }: { width: number; height: number }) {
@@ -134,7 +134,7 @@ export function SplittedLayer({ width, height }: { width: number; height: number
         {MEDIA_BTNS.map((btn, idx) => (
           <Button
             key={`${btn.cmd}-${idx}`}
-            width={idx===0?35:idx===MEDIA_BTNS.length - 1 ? 100 : 130}
+            width={idx===0?40:idx===MEDIA_BTNS.length - 1 ? 100 : 130}
                color={ idx === MEDIA_BTNS.length - 1 ? "#1a2e1a":"#4f4b4f"}
           activeColor={ idx === MEDIA_BTNS.length - 1 ? "#2a4a2a":"#666666"}
 
