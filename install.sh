@@ -630,7 +630,7 @@ install_user_service() {
   service_dir="$HOME/.config/systemd/user"
   service_file="$service_dir/react-drm.service"
   workdir_q=$(systemd_escape_path "$REPO_ROOT/linux-touchbar-control-center")
-  start_q=$(systemd_escape_path "$REPO_ROOT/node_modules/.bin/tsx")
+  start_q=$(systemd_escape_path "$REPO_ROOT/linux-touchbar-control-center/dist/index.js")
   detach_q=$(systemd_escape_path "$REPO_ROOT/system/react-drm-tb-detach")
 
   info "Installing systemd user service"
@@ -638,7 +638,7 @@ install_user_service() {
   temporary_file=$(mktemp --suffix=.service "$service_dir/react-drm-install.XXXXXX")
   if ! awk -v workdir="$workdir_q" -v start="$start_q" -v detach="$detach_q" '
     /^WorkingDirectory=/ { print "WorkingDirectory=" workdir; next }
-    /^ExecStart=/ { print "ExecStart=" start " index.tsx"; next }
+    /^ExecStart=/ { print "ExecStart=node " start; next }
     /^ExecStopPost=/ { print "ExecStopPost=-" detach; next }
     { print }
   ' "$REPO_ROOT/system/react-drm.service" >"$temporary_file"; then
