@@ -23,6 +23,7 @@ export function useBrowserKeys(windowClass: string) {
     back:     combo(windowClass, km.back),
     forward:  combo(windowClass, km.forward),
     reload:   combo(windowClass, km.reload),
+    home:     combo(windowClass, km.home),
     newTab:   combo(windowClass, km.newTab),
     closeTab: combo(windowClass, km.closeTab),
     nextTab:  combo(windowClass, km.nextTab),

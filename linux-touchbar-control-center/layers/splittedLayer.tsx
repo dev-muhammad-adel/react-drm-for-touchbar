@@ -7,7 +7,7 @@ import { LayerHost, useLayers } from '.';
 import type { Layer, LayerHostHandle } from '.';
 import { useActiveWindow } from '../hooks/useActiveWindow';
 import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
-import { BrowserPanel } from './leftsideLayers/FirefoxPanel';
+import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
 import { VlcPanel } from './leftsideLayers/VlcPanel';
 import { DolphinPanel } from './leftsideLayers/DolphinPanel';
