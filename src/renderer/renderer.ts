@@ -506,7 +506,14 @@ export function render(
 
   
   const nativeDraw: NativeDraw = {
-    drawBars: (o) => { if (!suspended && state !== 'off') display.drawBars(o); },
+
+    drawBars: (o) => {
+      if (suspended || state === 'off') return;
+ 
+      if (performance.now() - lastFlushAt < MIN_FLUSH_MS) return;
+      display.drawBars({ ...o, x0: o.x0 + shiftX, baseY: o.baseY + shiftY });
+      lastFlushAt = performance.now();
+    },
   };
 
   function renderCurrent(force = false): void {
