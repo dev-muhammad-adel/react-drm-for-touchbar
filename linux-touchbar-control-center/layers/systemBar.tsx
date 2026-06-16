@@ -642,40 +642,28 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
   }, []);
 
   return (
-    <Box style={{ flex: 1 , gap:10  }}>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
 
-      {/* Back button */}
-     
-     <BackButton animation="slide-down" />
+      <BackButton animation="slide-down" />
       <Sep />
 
       <PomodoroSection />
 
-      <Sep />
+      <Box style={{ flex: 1 }} />
 
-      <AudioVisSection />
-
-      <Sep />
-
-      {/* Stats modules */}
-      <Box style={{ }}>
-
-      <CpuMod  cores={s.cores} />
-      <Sep />
-      <MemMod  used={s.mem.used} total={s.mem.total} />
-      <Sep />
-      <TempMod temp={s.temp} />
-      <Sep />
-      <NetMod  rx={s.netRx} tx={s.netTx} iface={s.iface} rxHist={s.rxHist} txHist={s.txHist} />
-      {/* <Sep /> */}
-      {/* <HostMod uptime={s.uptime} /> */}
-      {HAS_BAT && <Sep />}
-      {HAS_BAT && <BatMod bat={s.bat} />}
-
-       <Sep /> 
-      <ClockMod time={s.time} />
+      <Box style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
+        <CpuMod  cores={s.cores} />
+        <Sep />
+        <MemMod  used={s.mem.used} total={s.mem.total} />
+        <Sep />
+        <TempMod temp={s.temp} />
+        <Sep />
+        <NetMod  rx={s.netRx} tx={s.netTx} iface={s.iface} rxHist={s.rxHist} txHist={s.txHist} />
+        {HAS_BAT && <Sep />}
+        {HAS_BAT && <BatMod bat={s.bat} />}
+        <Sep />
+        <ClockMod time={s.time} />
       </Box>
-
     </Box>
   );
 }
