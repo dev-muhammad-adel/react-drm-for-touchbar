@@ -6,6 +6,9 @@
 # KillSignal: the app treats SIGINT as its shutdown signal and ignores SIGTERM.
 # TimeoutStopSec covers the detach helper's ETIMEDOUT retries (the first
 # SET_CONFIG after a host config switch routinely times out and is retried).
+# Runs the COMPILED app (node dist/index.js), not the TypeScript sources — build
+# once before enabling:  ( cd ~/react-drm/linux-touchbar-control-center && npm run build )
+# Hot-reload is dev-only and stays off here (NODE_ENV=production).
 # Install: install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
 #          systemctl --user daemon-reload && systemctl --user enable react-drm
 [Unit]
@@ -14,8 +17,9 @@ After=graphical-session.target
 PartOf=graphical-session.target
 
 [Service]
+Environment=NODE_ENV=production
 WorkingDirectory=%h/react-drm/linux-touchbar-control-center
-ExecStart=%h/react-drm/node_modules/.bin/tsx index.tsx
+ExecStart=node %h/react-drm/linux-touchbar-control-center/dist/index.js
 ExecStopPost=-%h/react-drm/system/react-drm-tb-detach
 KillSignal=SIGINT
 SuccessExitStatus=130 137 SIGINT

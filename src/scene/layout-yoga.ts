@@ -28,9 +28,17 @@ type YogaNode = ReturnType<Yoga['Node']['create']>;
 let Y: Yoga | null = null;
 let yogaConfig: ReturnType<Yoga['Config']['create']> | null = null;
 
+// TypeScript with module:CommonJS downlevels a plain `import()` into
+// `require()`, which throws ERR_REQUIRE_ASYNC_MODULE on yoga-layout (it's ESM
+// with top-level await). Hiding the import behind `new Function` keeps it a
+// real, native dynamic import at runtime in both the tsx dev path and the
+// compiled CJS build.
+const importYoga = new Function('return import("yoga-layout")') as
+  () => Promise<typeof import('yoga-layout')>;
+
 export async function loadYogaEngine(): Promise<void> {
   if (!Y) {
-    Y = (await import('yoga-layout')).default;
+    Y = (await importYoga()).default;
     // Keep fractional positions; disable yoga's pixel-grid
     // rounding so both engines emit identical coordinates.
     yogaConfig = Y.Config.create();

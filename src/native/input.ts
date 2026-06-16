@@ -1,18 +1,13 @@
 import fs from 'fs';
-import path from 'path';
+import { loadAddon } from './load-addon';
 
-function loadNative(): {
+interface InputAddon {
   TouchReader: new (devicePath: string) => NativeTouchReader;
   KeyInjector: new () => NativeKeyInjector;
-} {
-  const candidates = [
-    path.join(__dirname, '../../build/Release/drm_backend.node'),
-    path.join(__dirname, '../../build/Debug/drm_backend.node'),
-  ];
-  for (const p of candidates) {
-    try { return require(p); } catch (_) { /* try next */ }
-  }
-  throw new Error('react-drm: native addon not found — run npm run build:native');
+}
+
+function loadNative(): InputAddon {
+  return loadAddon() as InputAddon;
 }
 
 interface NativeTouchReader {

@@ -1,5 +1,5 @@
 import fs from 'fs';
-import path from 'path';
+import { loadAddon } from './load-addon';
 import type { DrawCommand } from '../scene/serialize';
 
 function resolveCardPath(devicePath?: string): string {
@@ -27,21 +27,7 @@ interface NativeModule {
 
 // Lazy-load the native addon — fails with a clear message if not built yet.
 function loadNative(): NativeModule {
-  const candidates = [
-    path.join(__dirname, '../../build/Release/drm_backend.node'),
-    path.join(__dirname, '../../build/Debug/drm_backend.node'),
-  ];
-  for (const p of candidates) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      return require(p);
-    } catch (_) { /* try next */ }
-  }
-  throw new Error(
-    'react-drm: native addon not found.\n' +
-    'Run `npm run build:native` first.\n' +
-    'You may need libdrm-dev and libcairo2-dev installed.'
-  );
+  return loadAddon() as NativeModule;
 }
 
 export interface DamageRect { x: number; y: number; w: number; h: number; }

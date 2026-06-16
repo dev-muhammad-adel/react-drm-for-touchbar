@@ -75,7 +75,16 @@ function watchDir(dir: string, onChange: () => void): () => void {
 export function renderHot(
   appModulePath: string,
   display: DrmDisplay,
-  options?: RenderOptions & { appProps?: Record<string, unknown> },
+  options?: RenderOptions & {
+    appProps?: Record<string, unknown>;
+    /**
+     * Watch the source tree and live-swap the React tree on change.
+     * Defaults to dev only (off when NODE_ENV === 'production'). In production
+     * the app runs from compiled JS, so there is nothing to recompile/watch —
+     * renderHot just renders once.
+     */
+    watch?: boolean;
+  },
 ): RenderResult {
   function load(): React.ReactNode {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -92,13 +101,18 @@ export function renderHot(
   let lastGood: React.ReactNode = initialEl;
 
   // React's concurrent scheduler can surface render errors as uncaught exceptions
-  // (after updateContainer returns). Survive them so hot-reload keeps working.
+  // (after updateContainer returns). Survive them so the process keeps running.
   const uncaughtHandler = (err: unknown) => {
-    console.error('[hot-reload] uncaught exception (process survived):', err);
+    console.error('[react-drm] uncaught exception (process survived):', err);
     try { result.update(lastGood); } catch { /* best-effort restore */ }
   };
   process.on('uncaughtException', uncaughtHandler);
   process.on('unhandledRejection', uncaughtHandler);
+
+  // Hot-reload is a development-only convenience. In production the app runs
+  // from compiled JS (`node dist/index.js`), so there is nothing to watch.
+  const watch = options?.watch ?? process.env.NODE_ENV !== 'production';
+  if (!watch) return result;
 
   const dir = findWatchRoot(path.dirname(appModulePath));
   console.log(`[hot-reload] watching ${dir}`);

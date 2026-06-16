@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx index.tsx ",
-    "dev:profile": "DRM_DAMAGE_LOG=1 REACT_DRM_PROFILE=1  tsx index.tsx ",
-    "start": "npm run build && tsx ./dist/index.js",
-    "build": "tsc -p tsconfig.json"
+    "dev": "tsx --conditions=development index.tsx",
+    "dev:profile": "DRM_DAMAGE_LOG=1 REACT_DRM_PROFILE=1 tsx --conditions=development index.tsx",
+    "build": "npm --prefix .. run build && tsc -p tsconfig.json",
+    "start": "NODE_ENV=production node ./dist/index.js"
   },
   "dependencies": {
     "@benmalka/foxdriver": "^0.6.0",

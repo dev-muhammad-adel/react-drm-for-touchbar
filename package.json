@@ -3,8 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "description": "React renderer targeting Linux DRM/KMS via libdrm + Cairo",
-  "main": "./src/index.ts",
+  "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "workspaces": [
     "linux-touchbar-control-center"
   ],

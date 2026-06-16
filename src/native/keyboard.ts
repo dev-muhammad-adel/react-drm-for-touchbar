@@ -1,20 +1,15 @@
-import path from 'path';
+import { loadAddon } from './load-addon';
 
-function loadNative(): {
+interface KeyboardAddon {
   KeyboardReader: new (devicePath: string) => NativeKeyboardReader;
   findKeyboardDevice:  () => string;
   findKeyboardDevices: () => string[];
   findPointerDevices:  () => string[];
   findLidDevice:       () => string;
-} {
-  const candidates = [
-    path.join(__dirname, '../../build/Release/drm_backend.node'),
-    path.join(__dirname, '../../build/Debug/drm_backend.node'),
-  ];
-  for (const p of candidates) {
-    try { return require(p); } catch (_) { /* try next */ }
-  }
-  throw new Error('react-drm: native addon not found — run npm run build:native');
+}
+
+function loadNative(): KeyboardAddon {
+  return loadAddon() as KeyboardAddon;
 }
 
 interface NativeKeyboardReader {

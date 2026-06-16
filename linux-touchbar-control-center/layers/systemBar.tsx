@@ -532,7 +532,7 @@ function AudioVisSection() {
   const [, force]  = useState(0);
 
   useEffect(() => {
-    let partial = Buffer.alloc(0);
+    let partial: Buffer = Buffer.alloc(0);
     let prev = new Array(CAVA_BARS).fill(2);
     const proc = spawn('cava', ['-p', CAVA_CFG]);
     proc.stdout?.on('data', (chunk: Buffer) => {
