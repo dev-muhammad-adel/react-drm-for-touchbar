@@ -18,7 +18,7 @@ export const DISPLAY = {
   pixelShiftSecs:   300,  
   activeBrightness: 2,
   flushFps:         30,
-  partialFlush:     true,
+  partialFlush:     false, // true = not ready yet
 } as const;
 
 // ─── On-screen Esc key ───────────────────────────────────────────────────────
