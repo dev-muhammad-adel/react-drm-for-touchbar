@@ -75,14 +75,22 @@ export const ACTIVE_WINDOW = {
 // ─── Screenshots ────────────────────────────────────────────────────────────
 
 // The app usually runs under sudo — save into the real user's home, not /root.
+import { execSync } from 'child_process';
+
 const home = process.env.SUDO_USER ? `/home/${process.env.SUDO_USER}` : (process.env.HOME ?? '.');
 
+// Use nodejs to get the path to the images folder independent from the user's language.
+let picturesDir: string;
+try {
+  const cmd = process.env.SUDO_USER ? `sudo -u ${process.env.SUDO_USER} xdg-user-dir PICTURES` : 'xdg-user-dir PICTURES';
+  picturesDir = execSync(cmd).toString().trim();
+} catch {
+  picturesDir = `${home}/Pictures`;
+}
+
 export const SCREENSHOT = {
-  // Physical keys held together to save a touchbar screenshot. F-keys won't
-  // work here — touch bar Macs have no physical F-row, and the touchbar's own
-  // injected keys bypass the keyboard reader. Names from KEY_NAMES in react-drm.
   keys: ['ctrl', 'alt', 's'] as KeyId[],
-  dir:  `${home}/Pictures/touchbar`,  // created on first use
+  dir:  `${picturesDir}/touchbar`,
 };
 
 // ─── Dolphin panel ──────────────────────────────────────────────────────────
@@ -140,7 +148,7 @@ export const DEFAULT_BROWSER_KEYS: BrowserKeymap = {
   back:     [KEY.LEFTALT,  KEY.LEFT],
   forward:  [KEY.LEFTALT,  KEY.RIGHT],
   reload:   [KEY.LEFTCTRL, KEY.KEY_R],
-  home:     [KEY.LEFTALT,  KEY.HOME],
+  home:     [KEY.LEFTALT,  102],
   newTab:   [KEY.LEFTCTRL, KEY.KEY_T],
   closeTab: [KEY.LEFTCTRL, KEY.KEY_W],
   nextTab:  [KEY.LEFTCTRL, KEY.TAB],

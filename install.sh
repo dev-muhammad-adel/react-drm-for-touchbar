@@ -603,8 +603,8 @@ install_dependencies() {
 build_project() {
   info "Installing npm dependencies"
   (cd "$REPO_ROOT" && npm ci)
-  info "Building react-drm"
-  (cd "$REPO_ROOT" && npm run build)
+  info "Building react-drm and the control center"
+  (cd "$REPO_ROOT/linux-touchbar-control-center" && npm run build)
 }
 
 configure_user_groups() {
