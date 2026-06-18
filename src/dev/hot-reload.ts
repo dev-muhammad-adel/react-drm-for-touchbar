@@ -1,88 +1,86 @@
 import fs from 'fs';
 import path from 'path';
-import chokidar from 'chokidar';
 import React from 'react';
 import { render } from '../renderer/renderer';
 import type { RenderResult, RenderOptions } from '../renderer/renderer';
 import type { DrmDisplay } from '../native/binding';
 
-// Walk up from startDir looking for a package.json that declares "workspaces"
-// (the monorepo/workspace root). Falls back to the highest package.json found.
-// This ensures both linux-touchbar-control-center/ and src/ are covered in one watch.
+
 function findWatchRoot(startDir: string): string {
   let dir = startDir;
-  let highest = startDir;
-
   while (true) {
-    const pkgPath = path.join(dir, 'package.json');
-    if (fs.existsSync(pkgPath)) {
-      highest = dir;
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as { workspaces?: unknown };
-        if (pkg.workspaces) return dir;
-      } catch { /* unparseable package.json — keep walking */ }
-    }
+    if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) break; // reached filesystem root
     dir = parent;
   }
-
-  return highest;
+  return startDir;
 }
 
-function clearProjectCache(): void {
-  for (const key of Object.keys(require.cache)) {
-    if (!key.includes('node_modules') && !key.endsWith('.node')) {
-      delete require.cache[key];
+const PROJECT = (id: string) => !id.includes('node_modules') && !id.endsWith('.node');
+
+
+function invalidate(changed: string[]): void {
+  const cache = require.cache;
+
+  // Invert the dependency graph: for each module id, the set that imports it.
+  const importers = new Map<string, Set<string>>();
+  let edges = 0;
+  for (const id of Object.keys(cache)) {
+    for (const child of cache[id]?.children ?? []) {
+      edges++;
+      let set = importers.get(child.id);
+      if (!set) importers.set(child.id, (set = new Set()));
+      set.add(id);
     }
   }
+
+  if (edges === 0) {
+    // No graph to walk — can't know dependents, so clear everything project-local.
+    for (const id of Object.keys(cache)) if (PROJECT(id)) delete cache[id];
+    return;
+  }
+
+  const evict = new Set<string>();
+  const queue = changed.filter(id => cache[id]);
+  while (queue.length) {
+    const id = queue.pop()!;
+    if (evict.has(id) || !PROJECT(id)) continue;
+    evict.add(id);
+    for (const dep of importers.get(id) ?? []) queue.push(dep);
+  }
+  for (const id of evict) delete cache[id];
 }
 
-function watchDir(dir: string, onChange: () => void): () => void {
+const IGNORED_DIR = /(^|[/\\])(node_modules|\.git|dist|build)([/\\]|$)/;
+function watchDir(dir: string, onChange: (changed: string[]) => void): () => void {
   let debounce: ReturnType<typeof setTimeout> | null = null;
+  const pending = new Set<string>();
+  console.log(`[hot-reload] watching ${dir}`);
 
-  const watcher = chokidar.watch(dir, {
-    ignored: [/(^|[/\\])node_modules([/\\]|$)/, /(^|[/\\])\.git([/\\]|$)/, /\.node$/],
-    ignoreInitial: true,
-    // awaitWriteFinish catches atomic saves from vim/nvim (write-to-tmp then rename)
-    awaitWriteFinish: { stabilityThreshold: 80, pollInterval: 50 },
-  });
-
-  watcher.on('all', (_event, filePath) => {
-    if (!/\.(js|ts|tsx)$/.test(filePath)) return;
+  const watcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
+    if (!filename) return;
+    const rel = filename.toString();
+    if (IGNORED_DIR.test(rel) || !/\.(js|ts|tsx)$/.test(rel)) return;
+    pending.add(path.resolve(dir, rel));
     if (debounce) clearTimeout(debounce);
-    debounce = setTimeout(() => { debounce = null; onChange(); }, 150);
+    debounce = setTimeout(() => {
+      debounce = null;
+      const changed = [...pending];
+      pending.clear();
+      onChange(changed);
+    }, 150);
   });
 
   watcher.on('error', () => {});
-  return () => { void watcher.close(); };
+  return () => watcher.close();
 }
 
-/**
- * High-level hot-reload entry point.
- *
- * Loads `appModulePath` (no extension needed), renders its exported `App`
- * component, then watches for source/compiled changes and live-swaps the
- * React tree — all without restarting the process or reopening the display.
- *
- * Convention: the module must export a component named `App` (or a default
- * export) that accepts `{ width, height }` props.
- *
- * Usage in the entry file:
- *   const result = renderHot(path.resolve(__dirname, 'hello-app'), display);
- *   process.on('SIGINT', () => { result.unmount(); display.close(); process.exit(0); });
- */
 export function renderHot(
   appModulePath: string,
   display: DrmDisplay,
   options?: RenderOptions & {
     appProps?: Record<string, unknown>;
-    /**
-     * Watch the source tree and live-swap the React tree on change.
-     * Defaults to dev only (off when NODE_ENV === 'production'). In production
-     * the app runs from compiled JS, so there is nothing to recompile/watch —
-     * renderHot just renders once.
-     */
     watch?: boolean;
   },
 ): RenderResult {
@@ -100,8 +98,6 @@ export function renderHot(
   const result = render(initialEl, display, options);
   let lastGood: React.ReactNode = initialEl;
 
-  // React's concurrent scheduler can surface render errors as uncaught exceptions
-  // (after updateContainer returns). Survive them so the process keeps running.
   const uncaughtHandler = (err: unknown) => {
     console.error('[react-drm] uncaught exception (process survived):', err);
     try { result.update(lastGood); } catch { /* best-effort restore */ }
@@ -109,16 +105,13 @@ export function renderHot(
   process.on('uncaughtException', uncaughtHandler);
   process.on('unhandledRejection', uncaughtHandler);
 
-  // Hot-reload is a development-only convenience. In production the app runs
-  // from compiled JS (`node dist/index.js`), so there is nothing to watch.
   const watch = options?.watch ?? process.env.NODE_ENV !== 'production';
   if (!watch) return result;
 
   const dir = findWatchRoot(path.dirname(appModulePath));
-  console.log(`[hot-reload] watching ${dir}`);
 
-  watchDir(dir, () => {
-    clearProjectCache();
+  watchDir(dir, (changed) => {
+    invalidate(changed);
     let el: React.ReactNode;
     try {
       el = load();
