@@ -91,17 +91,31 @@ static void draw_shadow(cairo_t* cr,
                         double x, double y, double w, double h,
                         double tl, double tr, double br, double bl,
                         double dx, double dy, double blur,
-                        double sr, double sg, double sb, double sa) {
+                        double sr, double sg, double sb, double sa,
+                        bool inset) {
   if (sa <= 0 || w <= 0 || h <= 0) return;
   int pad = (int)std::ceil(blur);
+  if (inset && pad < 1) pad = 1; // inset needs a border to blur inward from
   int sw  = (int)std::ceil(w) + 2 * pad;
   int sh  = (int)std::ceil(h) + 2 * pad;
 
   cairo_surface_t* surf = cairo_image_surface_create(CAIRO_FORMAT_A8, sw, sh);
   cairo_t* scr = cairo_create(surf);
-  rounded_rect(scr, pad, pad, w, h, tl, tr, br, bl);
-  cairo_set_source_rgba(scr, 0, 0, 0, 1);
-  cairo_fill(scr);
+  if (!inset) {
+    // Outer drop shadow: a blurred filled copy of the shape.
+    rounded_rect(scr, pad, pad, w, h, tl, tr, br, bl);
+    cairo_set_source_rgba(scr, 0, 0, 0, 1);
+    cairo_fill(scr);
+  } else {
+    // Inner shadow: opaque everywhere EXCEPT the (offset) shape; after the blur
+    // the soft opaque→hole edge lands just inside the box edges. With dx/dy the
+    // hole shifts, darkening the opposite inner edge (CSS `inset` semantics).
+    cairo_set_source_rgba(scr, 0, 0, 0, 1);
+    cairo_paint(scr);
+    rounded_rect(scr, pad + dx, pad + dy, w, h, tl, tr, br, bl);
+    cairo_set_operator(scr, CAIRO_OPERATOR_CLEAR);
+    cairo_fill(scr);
+  }
   cairo_destroy(scr);
   cairo_surface_flush(surf);
 
@@ -112,7 +126,14 @@ static void draw_shadow(cairo_t* cr,
 
   cairo_save(cr);
   cairo_set_source_rgba(cr, sr, sg, sb, sa);
-  cairo_mask_surface(cr, surf, x + dx - pad, y + dy - pad);
+  if (!inset) {
+    cairo_mask_surface(cr, surf, x + dx - pad, y + dy - pad);
+  } else {
+    // Clip to the box so the inner shadow only paints inside it.
+    rounded_rect(cr, x, y, w, h, tl, tr, br, bl);
+    cairo_clip(cr);
+    cairo_mask_surface(cr, surf, x - pad, y - pad);
+  }
   cairo_restore(cr);
 
   cairo_surface_destroy(surf);
@@ -303,9 +324,12 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       double r  = numProp(cmd, "r"), g = numProp(cmd, "g"), b = numProp(cmd, "b");
       double a  = numProp(cmd, "a");
       double dx = numProp(cmd, "dx"), dy = numProp(cmd, "dy"), blur = numProp(cmd, "blur");
+      auto iv = cmd.Get("inset");
+      bool inset = (iv.IsBoolean() && iv.As<Napi::Boolean>().Value())
+                 || (iv.IsNumber()  && iv.As<Napi::Number>().DoubleValue() != 0.0);
       draw_shadow(cr, x, y, w, h, tl, tr, br, bl,
                   dx, dy, blur,
-                  r, g, b, a);
+                  r, g, b, a, inset);
 
     } else if (type == "fill_rect") {
       double x = numProp(cmd, "x"), y = numProp(cmd, "y");
@@ -622,9 +646,10 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
 
     } else if (type == CT_SHADOW) {
       draw_shadow(cr, c[1], c[2], c[3], c[4],
-                  c[5], c[6], c[7], c[8],   // tl,tr,br,bl
-                  c[13], c[14], c[15],       // dx,dy,blur
-                  c[9], c[10], c[11], c[12]); // r,g,b,a
+                  c[5], c[6], c[7], c[8],    // tl,tr,br,bl
+                  c[13], c[14], c[15],        // dx,dy,blur
+                  c[9], c[10], c[11], c[12],  // r,g,b,a
+                  c[16] != 0.0f);             // inset
 
     } else if (type == CT_TEXT) {
       double a = c[6]; if (a <= 0) a = 1.0;

@@ -6,7 +6,7 @@ export type DrawCommand =
   | { cmd: 'clear'; r: number; g: number; b: number }
   | { cmd: 'fill_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'stroke_rect'; x: number; y: number; w: number; h: number; r: number; g: number; b: number; a: number; tl: number; tr: number; br: number; bl: number; lineWidth: number; borderStyle: string }
-  | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number }
+  | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number; inset: boolean }
   | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'clip_pop' }
   | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string; bold: boolean; italic: boolean; align: string; containerX: number; containerW: number; lineHeight: number }
@@ -23,7 +23,7 @@ function cmdSignature(c: Exclude<DrawCommand, { cmd: 'draw_image' }>): string {
     case 'stroke_rect':
       return `sr:${c.x},${c.y},${c.w},${c.h},${c.r},${c.g},${c.b},${c.a},${c.tl},${c.tr},${c.br},${c.bl},${c.lineWidth},${c.borderStyle}`;
     case 'shadow':
-      return `sh:${c.x},${c.y},${c.w},${c.h},${c.tl},${c.tr},${c.br},${c.bl},${c.r},${c.g},${c.b},${c.a},${c.dx},${c.dy},${c.blur}`;
+      return `sh:${c.x},${c.y},${c.w},${c.h},${c.tl},${c.tr},${c.br},${c.bl},${c.r},${c.g},${c.b},${c.a},${c.dx},${c.dy},${c.blur},${c.inset ? 1 : 0}`;
     case 'clip_push':
       return `cp:${c.x},${c.y},${c.w},${c.h},${c.tl},${c.tr},${c.br},${c.bl}`;
     case 'clip_pop':
@@ -126,7 +126,8 @@ function cmdEq(a: DrawCommand, b: DrawCommand): boolean {
         && a.a === (b as typeof a).a
         && a.dx === (b as typeof a).dx
         && a.dy === (b as typeof a).dy
-        && a.blur === (b as typeof a).blur;
+        && a.blur === (b as typeof a).blur
+        && a.inset === (b as typeof a).inset;
     case 'clip_push':
       return a.x === (b as typeof a).x
         && a.y === (b as typeof a).y
@@ -238,9 +239,10 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const a  = node.style?.opacity ?? 1;
     const [tl, tr, br, bl] = resolveCornerRadii(node.style);
     const shadowOpacity = node.style?.shadowOpacity ?? 1;
+    let shadowCmd: Extract<DrawCommand, { cmd: 'shadow' }> | null = null;
     if (node.style?.shadowColor && shadowOpacity > 0) {
       const [sr, sg, sb, sa] = parseColor(node.style.shadowColor);
-      cmds.push({
+      shadowCmd = {
         cmd: 'shadow',
         x: lb.x, y: lb.y, w: lb.w, h: lb.h,
         tl, tr, br, bl,
@@ -248,8 +250,13 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
         dx: node.style.shadowOffsetX ?? 0,
         dy: node.style.shadowOffsetY ?? 0,
         blur: node.style.shadowRadius ?? 0,
-      });
+        inset: node.style.shadowInset ?? false,
+      };
     }
+    // Outer drop shadow paints behind the box; an inset shadow paints over the
+    // background and under the children, so it's deferred until after the
+    // fill/border (see below).
+    if (shadowCmd && !shadowCmd.inset) cmds.push(shadowCmd);
     const bgColor = node.style?.backgroundColor ?? node.color;
     if (bgColor !== 'transparent') {
       const [r, g, b, ca] = parseColor(bgColor);
@@ -270,6 +277,8 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
         cmds.push({ cmd: 'stroke_rect', x: lb.x, y: lb.y, w: lb.w, h: lb.h, r, g, b, a: alpha, tl, tr, br, bl, lineWidth: borderWidth, borderStyle });
       }
     }
+    if (shadowCmd && shadowCmd.inset) cmds.push(shadowCmd); // over bg, under children
+
     const clip = node.style?.overflow === 'hidden' || node.style?.overflow === 'scroll';
     if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
 
@@ -380,7 +389,7 @@ export const BINARY_STRIDE = 22;
 //  CLIP_PUSH:   [1]=x [2]=y [3]=w [4]=h [5]=tl [6]=tr [7]=br [8]=bl
 //  FILL_RECT:   [1]=x [2]=y [3]=w [4]=h [5]=r [6]=g [7]=b [8]=a [9]=tl [10]=tr [11]=br [12]=bl
 //  STROKE_RECT: [1]=x [2]=y [3]=w [4]=h [5]=r [6]=g [7]=b [8]=a [9]=tl [10]=tr [11]=br [12]=bl [13]=lineWidth  str0=borderStyle
-//  SHADOW:      [1]=x [2]=y [3]=w [4]=h [5]=tl [6]=tr [7]=br [8]=bl [9]=r [10]=g [11]=b [12]=a [13]=dx [14]=dy [15]=blur
+//  SHADOW:      [1]=x [2]=y [3]=w [4]=h [5]=tl [6]=tr [7]=br [8]=bl [9]=r [10]=g [11]=b [12]=a [13]=dx [14]=dy [15]=blur [16]=inset
 //  TEXT:        [1]=x [2]=y [3]=r [4]=g [5]=b [6]=a [7]=size [8]=containerX [9]=containerW [10]=lineHeight [11]=bold [12]=italic  str0=family str1=text str2=align
 //  DRAW_SVG:    [1]=x [2]=y [3]=w [4]=h  str0=src
 //  DRAW_IMAGE:  [1]=x [2]=y [3]=w [4]=h [5]=sw [6]=sh [7]=tl [8]=tr [9]=br [10]=bl  buf0=data
@@ -466,6 +475,7 @@ export function toBinaryBuffer(cmds: DrawCommand[], shiftX = 0, shiftY = 0): Bin
         data[base+5]  = c.tl; data[base+6] = c.tr; data[base+7] = c.br; data[base+8] = c.bl;
         data[base+9]  = c.r;  data[base+10] = c.g; data[base+11] = c.b; data[base+12] = c.a;
         data[base+13] = c.dx; data[base+14] = c.dy; data[base+15] = c.blur;
+        data[base+16] = c.inset ? 1 : 0;
         break;
       case 'text':
         data[base]    = CMD_TYPE.TEXT;

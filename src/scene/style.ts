@@ -81,6 +81,8 @@ export interface Style {
   shadowOffsetY?: number;
   shadowOpacity?: number;
   shadowRadius?: number;
+  /** Draw the shadow inside the box (recessed) instead of as an outer drop. */
+  shadowInset?: boolean;
   borderRadius?: number;
   borderTopLeftRadius?: number;
   borderTopRightRadius?: number;
