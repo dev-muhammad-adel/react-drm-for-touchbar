@@ -6,10 +6,10 @@
 
 // These match linux/input-event-codes.h but we define locally to avoid
 // collisions with the <linux/input.h> macros included by napi/node headers.
+static constexpr uint16_t TB_ABS_MT_SLOT        = 0x2f;
 static constexpr uint16_t TB_ABS_MT_POSITION_X  = 0x35;
 static constexpr uint16_t TB_ABS_MT_POSITION_Y  = 0x36;
 static constexpr uint16_t TB_ABS_MT_TRACKING_ID = 0x39;
-static constexpr uint16_t TB_BTN_TOUCH           = 0x14a;
 
 Napi::Object TouchReader::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(env, "TouchReader", {
@@ -86,6 +86,12 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
   bool touch_active = false;
   bool touch_starting = false; // deferred start: emit at SYN_REPORT so X/Y are populated
   bool pos_dirty = false;
+  // Multitouch slot isolation (MT type-B). The panel reports up to 11 contacts;
+  // we follow only the FIRST one (the primary finger) and ignore the rest, so a
+  // stray second contact (palm graze, second finger) can't hijack the active
+  // touch's coordinate and teleport it across the bar.
+  int32_t cur_slot     = 0;   // slot the current ABS_MT_* events address
+  int32_t primary_slot = -1;  // slot owning the active touch (-1 = no touch)
 
   // Emit (type, x, y): type 0=start  1=move  2=end
   auto emit = [&](int type, int32_t x, int32_t y) {
@@ -116,39 +122,39 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
     ssize_t n = read(fd, &ev, sizeof(ev));
     if (n != (ssize_t)sizeof(ev)) { device_error = true; break; }
 
-    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_POSITION_X) {
+    // Which slot subsequent ABS_MT_* events address.
+    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_SLOT) {
+      cur_slot = ev.value;
+    }
+
+    // Contact begin/end is per-slot via the tracking id. Only the primary slot
+    // drives start/end; contacts in other slots are secondary fingers — ignored.
+    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_TRACKING_ID) {
+      if (ev.value >= 0) {
+        if (primary_slot < 0) {     // first finger down → it becomes primary
+          primary_slot   = cur_slot;
+          touch_active   = true;
+          touch_starting = true;    // defer start until SYN_REPORT so X/Y arrive
+          pos_dirty      = false;
+        }
+      } else if (cur_slot == primary_slot) { // primary finger lifted
+        primary_slot   = -1;
+        touch_active   = false;
+        touch_starting = false;
+        pos_dirty      = false;
+        emit(2, cur_x, cur_y); // end
+      }
+    }
+
+    // Position only counts for the primary slot — a secondary finger's X/Y is
+    // dropped, so it can never move the active touch.
+    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_POSITION_X && cur_slot == primary_slot) {
       cur_x = ev.value;
       if (touch_active) pos_dirty = true;
     }
-    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_POSITION_Y) {
+    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_POSITION_Y && cur_slot == primary_slot) {
       cur_y = ev.value;
       if (touch_active) pos_dirty = true;
-    }
-
-    if (ev.type == EV_KEY && ev.code == TB_BTN_TOUCH) {
-      if (ev.value == 1 && !touch_active) {
-        touch_active = true;
-        touch_starting = true;
-        pos_dirty = false;
-      } else if (ev.value == 0 && touch_active) {
-        touch_active = false;
-        touch_starting = false;
-        pos_dirty = false;
-        emit(2, cur_x, cur_y); // end
-      }
-    }
-
-    if (ev.type == EV_ABS && ev.code == TB_ABS_MT_TRACKING_ID) {
-      if (ev.value >= 0 && !touch_active) {
-        touch_active = true;
-        touch_starting = true; // defer start until SYN_REPORT so X/Y arrive first
-        pos_dirty = false;
-      } else if (ev.value < 0 && touch_active) {
-        touch_active = false;
-        touch_starting = false;
-        pos_dirty = false;
-        emit(2, cur_x, cur_y); // end
-      }
     }
 
     // SYN_REPORT: flush accumulated position
