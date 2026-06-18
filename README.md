@@ -87,7 +87,7 @@ names differ between distributions, so install the equivalents of:
 - Node.js 20.19.0 or newer, npm and Python 3 for `node-gyp`
 - A C++ compiler, `make` and `pkg-config`
 - Development files for libdrm, Cairo, librsvg and libudev/systemd
-- `brightnessctl`, `cava` and `playerctl`
+- `brightnessctl` and `cava`
 - `xprop` when using Xorg
 - systemd/logind and a systemd user session for suspend handling and the
   supplied service

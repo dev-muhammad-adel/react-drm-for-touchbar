@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { execFile } from 'child_process';
-import { Box, Text, Button } from 'react-drm';
+import { Box, Text, Button, KEY } from 'react-drm';
 import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
-import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSportsEsports } from 'react-icons/md';
+import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSportsEsports, MdSearch } from 'react-icons/md';
 import { LayerHost, useLayers } from '.';
 import type { Layer, LayerHostHandle } from '.';
 import { useActiveWindow } from '../hooks/useActiveWindow';
@@ -11,15 +11,13 @@ import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
 import { VlcPanel } from './leftsideLayers/VlcPanel';
 import { DolphinPanel } from './leftsideLayers/DolphinPanel';
+import { keys } from '../services/keyInjector';
 
 
 // ── Media control ─────────────────────────────────────────────────────────────
 
-type MediaCmd = 'previous' | 'play-pause' | 'next';
+type MediaCmd = 'previous' | 'play-pause' | 'next' | 'search';
 
-function playerctl(cmd: MediaCmd): void {
-  execFile('playerctl', [cmd], () => {});
-}
 
 const ICON_SIZE = 32;
 
@@ -56,15 +54,16 @@ const SPLITTED_LEFT_LAYERS: Layer[] = [
 
 const MEDIA_BTNS: { icon: React.ReactElement; cmd?: MediaCmd; width: number; color: string; activeColor: string }[] = [
   { icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40 ,color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130 , color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130 , color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 130 , color:"#4f4b4f" , activeColor:"#666666"},
-  { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, cmd: 'play-pause', width: 100 , color:"#4f4b4f" , activeColor:"#666666"},
+  { icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
+  { icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
+  { icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
+  { icon: <MdPlayArrow     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, cmd: 'play-pause', width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
+  { icon: <MdSearch     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, cmd: 'search', width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// Right panel width: 5 buttons (40+130+130+130+100) + 4×2px gaps
+// Right panel width: 5 buttons (40+120+120+120+120) + 4×2px gaps
 const RIGHT_W =MEDIA_BTNS.reduce((sum, b) => sum + b.width, 0) + (MEDIA_BTNS.length - 1) * 2;
 const NAV_W   = 28;
 
@@ -107,7 +106,9 @@ export function SplittedLayer({ width, height }: { width: number; height: number
               idx === 1 ? () => go('systembar', 'slide-up') :
               idx === 2 ? () => go('audio-slider', 'slide-up') :
               idx === 3 ? () => go('brightness-slider', 'slide-up') :
-              () => playerctl(btn.cmd as MediaCmd)
+              idx === 4 ? () => keys.pressKey(KEY.PLAYPAUSE) :
+              idx === 5 ? () => keys.pressKey(KEY.SEARCH) :
+              () => {console.log('No action defined for this button');}
             }
             style={{
               alignItems: 'center',

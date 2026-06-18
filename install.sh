@@ -19,7 +19,7 @@ readonly TOUCHBAR_VENDOR_ID="05ac"
 readonly TOUCHBAR_PRODUCT_ID="8302"
 readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus)
 readonly REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
-readonly COMMON_RUNTIME_PACKAGES=(brightnessctl cava playerctl)
+readonly COMMON_RUNTIME_PACKAGES=(brightnessctl cava)
 
 ANALYSIS_MISSING_COMMANDS=()
 ANALYSIS_MISSING_MODULES=()
