@@ -84,7 +84,13 @@ export class KeyboardReader {
         this.scheduleReconnect(1000);
         return;
       }
-      this.listeners.forEach(l => l(code, value));
+      // Guard each listener: this runs inside the native ThreadSafeFunction
+      // callback, so an uncaught throw here propagates to native as a fatal
+      // uncaught exception and aborts the whole process. Contain + log instead.
+      this.listeners.forEach(l => {
+        try { l(code, value); }
+        catch (e) { console.error('[react-drm] keyboard listener threw:', e); }
+      });
     });
   }
 

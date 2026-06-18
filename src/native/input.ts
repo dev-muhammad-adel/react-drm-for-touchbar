@@ -151,7 +151,14 @@ export class TouchReader {
         this.scheduleReconnect(callback);
         return;
       }
-      callback(type, rawX, rawY);
+      // This runs inside the native ThreadSafeFunction callback — an uncaught
+      // throw from any touch/tap/swipe/app handler would propagate to native as
+      // a fatal uncaught exception and abort the whole process. Contain + log.
+      try {
+        callback(type, rawX, rawY);
+      } catch (e) {
+        console.error('[react-drm] touch handler threw:', e);
+      }
     });
   }
 
