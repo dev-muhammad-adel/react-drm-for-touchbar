@@ -23,7 +23,6 @@ const BACKENDS = [hyprland, gnome, plasma, xorg]; // fallback probe order when d
 // only window-focus source.
 async function backendsForSession(): Promise<ActiveWindowBackend[]> {
   const s = await detectSession();
-  console.log(`[react-drm] session: ${s.type} (${s.desktop})`);
 
   // Xorg, whatever the desktop: EWMH props over the X protocol → xprop.
   if (s.type === 'xorg') return [xorg];
@@ -57,7 +56,6 @@ async function ensureStarted(): Promise<void> {
       const s = await backend.start(push);
       if (s) {
         stop = s;
-        console.log(`[react-drm] active-window backend: ${backend.name}`);
         break;
       }
     } catch { /* try next */ }

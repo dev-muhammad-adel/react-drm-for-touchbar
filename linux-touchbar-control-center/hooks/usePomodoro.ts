@@ -1,12 +1,9 @@
 import { useEffect } from 'react';
-import { atom, useAtom } from 'jotai';
-
-export const POMO_SESSION = 25 * 60; // seconds in one pomodoro
-
-export const pomoElapsedAtom  = atom(0);
-export const pomoRunningAtom  = atom(false);
-export const pomoSessionsAtom = atom(0);
-export const pomoFlashAtom    = atom(false);
+import { useAtom } from 'jotai';
+import {
+  POMO_SESSION,
+  pomoElapsedAtom, pomoRunningAtom, pomoSessionsAtom, pomoFlashAtom,
+} from '../store/pomodoro';
 
 export function usePomodoroEngine() {
   const [running]              = useAtom(pomoRunningAtom);
@@ -18,7 +15,7 @@ export function usePomodoroEngine() {
     if (!running) return;
     const id = setInterval(() => setElapsed(e => e + 1), 1000);
     return () => clearInterval(id);
-  }, [running, setElapsed]);
+  }, [running]);
 
   // Auto-mark a session at every 25-min boundary
   useEffect(() => {
@@ -27,5 +24,5 @@ export function usePomodoroEngine() {
     setFlash(true);
     const t = setTimeout(() => setFlash(false), 2500);
     return () => clearTimeout(t);
-  }, [elapsed, setSessions, setFlash]);
+  }, [elapsed]);
 }

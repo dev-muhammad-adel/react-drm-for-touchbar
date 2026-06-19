@@ -3,7 +3,7 @@ import { useAtom } from 'jotai';
 import {
   POMO_SESSION,
   pomoElapsedAtom, pomoRunningAtom, pomoSessionsAtom, pomoFlashAtom,
-} from '../hooks/usePomodoro';
+} from '../store/pomodoro';
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button, LayoutContext, NativeDrawContext, DisplaySizeContext } from 'react-drm';
@@ -564,7 +564,6 @@ function PomodoroSection() {
 
   function toggle() { setRunning(r => !r); }
   function reset()  { setElapsed(0); setRunning(false); setSessions(0); setFlash(false); }
-
   return (
     <Box style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, gap: 8 }}>
       <Button  onClick={toggle} color="transparent" activeColor="#1e293b"
