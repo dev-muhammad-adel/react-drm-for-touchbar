@@ -1,6 +1,6 @@
 import React from 'react';
 import path from 'path';
-import { Box, Gif, animated, useSpringValue } from 'react-drm';
+import { Box, Gif, Text, animated, useSpringValue } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
@@ -20,51 +20,21 @@ import { DinoLayer } from './layers/dino';
 import { PongLayer } from './layers/pong';
 import { useBootSequence } from './hooks/useBootSequence';
 import { usePomodoroEngine } from './hooks/usePomodoro';
+import { Provider } from 'jotai';
 
-function PaintOnlyProfileScene({ width, height }: { width: number; height: number }) {
-  const pulse = useSpringValue(0);
-  React.useEffect(() => {
-    pulse.start({ from: 0, to: 1, loop: { reverse: true }, config: { duration: 850 } });
-  }, [pulse]);
 
-  const barW = Math.max(360, Math.round(width * 0.84));
-  const chipW = Math.max(110, Math.round(width * 0.13));
-
+function GotaiProvider({ children }: { children: React.ReactNode }) {
   return (
-    <Box style={{ width, height, justifyContent: 'center', alignItems: 'center', backgroundColor: '#060a12', gap: 8 }}>
-      <animated.Box style={{
-        width: barW,
-        height: 12,
-        borderRadius: 6,
-        opacity: pulse.to(v => 0.3 + (v * 0.65)),
-        backgroundColor: pulse.to(v => `rgba(56, 189, 248, ${(0.1 + (v * 0.75)).toFixed(3)})`),
-      }} />
-      <Box style={{ width: barW, height: 12, flexDirection: 'row', justifyContent: 'space-between' }}>
-        <animated.Box style={{
-          width: chipW,
-          height: 12,
-          borderRadius: 6,
-          opacity: pulse.to(v => 0.2 + (v * 0.6)),
-          backgroundColor: pulse.to(v => `rgba(125, 211, 252, ${(0.08 + (v * 0.55)).toFixed(3)})`),
-        }} />
-        <animated.Box style={{
-          width: chipW,
-          height: 12,
-          borderRadius: 6,
-          opacity: pulse.to(v => 0.5 + ((1 - v) * 0.4)),
-          backgroundColor: pulse.to(v => `rgba(16, 185, 129, ${(0.06 + ((1 - v) * 0.5)).toFixed(3)})`),
-        }} />
-      </Box>
-    </Box>
+    <Provider>
+      {children}
+    </Provider>
   );
 }
 
-export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
-  if (process.env.REACT_DRM_PROFILE_SCENE === 'paint-only') {
-    return <PaintOnlyProfileScene width={width} height={height} />;
-  }
 
-  const { booted, opacity } = useBootSequence();
+export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
+
+  // const { booted, opacity } = useBootSequence();
 
   usePomodoroEngine();
 
@@ -87,7 +57,9 @@ export function App({ width, height, keyboard }: { width: number; height: number
   // mode; 'fn' mode renders Esc inside the Fn-key layer instead.
   const showEsc = width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
 
+
   return (
+    <GotaiProvider>
     <SafeArea width={width} height={height}>
       {(w, h) => {
         const layerW = showEsc ? w - ESC_KEY.width - ESC_KEY.gap : w;
@@ -123,5 +95,6 @@ export function App({ width, height, keyboard }: { width: number; height: number
         );
       }}
     </SafeArea>
+    </GotaiProvider>
   );
 }
