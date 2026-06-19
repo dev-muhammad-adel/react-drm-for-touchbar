@@ -198,14 +198,23 @@ export class TouchRegistry {
     this.touchOrigin = null;
     const dx = lx - sx;                  // both corrected — delta is accurate
 
-    for (const r of this.swipeRegions.values()) {
-      if (r.onScrollMove) continue;      // scroll regions skip discrete swipe
-      if (sx < r.x || sx >= r.x + r.width) continue;
-      const threshold = r.threshold ?? 80;
-      if (Math.abs(dx) < threshold) continue;
-      if (dx < 0) r.onSwipeLeft?.(Math.abs(dx));
-      else        r.onSwipeRight?.(dx);
-    }
+const regions = [...this.swipeRegions.values()];
+
+for (const r of regions) {
+  const b = r;
+
+  if (sx < b.x || sx >= b.x + b.width) continue;
+
+  const threshold = b.threshold ?? 80;
+
+  if (Math.abs(dx) < threshold) continue;
+
+  if (dx < 0) b.onSwipeLeft?.(Math.abs(dx));
+  else        b.onSwipeRight?.(dx);
+}
+
+
+
   }
 
   /** Legacy one-shot hit-test — fires tap/onClick only, no gesture tracking. */

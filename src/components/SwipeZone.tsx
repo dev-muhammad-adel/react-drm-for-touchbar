@@ -10,52 +10,75 @@ export interface SwipeZoneProps {
   y?: number;
   width?: number;
   height?: number;
-  /** Called when user swipes left. `dx` is the horizontal travel in pixels. */
-  onSwipeLeft?:  (dx: number) => void;
-  /** Called when user swipes right. `dx` is the horizontal travel in pixels. */
+
+  onSwipeLeft?: (dx: number) => void;
   onSwipeRight?: (dx: number) => void;
-  /** Minimum horizontal pixel travel to count as a swipe. Default: 80. */
+
+  onScrollStart?: () => void;
+  onScrollMove?: (dx: number) => void;
+  onScrollEnd?: (velocity: number) => void;
+
   threshold?: number;
   color?: string;
   style?: Style;
   children?: React.ReactNode;
 }
 
-/**
- * A hit zone that fires onSwipeLeft / onSwipeRight.
- * Works correctly inside flex/grid containers.
- * The renderer opens the touch device automatically — no manual wiring needed.
- */
 export function SwipeZone({
-
   width = 0,
   height = 0,
   onSwipeLeft,
   onSwipeRight,
-  threshold,
+  onScrollStart,
+  onScrollMove,
+  onScrollEnd,
+  threshold = 80,
   color = 'transparent',
   style,
   children,
-}: SwipeZoneProps): React.ReactElement {
-  const registry  = useContext(TouchRegistryContext);
+}: SwipeZoneProps) {
+  const registry = useContext(TouchRegistryContext);
   const layoutCtx = useContext(LayoutContext);
-  const id      = useRef(Symbol());
+
+  const id = useRef(Symbol());
   const nodeRef = useRef<BoxNode | null>(null);
 
+  // register ONLY when dependencies change
   useLayoutEffect(() => {
     if (!registry) return;
-    const key  = id.current;
+
+    const key = id.current;
     const node = nodeRef.current;
 
     const lb = node ? layoutCtx.current.get(node) : undefined;
-    const rx = lb?.x ?? 0;
-    const ry = lb?.y ?? 0;
-    const rw = lb?.w ?? width;
-    const rh = lb?.h ?? height;
 
-    registry.registerSwipe(key, { x: rx, y: ry, width: rw, height: rh, onSwipeLeft, onSwipeRight, threshold });
+    registry.registerSwipe(key, {
+      x: lb?.x ?? 0,
+      y: lb?.y ?? 0,
+      width: lb?.w ?? width,
+      height: lb?.h ?? height,
+
+      onSwipeLeft,
+      onSwipeRight,
+      onScrollStart,
+      onScrollMove,
+      onScrollEnd,
+      threshold,
+    });
+
     return () => registry.unregisterSwipe(key);
-  });
+  }, [
+    registry,
+    layoutCtx,
+    width,
+    height,
+    threshold,
+    onSwipeLeft,
+    onSwipeRight,
+    onScrollMove,
+    onScrollStart,
+    onScrollEnd,
+  ]);
 
   return (
     <Box ref={nodeRef} color={color} style={style}>
