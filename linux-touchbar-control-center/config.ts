@@ -223,8 +223,8 @@ export const DOCK = {
   // 'ralt' = Right Option/Alt on the MacBook keyboard. Swap to any KEY
   // name from react-drm (e.g. 'rmeta', 'rctrl', 'menu') if you prefer.
   shortcut: {
-    key:    'lalt' as KeyId,
-    longMs: 350,   // hold time that counts as a long-press
+    key:    'ralt' as KeyId,
+    longMs: 900,   // hold time that counts as a long-press
   },
 };
 
