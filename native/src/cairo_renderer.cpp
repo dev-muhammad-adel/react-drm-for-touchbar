@@ -1,7 +1,9 @@
 #include "cairo_renderer.h"
 #include <cairo/cairo.h>
+#include <pango/pangocairo.h>
 #include <librsvg/rsvg.h>
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -137,6 +139,207 @@ static void draw_shadow(cairo_t* cr,
   cairo_restore(cr);
 
   cairo_surface_destroy(surf);
+}
+
+// ── Pango text rendering helpers ─────────────────────────────────────────────
+
+static std::string trim(const std::string& s) {
+  size_t a = 0, b = s.size();
+  while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
+  while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
+  return s.substr(a, b - a);
+}
+
+static std::vector<std::string> splitFamilies(const std::string& family) {
+  std::vector<std::string> out;
+  size_t start = 0;
+  for (size_t i = 0; i <= family.size(); ++i) {
+    if (i == family.size() || family[i] == ',') {
+      std::string part = trim(family.substr(start, i - start));
+      if (!part.empty()) out.push_back(part);
+      start = i + 1;
+    }
+  }
+  if (out.empty() && !trim(family).empty()) out.push_back(trim(family));
+  return out;
+}
+
+static std::string toLower(std::string s) {
+  for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  return s;
+}
+
+/** Build a Pango attribute list that assigns a font from the fallback stack to
+ *  each script run. Arabic runs prefer fonts whose names contain "arabic";
+ *  non-Arabic runs prefer fonts without that hint. */
+static PangoAttrList* buildFallbackAttrs(const std::string& text,
+                                          const std::vector<std::string>& families,
+                                          PangoFontDescription* baseDesc) {
+  PangoAttrList* attrs = pango_attr_list_new();
+  if (families.size() <= 1) return attrs;
+
+  PangoContext* context = pango_font_map_create_context(pango_cairo_font_map_get_default());
+  GList* items = pango_itemize(context, text.c_str(), 0, (int)text.size(), attrs, nullptr);
+
+  for (GList* l = items; l; l = l->next) {
+    PangoItem* item = static_cast<PangoItem*>(l->data);
+    int start = item->offset;
+    int end   = item->offset + item->length;
+    if (start >= end || start >= (int)text.size()) continue;
+
+    PangoScript script = static_cast<PangoScript>(g_unichar_get_script(static_cast<gunichar>(text[start])));
+    const bool isArabic = (script == PANGO_SCRIPT_ARABIC);
+
+    std::string chosen = families[0];
+    for (const std::string& f : families) {
+      const std::string lower = toLower(f);
+      const bool arabicHint = lower.find("arabic") != std::string::npos;
+      if (isArabic && arabicHint) { chosen = f; break; }
+      if (!isArabic && !arabicHint) { chosen = f; break; }
+    }
+
+    PangoFontDescription* runDesc = pango_font_description_copy(baseDesc);
+    pango_font_description_set_family(runDesc, chosen.c_str());
+    PangoAttribute* attr = pango_attr_font_desc_new(runDesc);
+    attr->start_index = start;
+    attr->end_index   = std::min(end, (int)text.size());
+    pango_attr_list_insert(attrs, attr);
+    pango_font_description_free(runDesc);
+  }
+
+  g_list_free_full(items, reinterpret_cast<GDestroyNotify>(pango_item_free));
+  g_object_unref(context);
+  return attrs;
+}
+
+/** Render a text string with PangoCairo, using comma-separated font fallback. */
+static void renderPangoText(cairo_t* cr,
+                            double x, double y,
+                            double r, double g, double b, double a,
+                            double size,
+                            const std::string& family,
+                            const std::string& text,
+                            bool bold, bool italic,
+                            const std::string& align,
+                            double containerX, double containerW,
+                            double lineH) {
+  if (text.empty()) return;
+
+  std::vector<std::string> families = splitFamilies(family);
+  if (families.empty()) families.push_back("sans-serif");
+
+  PangoLayout* layout = pango_cairo_create_layout(cr);
+  PangoFontDescription* desc = pango_font_description_new();
+  pango_font_description_set_size(desc, (int)(size * PANGO_SCALE));
+  pango_font_description_set_weight(desc, bold ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL);
+  pango_font_description_set_style(desc, italic ? PANGO_STYLE_ITALIC : PANGO_STYLE_NORMAL);
+  pango_font_description_set_family(desc, families[0].c_str());
+
+  PangoAttrList* attrs = buildFallbackAttrs(text, families, desc);
+  pango_layout_set_font_description(layout, desc);
+  pango_layout_set_text(layout, text.c_str(), -1);
+  pango_layout_set_attributes(layout, attrs);
+
+  PangoRectangle logical;
+  pango_layout_get_extents(layout, nullptr, &logical);
+  const double layoutW = logical.width / double(PANGO_SCALE);
+  const double layoutH = logical.height / double(PANGO_SCALE);
+
+  double drawX = x;
+  if (containerW > 0 && align != "left") {
+    if (align == "center") drawX = containerX + (containerW - layoutW) / 2.0;
+    else if (align == "right") drawX = containerX + containerW - layoutW;
+  }
+
+  double drawY = y;
+  if (lineH > 0) {
+    drawY = y + (lineH - layoutH) / 2.0;
+  }
+
+  cairo_set_source_rgba(cr, r, g, b, a);
+  cairo_move_to(cr, drawX, drawY);
+  pango_cairo_show_layout(cr, layout);
+
+  pango_attr_list_unref(attrs);
+  pango_font_description_free(desc);
+  g_object_unref(layout);
+}
+
+/** Build a PangoLayout configured for the given text and fallback stack. */
+static PangoLayout* buildPangoLayout(cairo_t* cr,
+                                      const std::string& family,
+                                      const std::string& text,
+                                      double size, bool bold, bool italic,
+                                      PangoFontDescription** outDesc,
+                                      PangoAttrList** outAttrs) {
+  std::vector<std::string> families = splitFamilies(family);
+  if (families.empty()) families.push_back("sans-serif");
+
+  PangoLayout* layout = pango_cairo_create_layout(cr);
+  PangoFontDescription* desc = pango_font_description_new();
+  pango_font_description_set_size(desc, (int)(size * PANGO_SCALE));
+  pango_font_description_set_weight(desc, bold ? PANGO_WEIGHT_BOLD : PANGO_WEIGHT_NORMAL);
+  pango_font_description_set_style(desc, italic ? PANGO_STYLE_ITALIC : PANGO_STYLE_NORMAL);
+  pango_font_description_set_family(desc, families[0].c_str());
+
+  PangoAttrList* attrs = buildFallbackAttrs(text, families, desc);
+  pango_layout_set_font_description(layout, desc);
+  pango_layout_set_text(layout, text.c_str(), -1);
+  pango_layout_set_attributes(layout, attrs);
+
+  *outDesc = desc;
+  *outAttrs = attrs;
+  return layout;
+}
+
+/** Rasterize text into a surface and return metrics. Returns null on failure. */
+static cairo_surface_t* rasterizePangoText(double size,
+                                            const std::string& family,
+                                            const std::string& text,
+                                            bool bold, bool italic,
+                                            double r, double g, double b,
+                                            double& outWidth,
+                                            double& outHeight,
+                                            int& outBaseline,
+                                            double& outPad) {
+  if (text.empty()) return nullptr;
+
+  // Use a temporary 1x1 surface just to have a cairo context for layout.
+  cairo_surface_t* tmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+  cairo_t* tcr = cairo_create(tmp);
+
+  PangoFontDescription* desc = nullptr;
+  PangoAttrList* attrs = nullptr;
+  PangoLayout* layout = buildPangoLayout(tcr, family, text, size, bold, italic, &desc, &attrs);
+
+  PangoRectangle logical;
+  pango_layout_get_extents(layout, nullptr, &logical);
+  outBaseline = pango_layout_get_baseline(layout) / PANGO_SCALE;
+  outWidth    = logical.width / double(PANGO_SCALE);
+  outHeight   = logical.height / double(PANGO_SCALE);
+
+  const double pad = 2.0;
+  const int W = (int)ceil(outWidth + 2 * pad + 1);
+  const int H = (int)ceil(outHeight + 2 * pad + 1);
+  cairo_surface_t* surf = nullptr;
+  if (W > 0 && H > 0 && (long)W * H <= 2048 * 256) {
+    surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, W, H);
+    cairo_t* cr = cairo_create(surf);
+    cairo_set_source_rgba(cr, r, g, b, 1.0);
+    cairo_move_to(cr, pad, pad);
+    pango_cairo_show_layout(cr, layout);
+    cairo_destroy(cr);
+    cairo_surface_flush(surf);
+  }
+
+  pango_attr_list_unref(attrs);
+  pango_font_description_free(desc);
+  g_object_unref(layout);
+  cairo_destroy(tcr);
+  cairo_surface_destroy(tmp);
+
+  outPad = pad;
+  return surf;
 }
 
 CairoRenderer::CairoRenderer(uint8_t* buf, uint32_t fb_w, uint32_t fb_h, uint32_t stride, bool rotate90)
@@ -400,31 +603,8 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
       double containerW  = numProp(cmd, "containerW");
       double lineH = numProp(cmd, "lineHeight");
 
-      cairo_set_source_rgba(cr, r, g, b, a);
-      cairo_select_font_face(cr, family.c_str(),
-                             italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
-                             bold   ? CAIRO_FONT_WEIGHT_BOLD  : CAIRO_FONT_WEIGHT_NORMAL);
-      cairo_set_font_size(cr, size);
-
-      double drawX = x;
-      if (containerW > 0 && align != "left") {
-        cairo_text_extents_t te;
-        cairo_text_extents(cr, text.c_str(), &te);
-        if (align == "center")
-          drawX = containerX + (containerW - te.width) / 2.0 - te.x_bearing;
-        else if (align == "right")
-          drawX = containerX + containerW - te.width - te.x_bearing;
-      }
-
-      cairo_font_extents_t fe;
-      cairo_font_extents(cr, &fe);
-      // With lineHeight: center text vertically within the line box.
-      // Without: y is the top of the text bounding box (ascent offset only).
-      double drawY = (lineH > 0)
-        ? y + (lineH - (fe.ascent + fe.descent)) / 2.0 + fe.ascent
-        : y + fe.ascent;
-      cairo_move_to(cr, drawX, drawY);
-      cairo_show_text(cr, text.c_str());
+      renderPangoText(cr, x, y, r, g, b, a, size, family, text, bold, italic,
+                      align, containerX, containerW, lineH);
     } else if (type == "overlay") {
       // Semi-transparent black veil — used for screen-saver dim step.
       const double a = numProp(cmd, "a");
@@ -672,28 +852,12 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
       const TextEntry* e = textGet(key);
       if (!e) {
         // Miss: shape + rasterize once into a dedicated surface, then cache it.
-        cairo_select_font_face(cr, family.c_str(),
-          italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
-          bold   ? CAIRO_FONT_WEIGHT_BOLD  : CAIRO_FONT_WEIGHT_NORMAL);
-        cairo_set_font_size(cr, size);
-        cairo_text_extents_t te; cairo_text_extents(cr, text.c_str(), &te);
-        cairo_font_extents_t fe; cairo_font_extents(cr, &fe);
-        const double pad = 2.0;
-        const int W = (int)ceil(te.width + 2 * pad + 1);
-        const int H = (int)ceil(fe.ascent + fe.descent + 2 * pad);
-        if (W > 0 && H > 0 && (long)W * H <= 2048 * 256) {
-          cairo_surface_t* ts = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, W, H);
-          cairo_t* tcr = cairo_create(ts);
-          cairo_select_font_face(tcr, family.c_str(),
-            italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
-            bold   ? CAIRO_FONT_WEIGHT_BOLD  : CAIRO_FONT_WEIGHT_NORMAL);
-          cairo_set_font_size(tcr, size);
-          cairo_set_source_rgba(tcr, r, g, b, 1.0); // bake color; alpha at composite
-          cairo_move_to(tcr, pad - te.x_bearing, pad + fe.ascent);
-          cairo_show_text(tcr, text.c_str());
-          cairo_destroy(tcr);
-          cairo_surface_flush(ts);
-          TextEntry ne{ ts, te.width, te.x_bearing, fe.ascent, fe.descent, pad };
+        double w = 0, h = 0, pad = 0;
+        int baseline = 0;
+        cairo_surface_t* ts = rasterizePangoText(size, family, text, bold, italic,
+                                                  r, g, b, w, h, baseline, pad);
+        if (ts) {
+          TextEntry ne{ ts, w, h, baseline, pad };
           e = textPut(key, ne);
         }
       }
@@ -705,39 +869,21 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
         const double containerW = c[9];
         if (containerW > 0 && align != "left") {
           const double cX = c[8];
-          if (align == "center")     drawX = cX + (containerW - e->width) / 2.0 - e->xBearing;
-          else if (align == "right") drawX = cX + containerW - e->width - e->xBearing;
+          if (align == "center")     drawX = cX + (containerW - e->width) / 2.0;
+          else if (align == "right") drawX = cX + containerW - e->width;
         }
         const double lineH = c[10];
-        const double drawY = (lineH > 0)
-          ? c[2] + (lineH - (e->ascent + e->descent)) / 2.0 + e->ascent
-          : c[2] + e->ascent;
+        const double topY = (lineH > 0)
+          ? c[2] + (lineH - e->height) / 2.0
+          : c[2];
         cairo_save(cr);
-        cairo_set_source_surface(cr, e->surf, drawX - e->pad + e->xBearing, drawY - e->pad - e->ascent);
+        cairo_set_source_surface(cr, e->surf, drawX - e->pad, topY - e->pad);
         cairo_paint_with_alpha(cr, a);
         cairo_restore(cr);
       } else {
         // Uncacheable (oversized) → draw glyphs directly.
-        cairo_select_font_face(cr, family.c_str(),
-          italic ? CAIRO_FONT_SLANT_ITALIC : CAIRO_FONT_SLANT_NORMAL,
-          bold   ? CAIRO_FONT_WEIGHT_BOLD  : CAIRO_FONT_WEIGHT_NORMAL);
-        cairo_set_font_size(cr, size);
-        cairo_set_source_rgba(cr, r, g, b, a);
-        cairo_text_extents_t te; cairo_text_extents(cr, text.c_str(), &te);
-        cairo_font_extents_t fe; cairo_font_extents(cr, &fe);
-        double drawX = c[1];
-        const double containerW = c[9];
-        if (containerW > 0 && align != "left") {
-          const double cX = c[8];
-          if (align == "center")     drawX = cX + (containerW - te.width) / 2.0 - te.x_bearing;
-          else if (align == "right") drawX = cX + containerW - te.width - te.x_bearing;
-        }
-        const double lineH = c[10];
-        const double drawY = (lineH > 0)
-          ? c[2] + (lineH - (fe.ascent + fe.descent)) / 2.0 + fe.ascent
-          : c[2] + fe.ascent;
-        cairo_move_to(cr, drawX, drawY);
-        cairo_show_text(cr, text.c_str());
+        renderPangoText(cr, c[1], c[2], r, g, b, a, size, family, text, bold, italic,
+                        align, c[8], c[9], c[10]);
       }
 
     } else if (type == CT_DRAW_SVG) {

@@ -19,13 +19,15 @@
         "/usr/include/cairo",
         "/usr/include/freetype2",
         "/usr/include/pixman-1",
-        "<!@(pkg-config --cflags-only-I librsvg-2.0 | tr ' ' '\\n' | sed 's/-I//')"
+        "<!@(pkg-config --cflags-only-I librsvg-2.0 | tr ' ' '\\n' | sed 's/-I//')",
+        "<!@(pkg-config --cflags-only-I pangocairo | tr ' ' '\\n' | sed 's/-I//')"
       ],
       "libraries": [
         "-ldrm",
         "-lcairo",
         "-ludev",
-        "<!@(pkg-config --libs librsvg-2.0)"
+        "<!@(pkg-config --libs librsvg-2.0)",
+        "<!@(pkg-config --libs pangocairo)"
       ],
       "defines": ["NAPI_CPP_EXCEPTIONS"]
     }

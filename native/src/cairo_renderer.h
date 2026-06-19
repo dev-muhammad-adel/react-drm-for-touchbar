@@ -56,10 +56,9 @@ private:
   // alignment/baseline math needs no per-frame text_extents (the shaping step).
   struct TextEntry {
     _cairo_surface* surf;
-    double width;      // ink advance width (cairo_text_extents.width)
-    double xBearing;   // cairo_text_extents.x_bearing
-    double ascent;     // cairo_font_extents.ascent
-    double descent;    // cairo_font_extents.descent
+    double width;      // logical advance width (Pango logical rect)
+    double height;     // logical height
+    int    baseline;   // Pango baseline in surface pixels
     double pad;        // surface margin baked around the glyphs
   };
   using TextList = std::list<std::pair<std::string, TextEntry>>;
