@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Text, Button, SwipeZone } from 'react-drm';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Box, Text, Button, SwipeZone, Svg, animated, useSpringValue } from 'react-drm';
 import {
   MdSkipPrevious, MdPlayArrow, MdPause, MdSkipNext,
   MdChevronLeft, MdChevronRight,
 } from 'react-icons/md';
 import { useMediaPlayers } from '../../hooks/useMediaPlayers';
+import { useAlbumArt } from '../../hooks/useAlbumArt';
 import { CgChevronDoubleDown } from 'react-icons/cg';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 
@@ -14,6 +15,66 @@ const ACCENT: Record<string, string> = {
 };
 
 const FONT = '';
+
+// Build the vinyl record as one cached SVG: black disc, a few groove rings, the
+// album art clipped to a circle (when present), a colored center label and the
+// spindle hole. Rendered once per track; the spinning is done by rotating the
+// wrapping Box, so this markup stays constant (and cached) frame to frame.
+function buildVinylSvg(size: number, accent: string, artUri: string | null): string {
+  const c       = size / 2;
+  const rOuter  = size / 2;
+  const rArt    = size * 0.42;
+  const rLabel  = size * 0.17;
+  const rHole   = Math.max(1.5, size * 0.035);
+  const groove  = Math.max(1, size * 0.012);
+
+  const grooves = [0.92, 0.80, 0.68, 0.56].map(f =>
+    `<circle cx="${c}" cy="${c}" r="${(rOuter * f).toFixed(2)}" fill="none" stroke="#000" stroke-opacity="0.5" stroke-width="${groove.toFixed(2)}"/>`
+  ).join('');
+
+  const art = artUri
+    ? `<clipPath id="art"><circle cx="${c}" cy="${c}" r="${rArt.toFixed(2)}"/></clipPath>` +
+      `<image href="${artUri}" x="${(c - rArt).toFixed(2)}" y="${(c - rArt).toFixed(2)}" ` +
+      `width="${(rArt * 2).toFixed(2)}" height="${(rArt * 2).toFixed(2)}" ` +
+      `preserveAspectRatio="xMidYMid slice" clip-path="url(#art)"/>`
+    : '';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+    `<circle cx="${c}" cy="${c}" r="${rOuter.toFixed(2)}" fill="#0a0a0a"/>` +
+    grooves +
+    art +
+    `<circle cx="${c}" cy="${c}" r="${rLabel.toFixed(2)}" fill="${accent}"/>` +
+    `<circle cx="${c}" cy="${c}" r="${rHole.toFixed(2)}" fill="#0a0a0a"/>` +
+    `</svg>`;
+}
+
+// Spinning vinyl. The disc is a static cached SVG; the rotation is a real Box
+// transform (style.rotate, degrees) driven by a looping spring — only while the
+// track is playing. Paused → the spring stops and the angle holds.
+function Vinyl({ size, accent, artUrl, spinning }: { size: number; accent: string; artUrl: string; spinning: boolean }) {
+  const artUri = useAlbumArt(artUrl || undefined);
+  const spin   = useSpringValue(0);
+
+  useEffect(() => {
+    if (spinning) {
+      const from = spin.get();
+      // +360 per loop → seamless wrap (0° ≡ 360°); linear easing for constant speed.
+      spin.start({ from, to: from + 360, loop: true, config: { duration: 4000, easing: (t: number) => t } });
+    } else {
+      spin.stop();
+    }
+    return () => { spin.stop(); };
+  }, [spinning, spin]);
+
+  const markup = useMemo(() => buildVinylSvg(size, accent, artUri), [size, accent, artUri]);
+
+  return (
+    <animated.Box style={{ width: size, height: size, rotate: spin }}>
+      <Svg src={markup} width={size} height={size} />
+    </animated.Box>
+  );
+}
+
 export function MediaMprisList({ width, height }: { width: number; height: number }) {
   const { players } = useMediaPlayers();
 
@@ -32,7 +93,6 @@ const prev = () => {
   if (index <= 0) return;
   setIndex(i => i - 1);
 };
-console.log(players[0]?.state.title)
 
   const iconSz = Math.round(height * 0.48);
 const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
@@ -140,6 +200,14 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
                   >
                     <MdSkipNext style={{ width: iconSz, height: iconSz }} />
                   </Button>
+
+                  {/* spinning vinyl with album art */}
+                  <Vinyl
+                    size={Math.round(height * 0.9)}
+                    accent={color}
+                    artUrl={player.state.artUrl}
+                    spinning={player.state.status === 'Playing'}
+                  />
 
                   {/* text */}
                   <Box style={{ flexDirection: 'column' }}>

@@ -19,6 +19,8 @@ export interface MediaPlayerState {
   title:  string;
   artist: string;
   status: PlayerStatus;
+  /** Album-art URL from MPRIS `mpris:artUrl` (http/https/file/data), or '' if none. */
+  artUrl: string;
 }
 
 export interface MediaPlayer {
@@ -36,9 +38,9 @@ export interface MediaPlayer {
   previous(): void;
 }
 
-const IDLE: MediaPlayerState = { title: '', artist: '', status: 'Stopped' };
+const IDLE: MediaPlayerState = { title: '', artist: '', status: 'Stopped', artUrl: '' };
 
-function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerState, 'title' | 'artist'> {
+function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerState, 'title' | 'artist' | 'artUrl'> {
   const m = meta ?? {};
   const artistRaw = m['xesam:artist']?.value;
   let title = (m['xesam:title']?.value as string) ?? '';
@@ -50,6 +52,7 @@ function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerSt
   return {
     title,
     artist: Array.isArray(artistRaw) ? artistRaw.join(', ') : ((artistRaw as string) ?? ''),
+    artUrl: (m['mpris:artUrl']?.value as string) ?? '',
   };
 }
 
@@ -141,7 +144,8 @@ export function useMediaPlayers(): UseMediaPlayersResult {
             if (changed.PlaybackStatus) next.status = changed.PlaybackStatus.value as PlayerStatus;
             if (changed.Metadata) Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
         
-            if (next.title === current.title && next.artist === current.artist && next.status === current.status) {
+            if (next.title === current.title && next.artist === current.artist
+                && next.status === current.status && next.artUrl === current.artUrl) {
               return prev;
             }
             return { ...prev, [service]: next };
