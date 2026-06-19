@@ -58,6 +58,8 @@ export interface UseMediaPlayersResult {
   show: boolean;
   /** True when no Chrome/Spotify MPRIS player is present (convenience alias). */
   hide: boolean;
+  /** True until the first bus scan resolves — distinguishes "still discovering" from "no players". */
+  loading: boolean;
   /** One entry per detected player, in detection order. */
   players: MediaPlayer[];
 }
@@ -69,6 +71,7 @@ export interface UseMediaPlayersResult {
 export function useMediaPlayers(): UseMediaPlayersResult {
   const [services, setServices] = useState<string[]>([]);
   const [states,   setStates]   = useState<Record<string, MediaPlayerState>>({});
+  const [loading,  setLoading]  = useState(true);
   const busRef = useRef<MessageBus | null>(null);
 
   // ── Track matching MPRIS service names on the session bus ──────────────────
@@ -96,7 +99,7 @@ export function useMediaPlayers(): UseMediaPlayersResult {
         if (match) svcs.add(name);
       });
       sync();
-    })().catch(() => {});
+    })().catch(() => {}).finally(() => { if (alive) setLoading(false); });
 
     return () => { alive = false; busRef.current = null; bus.disconnect(); };
   }, []);
@@ -137,6 +140,10 @@ export function useMediaPlayers(): UseMediaPlayersResult {
             const next: MediaPlayerState = { ...current };
             if (changed.PlaybackStatus) next.status = changed.PlaybackStatus.value as PlayerStatus;
             if (changed.Metadata) Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
+        
+            if (next.title === current.title && next.artist === current.artist && next.status === current.status) {
+              return prev;
+            }
             return { ...prev, [service]: next };
           });
         });
@@ -156,7 +163,6 @@ export function useMediaPlayers(): UseMediaPlayersResult {
     };
   }, [services]);
 
-  // ── Stable control callbacks keyed by service ──────────────────────────────
   const send = useCallback((service: string | undefined, member: 'PlayPause' | 'Next' | 'Previous') => {
     const bus = busRef.current;
     const svc = service ?? services[0];
@@ -170,7 +176,6 @@ export function useMediaPlayers(): UseMediaPlayersResult {
   const next      = useCallback((service?: string) => send(service, 'Next'),      [send]);
   const previous  = useCallback((service?: string) => send(service, 'Previous'),  [send]);
 
-  // ── Expose one MediaPlayer object per detected service ─────────────────────
   const players = useMemo<MediaPlayer[]>(() => {
     return services.map(service => {
       const match = PLAYER_CONFIGS.find(c => service.startsWith(c.prefix));
@@ -187,5 +192,5 @@ export function useMediaPlayers(): UseMediaPlayersResult {
 
   const show = players.length > 0;
 
-  return { show, hide: !show, players };
+  return { show, hide: !show, loading, players };
 }

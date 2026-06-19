@@ -7,7 +7,7 @@ import { LayerHost, useLayers } from '.';
 import type { Layer, LayerHostHandle } from '.';
 import { useActiveWindow } from '../hooks/useActiveWindow';
 import { useMediaPlayers } from '../hooks/useMediaPlayers';
-import { mediaMprisListPinnedAtom } from '../hooks/useMediaMprisList';
+import { mediaMprisListPinnedAtom } from '../store/mediaMprisList';
 import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
 import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
@@ -78,11 +78,8 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const { go } = useLayers(); // outer context — navigates top-level layers
   const leftRef = useRef<LayerHostHandle>(null);
   const { class: activeClass } = useActiveWindow();
-  const { show: showMedia } = useMediaPlayers();
+  const { show: showMedia, loading: mediaLoading } = useMediaPlayers();
   const [isMediaMprisListPinned, setIsMediaMprisListPinned] = useAtom(mediaMprisListPinnedAtom);
-
-  // Build the right-side button row. The media button appears only when a
-  // Chrome (via plasma-browser-integration) or Spotify MPRIS player is present.
   const mediaBtns: RightBtn[] = useMemo(() => {
     const base: RightBtn[] = [
       { ...BASE_BTNS[0], onClick: () => go('media', 'slide-left') },
@@ -120,16 +117,23 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const leftW = width - rightW - 20;
 
   useEffect(() => {
-    if (isMediaMprisListPinned) return; // keep the manually pinned layer visible across window changes
-    const target = resolveLeftSideLayerByClass(activeClass);
-    leftRef.current?.go("mediaMprisList", 'fade');
+    console.log('SplittedLayer: activeClass', activeClass, 'isMediaMprisListPinned', isMediaMprisListPinned);
+    if (isMediaMprisListPinned) {
+ leftRef.current?.go('mediaMprisList', 'fade');
+    }else{
+
+      const target = resolveLeftSideLayerByClass(activeClass);
+      leftRef.current?.go(target, 'fade');
+    }
   }, [activeClass, isMediaMprisListPinned]);
 
   useEffect(() => {
+    console.log({ showMedia, mediaLoading, isMediaMprisListPinned });
+    if (mediaLoading) return;
     if (showMedia) return;
     if (!isMediaMprisListPinned) return;
     setIsMediaMprisListPinned(false);
-  }, [showMedia, isMediaMprisListPinned]);
+  }, [showMedia, mediaLoading, isMediaMprisListPinned]);
 
   return (
     <Box style={{ justifyContent: 'space-between', flex: 1, gap: 20 }}>
