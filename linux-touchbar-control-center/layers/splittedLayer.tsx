@@ -69,7 +69,7 @@ const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
   { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
   { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
   { key: 'playpause',  icon: <MdPlayArrow    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
-  { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
+  // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
