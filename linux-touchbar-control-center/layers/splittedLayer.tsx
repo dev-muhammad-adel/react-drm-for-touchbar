@@ -87,7 +87,6 @@ export function SplittedLayer({ width, height }: { width: number; height: number
       { ...BASE_BTNS[2], onClick: () => go('audio-slider', 'slide-up') },
       { ...BASE_BTNS[3], onClick: () => go('brightness-slider', 'slide-up') },
       { ...BASE_BTNS[4], onClick: () => keys.pressKey(KEY.PLAYPAUSE) },
-      { ...BASE_BTNS[5], onClick: () => keys.pressKey(KEY.SEARCH) },
     ];
     if (showMedia) {
       base.splice(1, 0, {
