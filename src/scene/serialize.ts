@@ -338,7 +338,10 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const align      = node.style?.textAlign ?? 'left';
     const containerX = parentLb?.x ?? lb.x;
     const containerW = parentLb?.w ?? 0;
-    const lineHeight = node.style?.lineHeight ?? 0;
+    // Default the line box to the text's measured layout height so the native
+    // renderer vertically centers the glyph ink within it (otherwise text
+    // hugs the top of its box and reads as sitting low when the box is centered).
+    const lineHeight = node.style?.lineHeight ?? lb.h;
     if (a > 0.001) {
       cmds.push({ cmd: 'text', x: lb.x, y: lb.y, r, g, b, a, size, family, text: node.text, bold, italic, align, containerX, containerW, lineHeight });
     }

@@ -60,6 +60,8 @@ private:
     double height;     // logical height
     int    baseline;   // Pango baseline in surface pixels
     double pad;        // surface margin baked around the glyphs
+    double inkTop;     // ink-rect top, offset from the layout origin (px)
+    double inkH;       // ink-rect height — the actual drawn glyph extent (px)
   };
   using TextList = std::list<std::pair<std::string, TextEntry>>;
   TextList text_lru_;

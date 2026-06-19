@@ -240,10 +240,11 @@ static void renderPangoText(cairo_t* cr,
   pango_layout_set_text(layout, text.c_str(), -1);
   pango_layout_set_attributes(layout, attrs);
 
-  PangoRectangle logical;
-  pango_layout_get_extents(layout, nullptr, &logical);
+  PangoRectangle ink, logical;
+  pango_layout_get_extents(layout, &ink, &logical);
   const double layoutW = logical.width / double(PANGO_SCALE);
-  const double layoutH = logical.height / double(PANGO_SCALE);
+  const double inkTop  = ink.y / double(PANGO_SCALE);
+  const double inkH    = ink.height / double(PANGO_SCALE);
 
   double drawX = x;
   if (containerW > 0 && align != "left") {
@@ -253,7 +254,8 @@ static void renderPangoText(cairo_t* cr,
 
   double drawY = y;
   if (lineH > 0) {
-    drawY = y + (lineH - layoutH) / 2.0;
+    // Center the ink rect (visible pixels), not the logical box.
+    drawY = y + (lineH - inkH) / 2.0 - inkTop;
   }
 
   cairo_set_source_rgba(cr, r, g, b, a);
@@ -301,7 +303,9 @@ static cairo_surface_t* rasterizePangoText(double size,
                                             double& outWidth,
                                             double& outHeight,
                                             int& outBaseline,
-                                            double& outPad) {
+                                            double& outPad,
+                                            double& outInkTop,
+                                            double& outInkH) {
   if (text.empty()) return nullptr;
 
   // Use a temporary 1x1 surface just to have a cairo context for layout.
@@ -312,11 +316,13 @@ static cairo_surface_t* rasterizePangoText(double size,
   PangoAttrList* attrs = nullptr;
   PangoLayout* layout = buildPangoLayout(tcr, family, text, size, bold, italic, &desc, &attrs);
 
-  PangoRectangle logical;
-  pango_layout_get_extents(layout, nullptr, &logical);
+  PangoRectangle ink, logical;
+  pango_layout_get_extents(layout, &ink, &logical);
   outBaseline = pango_layout_get_baseline(layout) / PANGO_SCALE;
   outWidth    = logical.width / double(PANGO_SCALE);
   outHeight   = logical.height / double(PANGO_SCALE);
+  outInkTop   = ink.y / double(PANGO_SCALE);       // ink top relative to layout origin
+  outInkH     = ink.height / double(PANGO_SCALE);  // visible glyph extent
 
   const double pad = 2.0;
   const int W = (int)ceil(outWidth + 2 * pad + 1);
@@ -864,12 +870,12 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
       const TextEntry* e = textGet(key);
       if (!e) {
         // Miss: shape + rasterize once into a dedicated surface, then cache it.
-        double w = 0, h = 0, pad = 0;
+        double w = 0, h = 0, pad = 0, inkTop = 0, inkH = 0;
         int baseline = 0;
         cairo_surface_t* ts = rasterizePangoText(size, family, text, bold, italic,
-                                                  r, g, b, w, h, baseline, pad);
+                                                  r, g, b, w, h, baseline, pad, inkTop, inkH);
         if (ts) {
-          TextEntry ne{ ts, w, h, baseline, pad };
+          TextEntry ne{ ts, w, h, baseline, pad, inkTop, inkH };
           e = textPut(key, ne);
         }
       }
@@ -885,8 +891,11 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
           else if (align == "right") drawX = cX + containerW - e->width;
         }
         const double lineH = c[10];
+        // Center the *ink* (visible pixels) within the line box: place the
+        // layout origin so the ink rect is vertically centered. Logical-box
+        // centering drifts low because the logical rect has uneven leading.
         const double topY = (lineH > 0)
-          ? c[2] + (lineH - e->height) / 2.0
+          ? c[2] + (lineH - e->inkH) / 2.0 - e->inkTop
           : c[2];
         cairo_save(cr);
         cairo_set_source_surface(cr, e->surf, drawX - e->pad, topY - e->pad);
