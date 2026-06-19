@@ -2,11 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, Button, SwipeZone, Svg, animated, useSpringValue } from 'react-drm';
 import {
   MdSkipPrevious, MdPlayArrow, MdPause, MdSkipNext,
-  MdChevronLeft, MdChevronRight,
 } from 'react-icons/md';
 import { useMediaPlayers } from '../../hooks/useMediaPlayers';
 import { useAlbumArt } from '../../hooks/useAlbumArt';
-import { CgChevronDoubleDown } from 'react-icons/cg';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 
 const ACCENT: Record<string, string> = {
@@ -81,8 +79,11 @@ export function MediaMprisList({ width, height }: { width: number; height: numbe
   const [index, setIndex] = useState(0);
   const [dragX, setDragX] = useState(0);
 
-
-  // const current = players[safeIndex];
+  // Keep index in range when a player disappears — otherwise a stale index
+  // pushes the track fully off-screen (blank panel) until the user swipes back.
+  useEffect(() => {
+    setIndex(i => Math.min(i, Math.max(0, players.length - 1)));
+  }, [players.length]);
 
 const next = () => {
   if (index >= players.length - 1) return;
@@ -95,7 +96,10 @@ const prev = () => {
 };
 
   const iconSz = Math.round(height * 0.48);
-const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
+  // Viewport between the two chevrons: panel width minus both 24px chevron
+  // buttons and the two 6px gaps of the row. One carousel item must equal this
+  // exactly, or paging by itemWidth drifts off-center.
+  const itemWidth = width - 24 * 2 - 6 * 2;
   const trackWidth = useMemo(() => players.length * itemWidth, [players.length, itemWidth]);
 
   const atStart = index <= 0;                      // left chevron disabled
@@ -136,7 +140,7 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
       >
 
         <SwipeZone
-          width={width}
+          width={itemWidth}
           height={height}
           threshold={80}
           onScrollMove={(dx) => setDragX(dx)}
@@ -160,12 +164,12 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
             }}
           >
 
-            {players.map((player, i) => {
+            {players.map((player) => {
               const color = ACCENT[player.name] ?? '#666';
 
               return (
                 <Box
-                  key={player.name + i}
+                  key={player.service}
                   style={{
                     width: itemWidth,
                     height,

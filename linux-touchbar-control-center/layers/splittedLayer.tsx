@@ -96,16 +96,10 @@ export function SplittedLayer({ width, height }: { width: number; height: number
         width: 120,
         color: isMediaMprisListPinned ? '#2d5a3d' : '#4f4b4f',
         activeColor: isMediaMprisListPinned ? '#3d7a52' : '#666666',
-        onClick: () => {
-          if (isMediaMprisListPinned) {
-            setIsMediaMprisListPinned(false);
-            const target = resolveLeftSideLayerByClass(activeClass);
-            leftRef.current?.go(target, 'fade');
-          } else {
-            setIsMediaMprisListPinned(true);
-            leftRef.current?.go('mediaMprisList', 'fade');
-          }
-        },
+        // Just toggle the pin — the navigation effect below reacts to the
+        // change and drives the left panel (no manual go() here, which would
+        // fire the fade twice).
+        onClick: () => setIsMediaMprisListPinned(p => !p),
       });
     }
 
@@ -116,19 +110,20 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const rightW = mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 2;
   const leftW = width - rightW - 20;
 
+  const leftTargetRef = useRef<SplittedLeftLayerName | null>(null);
   useEffect(() => {
-    console.log('SplittedLayer: activeClass', activeClass, 'isMediaMprisListPinned', isMediaMprisListPinned);
-    if (isMediaMprisListPinned) {
- leftRef.current?.go('mediaMprisList', 'fade');
-    }else{
-
-      const target = resolveLeftSideLayerByClass(activeClass);
-      leftRef.current?.go(target, 'fade');
-    }
+    // Pinned → stay on the list; otherwise resolve from the active window.
+    const target = isMediaMprisListPinned
+      ? 'mediaMprisList'
+      : resolveLeftSideLayerByClass(activeClass);
+    // Skip redundant navigation: while pinned the target stays put across
+    // window changes, and two windows of the same kind resolve to one layer.
+    if (target === leftTargetRef.current) return;
+    leftTargetRef.current = target;
+    leftRef.current?.go(target, 'fade');
   }, [activeClass, isMediaMprisListPinned]);
 
   useEffect(() => {
-    console.log({ showMedia, mediaLoading, isMediaMprisListPinned });
     if (mediaLoading) return;
     if (showMedia) return;
     if (!isMediaMprisListPinned) return;
