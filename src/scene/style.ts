@@ -88,4 +88,7 @@ export interface Style {
   borderTopRightRadius?: number;
   borderBottomLeftRadius?: number;
   borderBottomRightRadius?: number;
+
+  /** Rotation in degrees about the box center. Visual only — does not affect layout. */
+  rotate?: number;
 }

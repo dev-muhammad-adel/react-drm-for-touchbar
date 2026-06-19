@@ -741,7 +741,8 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
 static constexpr int BSTRIDE = 22;
 enum CmdType { CT_CLEAR=0, CT_FILL=1, CT_STROKE=2, CT_SHADOW=3,
                CT_CLIP_PUSH=4, CT_CLIP_POP=5, CT_TEXT=6,
-               CT_DRAW_SVG=7, CT_DRAW_IMAGE=8, CT_OVERLAY=9 };
+               CT_DRAW_SVG=7, CT_DRAW_IMAGE=8, CT_OVERLAY=9,
+               CT_TRANSFORM_PUSH=10, CT_TRANSFORM_POP=11 };
 
 void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
                                   Napi::Array strings, Napi::Array buffers) {
@@ -797,6 +798,17 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
       cairo_save(cr);
       rounded_rect(cr, c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8]);
       cairo_clip(cr);
+
+    } else if (type == CT_TRANSFORM_POP) {
+      cairo_restore(cr);
+
+    } else if (type == CT_TRANSFORM_PUSH) {
+      // Rotate the subtree about (cx,cy): translate to pivot, rotate, translate
+      // back. Shares the save/restore stack with clips — pairs balance per box.
+      cairo_save(cr);
+      cairo_translate(cr, c[1], c[2]);
+      cairo_rotate(cr, c[3]);
+      cairo_translate(cr, -c[1], -c[2]);
 
     } else if (type == CT_FILL) {
       double a = c[8]; if (a <= 0) a = 1.0;

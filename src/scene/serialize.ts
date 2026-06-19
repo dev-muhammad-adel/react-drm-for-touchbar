@@ -9,6 +9,8 @@ export type DrawCommand =
   | { cmd: 'shadow'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number; r: number; g: number; b: number; a: number; dx: number; dy: number; blur: number; inset: boolean }
   | { cmd: 'clip_push'; x: number; y: number; w: number; h: number; tl: number; tr: number; br: number; bl: number }
   | { cmd: 'clip_pop' }
+  | { cmd: 'transform_push'; cx: number; cy: number; rotate: number }  // rotate in radians, pivot (cx,cy)
+  | { cmd: 'transform_pop' }
   | { cmd: 'text'; x: number; y: number; r: number; g: number; b: number; a: number; size: number; family: string; text: string; bold: boolean; italic: boolean; align: string; containerX: number; containerW: number; lineHeight: number }
   | { cmd: 'draw_svg'; x: number; y: number; w: number; h: number; src: string }
   | { cmd: 'draw_image'; x: number; y: number; w: number; h: number; sw: number; sh: number; data: Buffer; tl: number; tr: number; br: number; bl: number }
@@ -28,6 +30,10 @@ function cmdSignature(c: Exclude<DrawCommand, { cmd: 'draw_image' }>): string {
       return `cp:${c.x},${c.y},${c.w},${c.h},${c.tl},${c.tr},${c.br},${c.bl}`;
     case 'clip_pop':
       return 'co';
+    case 'transform_push':
+      return `tp:${c.cx},${c.cy},${c.rotate}`;
+    case 'transform_pop':
+      return 'to';
     case 'text':
       return `t:${c.x},${c.y},${c.r},${c.g},${c.b},${c.a},${c.size},${c.family},${c.text},${c.bold ? 1 : 0},${c.italic ? 1 : 0},${c.align},${c.containerX},${c.containerW},${c.lineHeight}`;
     case 'draw_svg':
@@ -46,6 +52,7 @@ export function frameSignature(cmds: DrawCommand[]): string | null {
   let out = '';
   for (const c of cmds) {
     if (c.cmd === 'draw_image') return null; // GIF animating → always render
+    if (c.cmd === 'transform_push') return null; // rotation animates → always render (and skip hashing the rotated subtree)
     out += `${cmdSignature(c)};`;
   }
   return out;
@@ -139,6 +146,12 @@ function cmdEq(a: DrawCommand, b: DrawCommand): boolean {
         && a.bl === (b as typeof a).bl;
     case 'clip_pop':
       return true;
+    case 'transform_push':
+      return a.cx === (b as typeof a).cx
+        && a.cy === (b as typeof a).cy
+        && a.rotate === (b as typeof a).rotate;
+    case 'transform_pop':
+      return true;
     case 'text':
       return a.x === (b as typeof a).x
         && a.y === (b as typeof a).y
@@ -169,6 +182,10 @@ function cmdEq(a: DrawCommand, b: DrawCommand): boolean {
 
 export function damageRects(prev: DrawCommand[] | null, next: DrawCommand[]): Rect[] | null {
   if (!prev || prev.length !== next.length) return null;
+  // A rotated subtree's child commands are emitted in pre-rotation coordinates,
+  // so their bounding boxes don't reflect where they paint. Can't compute a
+  // partial damage region — force a full-FB flush whenever a transform is live.
+  for (const c of next) if (c.cmd === 'transform_push') return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, changed = false;
   for (let i = 0; i < next.length; i++) {
     if (cmdEq(prev[i], next[i])) continue;
@@ -238,6 +255,12 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
     const a  = node.style?.opacity ?? 1;
     const [tl, tr, br, bl] = resolveCornerRadii(node.style);
+    // Rotation wraps the whole box (background + border + children) around its
+    // center. Layout is untouched — this only rewrites the draw CTM natively.
+    const rotateDeg = node.style?.rotate ?? 0;
+    if (rotateDeg !== 0) {
+      cmds.push({ cmd: 'transform_push', cx: lb.x + lb.w / 2, cy: lb.y + lb.h / 2, rotate: rotateDeg * Math.PI / 180 });
+    }
     const shadowOpacity = node.style?.shadowOpacity ?? 1;
     let shadowCmd: Extract<DrawCommand, { cmd: 'shadow' }> | null = null;
     if (node.style?.shadowColor && shadowOpacity > 0) {
@@ -301,6 +324,7 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
       for (const child of [...absNeg, ...flow, ...absPos]) emitNode(child, cmds, layout, lb, childOffsetX);
     }
     if (clip) cmds.push({ cmd: 'clip_pop' });
+    if (rotateDeg !== 0) cmds.push({ cmd: 'transform_pop' });
   } else if (node.type === 'text') {
     const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
     const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
@@ -371,6 +395,8 @@ export const CMD_TYPE = {
   DRAW_SVG:    7,
   DRAW_IMAGE:  8,
   OVERLAY:     9,
+  TRANSFORM_PUSH: 10,
+  TRANSFORM_POP:  11,
 } as const;
 
 /** Float64 words per command slot. */
@@ -386,6 +412,8 @@ export const BINARY_STRIDE = 22;
 //  CLEAR:       [1]=r [2]=g [3]=b
 //  OVERLAY:     [1]=a
 //  CLIP_POP:    (no fields)
+//  TRANSFORM_POP:  (no fields)
+//  TRANSFORM_PUSH: [1]=cx [2]=cy [3]=rotate(radians)
 //  CLIP_PUSH:   [1]=x [2]=y [3]=w [4]=h [5]=tl [6]=tr [7]=br [8]=bl
 //  FILL_RECT:   [1]=x [2]=y [3]=w [4]=h [5]=r [6]=g [7]=b [8]=a [9]=tl [10]=tr [11]=br [12]=bl
 //  STROKE_RECT: [1]=x [2]=y [3]=w [4]=h [5]=r [6]=g [7]=b [8]=a [9]=tl [10]=tr [11]=br [12]=bl [13]=lineWidth  str0=borderStyle
@@ -445,6 +473,14 @@ export function toBinaryBuffer(cmds: DrawCommand[], shiftX = 0, shiftY = 0): Bin
         break;
       case 'clip_pop':
         data[base] = CMD_TYPE.CLIP_POP;
+        break;
+      case 'transform_pop':
+        data[base] = CMD_TYPE.TRANSFORM_POP;
+        break;
+      case 'transform_push':
+        data[base]   = CMD_TYPE.TRANSFORM_PUSH;
+        data[base+1] = c.cx + shiftX; data[base+2] = c.cy + shiftY;
+        data[base+3] = c.rotate;
         break;
       case 'clip_push':
         data[base]   = CMD_TYPE.CLIP_PUSH;
