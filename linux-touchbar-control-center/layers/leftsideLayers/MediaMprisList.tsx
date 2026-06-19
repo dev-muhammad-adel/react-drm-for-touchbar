@@ -98,6 +98,9 @@ const prev = () => {
 const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
   const trackWidth = useMemo(() => players.length * itemWidth, [players.length, itemWidth]);
 
+  const atStart = index <= 0;                      // left chevron disabled
+  const atEnd   = index >= players.length - 1;     // right chevron disabled
+
   if (players.length === 0) {
     return (
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8 }}>
@@ -112,7 +115,16 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
     <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center',gap:6 }}>
 
       {/* left arrow */}
-      <FaChevronLeft style={{ width: 12, height: 12 }} fill="#fff" />
+      <Button
+        width={24}
+        height={height}
+        color="transparent"
+        activeColor={atStart ? 'transparent' : '#1e293b'}
+        onClick={atStart ? undefined : prev}
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6, opacity: atStart ? 0.3 : 1 }}
+      >
+        <FaChevronLeft style={{ width: 12, height: 12 }} fill={atStart ? '#555' : '#fff'} />
+      </Button>
 
       {/* VIEWPORT */}
       <Box
@@ -171,10 +183,10 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
                   <Button
                     width={60}
                     height={height}
-                    color="#3a3a3a" activeColor="#4f4b4f" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+                    color="#4f4b4f" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
                     onClick={player.previous}
                   >
-                    <MdSkipPrevious style={{ width: iconSz, height: iconSz }} />
+                    <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill='#fff' />
                   </Button>
 
                   {/* play/pause */}
@@ -186,8 +198,8 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
                     style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
                   >
                     {player.state.status === 'Playing'
-                      ? <MdPause style={{ width: iconSz, height: iconSz }} />
-                      : <MdPlayArrow style={{ width: iconSz, height: iconSz }} />
+                      ? <MdPause style={{ width: iconSz, height: iconSz }} fill="#fff" />
+                      : <MdPlayArrow style={{ width: iconSz, height: iconSz }} fill="#fff" />
                     }
                   </Button>
 
@@ -195,10 +207,10 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
                   <Button
                     width={60}
                     height={height}
-                    color="#3a3a3a" activeColor="#4f4b4f" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+                    color="#4f4b4f" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
                     onClick={player.next}
                   >
-                    <MdSkipNext style={{ width: iconSz, height: iconSz }} />
+                    <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
                   </Button>
 
                   {/* spinning vinyl with album art */}
@@ -229,7 +241,16 @@ const itemWidth = width - 12 * 2 - 6 * 2; // left/right padding + gap
       </Box>
 
       {/* right arrow */}
-      <FaChevronRight style={{ width: 12, height: 12 }} fill="#fff" />
+      <Button
+        width={24}
+        height={height}
+        color="transparent"
+        activeColor={atEnd ? 'transparent' : '#1e293b'}
+        onClick={atEnd ? undefined : next}
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6, opacity: atEnd ? 0.3 : 1 }}
+      >
+        <FaChevronRight style={{ width: 12, height: 12 }} fill={atEnd ? '#555' : '#fff'} />
+      </Button>
 
     </Box>
   );
