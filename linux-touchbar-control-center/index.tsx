@@ -55,7 +55,9 @@ async function main() {
       onSleep: () => result.suspend(),
       onResume: async () => {
         await attachTouchBar();
-        keyboard.reconnect();
+        // KeyboardReader already auto-reconnects on device loss. Forcing a
+        // fresh udev enumeration here races the BCE/T2 resume path and can
+        // abort inside libudev before the input tree is stable again.
         result.resume();
       },
     }).catch(e => {
