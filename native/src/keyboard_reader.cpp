@@ -2,12 +2,14 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <linux/input.h>
 
 Napi::Object KeyboardReader::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(env, "KeyboardReader", {
-    InstanceMethod("start", &KeyboardReader::Start),
-    InstanceMethod("stop",  &KeyboardReader::Stop),
+    InstanceMethod("start",   &KeyboardReader::Start),
+    InstanceMethod("stop",    &KeyboardReader::Stop),
+    InstanceMethod("isAlive", &KeyboardReader::IsAlive),
   });
   exports.Set("KeyboardReader", func);
   return exports;
@@ -65,6 +67,27 @@ Napi::Value KeyboardReader::Start(const Napi::CallbackInfo& info) {
 Napi::Value KeyboardReader::Stop(const Napi::CallbackInfo& info) {
   DoStop();
   return info.Env().Undefined();
+}
+
+// Cheap, non-destructive liveness probe of the *existing* fd — does NOT re-open
+// or re-scan, so it can't race the BCE/input re-enumeration. Returns false when
+// the fd is closed, poll reports the device gone (POLLHUP/POLLERR/POLLNVAL), or
+// the evdev ioctl fails. NOTE: all of these read kernel-cached state with no USB
+// round-trip, so a device whose transport silently stalled (events stop but the
+// node persists) will still report alive — that's the case the resume logging is
+// meant to reveal.
+Napi::Value KeyboardReader::IsAlive(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (fd_ < 0) return Napi::Boolean::New(env, false);
+
+  struct pollfd p { fd_, 0, 0 };
+  if (poll(&p, 1, 0) < 0) return Napi::Boolean::New(env, false);
+  if (p.revents & (POLLHUP | POLLERR | POLLNVAL)) return Napi::Boolean::New(env, false);
+
+  struct input_id id;
+  if (ioctl(fd_, EVIOCGID, &id) < 0) return Napi::Boolean::New(env, false);
+
+  return Napi::Boolean::New(env, true);
 }
 
 // Emits (code, value) for every EV_KEY event.

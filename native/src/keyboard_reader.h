@@ -12,6 +12,7 @@ public:
 private:
   Napi::Value Start(const Napi::CallbackInfo& info);
   Napi::Value Stop(const Napi::CallbackInfo& info);
+  Napi::Value IsAlive(const Napi::CallbackInfo& info);
 
   void ReadLoop(int fd, int cancel_rfd);
   void DoStop();

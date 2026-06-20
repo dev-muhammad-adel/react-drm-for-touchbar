@@ -15,6 +15,7 @@ function loadNative(): KeyboardAddon {
 interface NativeKeyboardReader {
   start(callback: (code: number, value: number) => void): void;
   stop(): void;
+  isAlive(): boolean;
 }
 
 // Linux keycodes by name (from linux/input-event-codes.h)
@@ -66,6 +67,7 @@ export class KeyboardReader {
   private readonly explicitPath?: string;
   private stopped = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentPath = '';
 
   constructor(devicePath?: string) {
     this.explicitPath = devicePath;
@@ -75,8 +77,12 @@ export class KeyboardReader {
 
   private openHandle(): NativeKeyboardReader {
     const native = loadNative();
-    return new native.KeyboardReader(this.explicitPath ?? native.findKeyboardDevice());
+    const path = this.explicitPath ?? native.findKeyboardDevice();
+    this.currentPath = path;
+    return new native.KeyboardReader(path);
   }
+
+  get devicePath(): string { return this.currentPath; }
 
   private startHandle(): void {
     this.handle.start((code, value) => {
@@ -117,6 +123,11 @@ export class KeyboardReader {
     if (this.stopped) return;
     try { this.handle.stop(); } catch (_) { /* stale handle */ }
     this.scheduleReconnect(0);
+  }
+
+  isAlive(): boolean {
+    if (this.stopped) return false;
+    try { return this.handle.isAlive(); } catch (_) { return false; }
   }
 
   /** Subscribe to raw key events. Returns an unsubscribe function. */

@@ -46,6 +46,49 @@ static std::vector<std::string> enumerate_input(
   return result;
 }
 
+static int score_keyboard(struct udev_device* dev) {
+  int score = 0;
+  const char* syspath = udev_device_get_syspath(dev);
+  struct udev_device* parent = udev_device_get_parent(dev); // the inputN device
+  const char* name = parent ? udev_device_get_sysattr_value(parent, "name") : nullptr;
+  const char* phys = parent ? udev_device_get_sysattr_value(parent, "phys") : nullptr;
+
+  const std::string sp = syspath ? syspath : "";
+  const std::string nm = name ? name : "";
+  const std::string ph = phys ? phys : "";
+
+  if (nm.find("Apple Internal Keyboard") != std::string::npos) score += 100; // exact built-in
+  if (ph.find("bce-vhci") != std::string::npos)                score += 50;  // on the T2 bridge
+  if (sp.find("/devices/virtual/") != std::string::npos)       score -= 100; // ydotoold / our injector
+  else                                                         score += 10;  // real hardware path
+  return score;
+}
+
+static std::string pick_keyboard(struct udev* udev) {
+  struct udev_enumerate* en = udev_enumerate_new(udev);
+  udev_enumerate_add_match_subsystem(en, "input");
+  udev_enumerate_add_match_property(en, "ID_INPUT_KEYBOARD", "1");
+  udev_enumerate_scan_devices(en);
+
+  std::string best;
+  int best_score = -1000000;
+  struct udev_list_entry* entry;
+  udev_list_entry_foreach(entry, udev_enumerate_get_list_entry(en)) {
+    struct udev_device* dev = udev_device_new_from_syspath(
+        udev, udev_list_entry_get_name(entry));
+    if (!dev) continue;
+    const char* node = udev_device_get_devnode(dev);
+    if (node && std::string(node).find("/dev/input/event") == 0 && on_seat0(dev)) {
+      int s = score_keyboard(dev);
+      if (s > best_score) { best_score = s; best = node; }
+    }
+    udev_device_unref(dev);
+  }
+  udev_enumerate_unref(en);
+
+  return best_score >= 0 ? best : std::string();
+}
+
 // ── exported functions ────────────────────────────────────────────────────────
 
 Napi::Value FindKeyboardDevice(const Napi::CallbackInfo& info) {
@@ -53,16 +96,17 @@ Napi::Value FindKeyboardDevice(const Napi::CallbackInfo& info) {
   struct udev* udev = make_udev(env);
   if (!udev) return env.Undefined();
 
-  auto devices = enumerate_input(udev, "ID_INPUT_KEYBOARD", true);
+  std::string node = pick_keyboard(udev);
   udev_unref(udev);
 
-  if (devices.empty()) {
+  if (node.empty()) {
     Napi::Error::New(env,
-      "react-drm: no keyboard found on seat0 via udev. Is a keyboard connected?")
+      "react-drm: no real keyboard found on seat0 (only virtual devices). "
+      "The built-in keyboard may still be enumerating.")
       .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  return Napi::String::New(env, devices[0]);
+  return Napi::String::New(env, node);
 }
 
 Napi::Value FindKeyboardDevices(const Napi::CallbackInfo& info) {
