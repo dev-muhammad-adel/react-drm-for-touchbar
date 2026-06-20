@@ -25,9 +25,9 @@ import { Provider } from 'jotai';
 
 function GotaiProvider({ children }: { children: React.ReactNode }) {
   return (
-    <Provider>
+    <>
       {children}
-    </Provider>
+    </>
   );
 }
 
