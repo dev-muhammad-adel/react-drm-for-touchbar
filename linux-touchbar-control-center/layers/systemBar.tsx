@@ -216,8 +216,9 @@ function StatTile({ icon: Icon, value, color }: {
 }) {
   return (
     <Box style={{
-      flexDirection: 'row', alignItems: 'center', gap: 10,
-      paddingHorizontal: 20, alignSelf: 'stretch', width: 130,
+      flexDirection: 'row', alignItems: 'center', gap: 2,
+      paddingHorizontal: 20, alignSelf: 'stretch', width: 150,
+      justifyContent: 'center',
     }}>
       <Icon style={{ width: 26, height: 26 }} fill={color} stroke="none" />
       <Text style={{ color, fontSize: 22, fontFamily: 'FiraCode Nerd Font Mono' }}>{value}</Text>
@@ -405,7 +406,7 @@ function BatMod({ bat }: { bat: BatteryInfo | null }) {
             : 'HIGH';
 
   return (
-    <Mod width={140}>
+    <Mod width={160}>
       {/* <Label>{stateText}</Label> */}
       <BatteryIcon bat={bat} />
       <Val color={color}>{`${bat.pct}%`}</Val>
@@ -422,9 +423,10 @@ function ClockMod({ time }: { time: Date }) {
        alignItems: 'center', 
       // backgroundColor: '#1e1b4b',
       paddingHorizontal: 20,
+      justifyContent: 'center',
       // alignSelf: 'stretch',
-      // borderLeftWidth: 2,
-      // borderLeftColor: '#818cf8',
+      gap: 6,
+ 
     }}>
       <Text style={{ color: '#fde68a', fontSize: 20, fontFamily: 'IosevkaTerm Nerd Font' }}>{hh}</Text>
       <Text style={{ color: '#94a3b8', fontSize: 14, fontFamily: 'IosevkaTerm Nerd Font' }}>{dd}</Text>
