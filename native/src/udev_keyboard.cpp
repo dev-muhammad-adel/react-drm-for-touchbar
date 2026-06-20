@@ -46,21 +46,27 @@ static std::vector<std::string> enumerate_input(
   return result;
 }
 
+// Score a keyboard candidate using ONLY its syspath. The syspath comes straight
+// from the enumerate entry (cached in the udev_device) and needs no parent walk
+// or sysattr (/sys file) reads — important because this runs on every auto-
+// reconnect, including the one right after system resume while the apple-bce/T2
+// input tree is still re-enumerating. The previous version read name/phys via
+// udev_device_get_parent()+get_sysattr_value(), extra libudev/sysfs work on a
+// half-torn-down device tree that PR #16 already flagged as racing the resume
+// path — and it broke keyboard recovery after suspend on MacBookPro15,1.
+//
+// The syspath alone distinguishes everything we need:
+//   • virtual nodes (ydotoold / our own react-drm-fkeys injector) live under
+//     /devices/virtual/ and must never be bound.
+//   • the built-in T2 keyboard always sits on the apple-bce/bce-vhci bridge.
 static int score_keyboard(struct udev_device* dev) {
-  int score = 0;
   const char* syspath = udev_device_get_syspath(dev);
-  struct udev_device* parent = udev_device_get_parent(dev); // the inputN device
-  const char* name = parent ? udev_device_get_sysattr_value(parent, "name") : nullptr;
-  const char* phys = parent ? udev_device_get_sysattr_value(parent, "phys") : nullptr;
-
   const std::string sp = syspath ? syspath : "";
-  const std::string nm = name ? name : "";
-  const std::string ph = phys ? phys : "";
 
-  if (nm.find("Apple Internal Keyboard") != std::string::npos) score += 100; // exact built-in
-  if (ph.find("bce-vhci") != std::string::npos)                score += 50;  // on the T2 bridge
-  if (sp.find("/devices/virtual/") != std::string::npos)       score -= 100; // ydotoold / our injector
-  else                                                         score += 10;  // real hardware path
+  if (sp.find("/devices/virtual/") != std::string::npos) return -100; // injector — exclude
+  int score = 10;                                                     // real hardware path
+  if (sp.find("apple-bce") != std::string::npos
+      || sp.find("bce-vhci") != std::string::npos) score += 50;       // built-in T2 keyboard
   return score;
 }
 
