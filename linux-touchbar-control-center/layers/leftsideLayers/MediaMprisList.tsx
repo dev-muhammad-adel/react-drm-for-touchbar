@@ -1,18 +1,28 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text, Button, SwipeZone, Svg, animated, useSpringValue } from 'react-drm';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Text, Button, SwipeZone, Svg, animated, useSpringValue, LayoutContext } from 'react-drm';
+import type { BoxNode } from 'react-drm';
 import {
   MdSkipPrevious, MdPlayArrow, MdPause, MdSkipNext,
 } from 'react-icons/md';
-import { useMediaPlayers } from '../../hooks/useMediaPlayers';
+import { type MediaPlayer, useMediaPlayers } from '../../hooks/useMediaPlayers';
 import { useAlbumArt } from '../../hooks/useAlbumArt';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
 
 const ACCENT: Record<string, string> = {
   spotify: '#1db954',
-  chrome:  '#4285f4',
+  browser: '#4285f4',
 };
 
 const FONT = '';
+
+function hms(us: number): string {
+  const s = Math.max(0, Math.floor(us / 1e6));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
 
 // Build the vinyl record as one cached SVG: black disc, a few groove rings, the
 // album art clipped to a circle (when present), a colored center label and the
@@ -70,6 +80,149 @@ function Vinyl({ size, accent, artUrl, spinning }: { size: number; accent: strin
     <animated.Box style={{ width: size, height: size, rotate: spin }}>
       <Svg src={markup} width={size} height={size} />
     </animated.Box>
+  );
+}
+
+function MediaPlayerSlide({
+  player,
+  itemWidth,
+  height,
+  iconSz,
+  color,
+}: {
+  player: MediaPlayer;
+  itemWidth: number;
+  height: number;
+  iconSz: number;
+  color: string;
+}) {
+  const [dragUs, setDragUs] = useState<number | null>(null);
+  const layoutCtx = useContext(LayoutContext);
+  const barRef = useRef<BoxNode | null>(null);
+
+  const shownUs = dragUs ?? player.state.positionUs;
+  const pct = player.state.lengthUs > 0 ? Math.max(0, Math.min(1, shownUs / player.state.lengthUs)) : 0;
+  const fillW = Math.round(Math.max(0, itemWidth - 450) * pct);
+  const barW = Math.max(140, itemWidth - 450);
+
+  const previewAt = (tx: number) => {
+    const lb = barRef.current ? layoutCtx.current.get(barRef.current) : undefined;
+    if (!lb || lb.w <= 0 || player.state.lengthUs <= 0) return;
+    const frac = Math.max(0, Math.min(1, (tx - lb.x) / lb.w));
+    setDragUs(Math.round(frac * player.state.lengthUs));
+  };
+
+  const commitDrag = (tx: number) => {
+    const lb = barRef.current ? layoutCtx.current.get(barRef.current) : undefined;
+    if (!lb || lb.w <= 0 || player.state.lengthUs <= 0) {
+      setDragUs(null);
+      return;
+    }
+    const frac = Math.max(0, Math.min(1, (tx - lb.x) / lb.w));
+    player.seek(Math.round(frac * player.state.lengthUs));
+    setDragUs(null);
+  };
+
+  return (
+    <Box
+      key={player.service}
+      style={{
+        width: itemWidth,
+        height,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingLeft: 8,
+        paddingRight: 8,
+        borderRadius: 8,
+      }}
+    >
+      <Button
+        width={60}
+        height={height}
+        color="#4f4b4f"
+        activeColor="#666666"
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+        onClick={player.previous}
+      >
+        <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill="#fff" />
+      </Button>
+
+      <Button
+        width={100}
+        height={height}
+        color={color}
+        onClick={player.playPause}
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+      >
+        {player.state.status === 'Playing'
+          ? <MdPause style={{ width: iconSz, height: iconSz }} fill="#fff" />
+          : <MdPlayArrow style={{ width: iconSz, height: iconSz }} fill="#fff" />
+        }
+      </Button>
+
+      <Button
+        width={60}
+        height={height}
+        color="#4f4b4f"
+        activeColor="#666666"
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+        onClick={player.next}
+      >
+        <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
+      </Button>
+
+      <Vinyl
+        size={Math.round(height * 0.9)}
+        accent={color}
+        artUrl={player.state.artUrl}
+        spinning={player.state.status === 'Playing'}
+      />
+
+      <Box style={{ flex: 1, flexDirection: 'column', justifyContent: 'center', gap: 4 }}>
+        <Text color="#fff" fontSize={15} fontFamily={FONT}>
+          {player.state.title || 'Unknown'}
+        </Text>
+
+        <Text color="#94a3b8" fontSize={12} fontFamily={FONT}>
+          {player.state.artist}
+        </Text>
+
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Box style={{ width: 42, alignItems: 'flex-end' }}>
+            <Text color="#94a3b8" fontSize={11} fontFamily={FONT}>{hms(shownUs)}</Text>
+          </Box>
+
+          <Button
+            width={barW}
+            height={10}
+            color="transparent"
+            activeColor="transparent"
+            onTouchStart={(tx) => previewAt(tx)}
+            onTouchMove={(tx) => previewAt(tx)}
+            onTouchEnd={(tx) => commitDrag(tx)}
+            onTouchCancel={() => setDragUs(null)}
+          >
+            <Box
+              ref={barRef}
+              style={{
+                width: barW,
+                height: 6,
+                borderRadius: 6,
+                backgroundColor: '#1f2937',
+                overflow: 'hidden',
+              }}
+            >
+              <Box style={{ position: 'absolute', left: 0, top: 0, width: fillW, height: 6, borderRadius: 6, backgroundColor: color }} />
+            </Box>
+          </Button>
+
+          <Box style={{ width: 42 }}>
+            <Text color="#94a3b8" fontSize={11} fontFamily={FONT}>{hms(player.state.lengthUs)}</Text>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
@@ -164,81 +317,16 @@ const prev = () => {
             }}
           >
 
-            {players.map((player) => {
-              const color = ACCENT[player.name] ?? '#666';
-
-              return (
-                <Box
-                  key={player.service}
-                  style={{
-                    width: itemWidth,
-                    height,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingLeft: 8,
-                    paddingRight: 8,
-                    borderRadius: 8,
-                    // backgroundColor: i === 0 ? 'red' : 'blue',
-                  }}
-                >
-
-                  {/* prev */}
-                  <Button
-                    width={60}
-                    height={height}
-                    color="#4f4b4f" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
-                    onClick={player.previous}
-                  >
-                    <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill='#fff' />
-                  </Button>
-
-                  {/* play/pause */}
-                  <Button
-                    width={100}
-                    height={height}
-                    color={color}
-                    onClick={player.playPause}
-                    style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
-                  >
-                    {player.state.status === 'Playing'
-                      ? <MdPause style={{ width: iconSz, height: iconSz }} fill="#fff" />
-                      : <MdPlayArrow style={{ width: iconSz, height: iconSz }} fill="#fff" />
-                    }
-                  </Button>
-
-                  {/* next */}
-                  <Button
-                    width={60}
-                    height={height}
-                    color="#4f4b4f" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
-                    onClick={player.next}
-                  >
-                    <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
-                  </Button>
-
-                  {/* spinning vinyl with album art */}
-                  <Vinyl
-                    size={Math.round(height * 0.9)}
-                    accent={color}
-                    artUrl={player.state.artUrl}
-                    spinning={player.state.status === 'Playing'}
-                  />
-
-                  {/* text */}
-                  <Box style={{ flexDirection: 'column' }}>
-                    <Text color="#fff" fontSize={15} fontFamily={FONT}>
-                      {player.state.title || 'Unknown'}
-                    </Text>
-
-                    <Text color="#94a3b8" fontSize={12} fontFamily={FONT}>
-                      {player.state.artist}
-                    </Text>
-                  </Box>
-
-                </Box>
-              );
-            })}
+            {players.map((player) => (
+              <MediaPlayerSlide
+                key={player.service}
+                player={player}
+                itemWidth={itemWidth}
+                height={height}
+                iconSz={iconSz}
+                color={ACCENT[player.name] ?? '#666'}
+              />
+            ))}
 
           </Box>
         </SwipeZone>
