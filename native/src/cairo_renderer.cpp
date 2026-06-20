@@ -348,6 +348,45 @@ static cairo_surface_t* rasterizePangoText(double size,
   return surf;
 }
 
+// Measure one line of text with the SAME Pango path used for rendering, so the
+// layout engine's box matches the rasterized glyphs. The old per-char heuristic
+// under-measured proportional/shaped text (Arabic especially) → overlaps.
+// args: (text, family, size, bold, italic) → { width, height } in px.
+Napi::Value MeasureText(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  double w = 0, h = 0;
+
+  if (info.Length() >= 5 && info[0].IsString() && info[2].IsNumber()) {
+    std::string text   = info[0].As<Napi::String>().Utf8Value();
+    std::string family = info[1].IsString() ? info[1].As<Napi::String>().Utf8Value() : "";
+    double size        = info[2].As<Napi::Number>().DoubleValue();
+    bool bold          = info[3].ToBoolean().Value();
+    bool italic        = info[4].ToBoolean().Value();
+
+    if (!text.empty() && size > 0) {
+      cairo_surface_t* tmp = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+      cairo_t* tcr = cairo_create(tmp);
+      PangoFontDescription* desc = nullptr;
+      PangoAttrList* attrs = nullptr;
+      PangoLayout* layout = buildPangoLayout(tcr, family, text, size, bold, italic, &desc, &attrs);
+      PangoRectangle logical;
+      pango_layout_get_extents(layout, nullptr, &logical);
+      w = logical.width  / double(PANGO_SCALE);
+      h = logical.height / double(PANGO_SCALE);
+      pango_attr_list_unref(attrs);
+      pango_font_description_free(desc);
+      g_object_unref(layout);
+      cairo_destroy(tcr);
+      cairo_surface_destroy(tmp);
+    }
+  }
+
+  Napi::Object obj = Napi::Object::New(env);
+  obj.Set("width",  Napi::Number::New(env, w));
+  obj.Set("height", Napi::Number::New(env, h));
+  return obj;
+}
+
 CairoRenderer::CairoRenderer(uint8_t* buf, uint32_t fb_w, uint32_t fb_h, uint32_t stride, bool rotate90)
   : buf_(buf), fb_w_(fb_w), fb_h_(fb_h), stride_(stride), rotate90_(rotate90)
 {

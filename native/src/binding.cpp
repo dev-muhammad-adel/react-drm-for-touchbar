@@ -278,6 +278,7 @@ Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   TouchReader::Init(env, exports);
   KeyInjector::Init(env, exports);
   KeyboardReader::Init(env, exports);
+  exports.Set("measureText",         Napi::Function::New(env, MeasureText));
   exports.Set("findKeyboardDevice",  Napi::Function::New(env, FindKeyboardDevice));
   exports.Set("findKeyboardDevices", Napi::Function::New(env, FindKeyboardDevices));
   exports.Set("findPointerDevices",  Napi::Function::New(env, FindPointerDevices));

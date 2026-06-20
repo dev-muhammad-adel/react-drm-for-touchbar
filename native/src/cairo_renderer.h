@@ -9,6 +9,10 @@
 struct _cairo_surface; // forward decl — avoids pulling cairo into this header
 struct _cairo;         // forward decl for the cairo drawing context
 
+// Measure a line of text via Pango (same shaping as rendering) for the layout
+// engine. args: (text, family, size, bold, italic) → { width, height }.
+Napi::Value MeasureText(const Napi::CallbackInfo& info);
+
 class CairoRenderer {
 public:
   CairoRenderer(uint8_t* buffer, uint32_t fb_w, uint32_t fb_h, uint32_t stride, bool rotate90);
