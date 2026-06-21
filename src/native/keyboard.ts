@@ -74,6 +74,11 @@ export function findKeyboardDevices(): string[] { return loadNative().findKeyboa
 export function findPointerDevices(): string[]  { return loadNative().findPointerDevices(); }
 export function findLidDevice(): string         { return loadNative().findLidDevice(); }
 
+// Delay between reconnect attempts. After an apple-bce resume the keyboard node
+// can take a few seconds to re-enumerate, so retry on the same 3s cadence as the
+// touch reader rather than hammering the open.
+const RECONNECT_DELAY_MS = 3000;
+
 export class KeyboardReader {
   private handle: NativeKeyboardReader;
   private listeners = new Set<(code: number, value: number) => void>();
@@ -101,7 +106,7 @@ export class KeyboardReader {
   private startHandle(): void {
     this.handle.start((code, value) => {
       if (code === -1) {
-        this.scheduleReconnect(1000);
+        this.scheduleReconnect(RECONNECT_DELAY_MS);
         return;
       }
       // Guard each listener: this runs inside the native ThreadSafeFunction
@@ -124,7 +129,7 @@ export class KeyboardReader {
         this.startHandle();
       } catch (_) {
         // Device not back yet (or path changed) — keep retrying.
-        this.scheduleReconnect(1000);
+        this.scheduleReconnect(RECONNECT_DELAY_MS);
       }
     }, delayMs);
   }
@@ -166,7 +171,7 @@ export class KeyboardReader {
       this.handle = this.openHandle();
       this.startHandle();
     } catch (_) {
-      this.scheduleReconnect(1000);
+      this.scheduleReconnect(RECONNECT_DELAY_MS);
     }
     console.log('[react-drm][fd] kbd.resume after  reopen:', listEventFds(), 'path=' + this.currentPath); // TEMP
   }

@@ -691,7 +691,9 @@ export function render(
   // held fd survives the apple-bce teardown, goes stale ("(deleted)") and leaks
   // one fd per suspend cycle while delivering no events.
   let stopTouch = (): void => {};
+  let touchRetryTimer: ReturnType<typeof setTimeout> | null = null;
   function startTouch(): void {
+    if (touchRetryTimer) { clearTimeout(touchRetryTimer); touchRetryTimer = null; }
     try {
       const touchDevice = new TouchReader({ width: display.width, height: display.height });
       touchDevice.startWithGestures({
@@ -703,6 +705,12 @@ export function render(
       console.log('[react-drm] touch device ready');
     } catch (e) {
       console.warn('[react-drm] no touch device:', (e as Error).message ?? e);
+      if (!suspended) {
+        touchRetryTimer = setTimeout(() => {
+          touchRetryTimer = null;
+          if (!suspended) startTouch();
+        }, 3000);
+      }
     }
   }
   startTouch();
@@ -715,6 +723,7 @@ export function render(
     stopLid();
     stopPointer();
     stopTouch(); // drop the touch fd too — don't let it go stale across the teardown
+    if (touchRetryTimer) { clearTimeout(touchRetryTimer); touchRetryTimer = null; } // cancel any in-flight touch retry
     if (ownKeyboardWatch) stopKeyboard();
     else options.keyboardReader?.suspend(); // release the caller's kbd fd too — don't hold it across teardown
     backlight.off();
@@ -751,6 +760,7 @@ export function render(
       stopPointer();
       stopKeyboard();
       stopTouch();
+      if (touchRetryTimer) { clearTimeout(touchRetryTimer); touchRetryTimer = null; } // cancel any in-flight touch retry
     },
     update: doUpdate,
     hitTest:    (x, y) => registry.hitTest(x, y),
