@@ -1,4 +1,17 @@
+import fs from 'fs';
 import { loadAddon } from './load-addon';
+
+// TEMP DIAGNOSTIC (remove after the suspend/resume hardware test): list the
+// /dev/input/event* fds this process currently holds — the in-app equivalent of
+// `ls -l /proc/self/fd | grep /dev/input/event`, so the suspend cycle is visible
+// in the journal without a live shell.
+export function listEventFds(): string[] {
+  try {
+    return fs.readdirSync('/proc/self/fd')
+      .map(fd => { try { return fs.readlinkSync(`/proc/self/fd/${fd}`); } catch { return ''; } })
+      .filter(p => p.startsWith('/dev/input/event'));
+  } catch { return []; }
+}
 
 interface KeyboardAddon {
   KeyboardReader: new (devicePath: string) => NativeKeyboardReader;
@@ -66,6 +79,7 @@ export class KeyboardReader {
   private listeners = new Set<(code: number, value: number) => void>();
   private readonly explicitPath?: string;
   private stopped = false;
+  private suspended = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private currentPath = '';
 
@@ -101,10 +115,10 @@ export class KeyboardReader {
   }
 
   private scheduleReconnect(delayMs: number): void {
-    if (this.stopped || this.reconnectTimer) return;
+    if (this.stopped || this.suspended || this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      if (this.stopped) return;
+      if (this.stopped || this.suspended) return;
       try {
         this.handle = this.openHandle();
         this.startHandle();
@@ -123,6 +137,38 @@ export class KeyboardReader {
     if (this.stopped) return;
     try { this.handle.stop(); } catch (_) { /* stale handle */ }
     this.scheduleReconnect(0);
+  }
+
+  /**
+   * Release the device fd before system sleep, keeping listeners intact.
+   * Called while the device is still alive (on the logind sleep signal), so the
+   * close is clean — we never hold an fd across the apple-bce teardown and so
+   * never depend on a stale-fd POLLHUP firing on resume. Pair with resume().
+   */
+  suspend(): void {
+    if (this.stopped || this.suspended) return;
+    this.suspended = true;
+    if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
+    console.log('[react-drm][fd] kbd.suspend before close:', listEventFds()); // TEMP
+    try { this.handle.stop(); } catch (_) { /* already gone */ }
+    console.log('[react-drm][fd] kbd.suspend after  close:', listEventFds()); // TEMP
+  }
+
+  /**
+   * Re-open the device fd after resume. If the keyboard hasn't finished
+   * re-enumerating yet, falls back to the normal retry loop.
+   */
+  resume(): void {
+    if (this.stopped || !this.suspended) return;
+    this.suspended = false;
+    console.log('[react-drm][fd] kbd.resume before reopen:', listEventFds()); // TEMP
+    try {
+      this.handle = this.openHandle();
+      this.startHandle();
+    } catch (_) {
+      this.scheduleReconnect(1000);
+    }
+    console.log('[react-drm][fd] kbd.resume after  reopen:', listEventFds(), 'path=' + this.currentPath); // TEMP
   }
 
   isAlive(): boolean {

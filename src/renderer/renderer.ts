@@ -12,7 +12,7 @@ import { LayoutContext } from '../scene/layout-context';
 import { DisplaySizeContext, NativeDrawContext } from '../scene/display-context';
 import type { NativeDraw } from '../scene/display-context';
 import { TouchReader } from '../native/input';
-import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice } from '../native/keyboard';
+import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice, listEventFds } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
 import type { DrmDisplay } from '../native/binding';
@@ -670,8 +670,9 @@ export function render(
 
   // The evdev watchers' worker fds die silently when the devices disappear
   // (e.g. the apple-bce bus teardown during suspend), so suspend()/resume()
-  // stop and recreate them. The keyboardReader subscription is excluded — the
-  // caller's KeyboardReader reconnects on its own and the listener persists.
+  // stop and recreate them. A caller-supplied KeyboardReader is driven the same
+  // way — suspend()/resume() release and re-open its fd so we never hold it
+  // across the teardown — while its onKey listener persists throughout.
   let stopLid     = watchLid(onLid);
   let stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
   let stopKeyboard  = () => {};
@@ -685,19 +686,26 @@ export function render(
     });
   }
 
+  // Open the Touch Bar touchpad. Wrapped so suspend() can drop its fd and
+  // resume() can re-open against the freshly re-enumerated node — otherwise the
+  // held fd survives the apple-bce teardown, goes stale ("(deleted)") and leaks
+  // one fd per suspend cycle while delivering no events.
   let stopTouch = (): void => {};
-  try {
-    const touchDevice = new TouchReader({ width: display.width, height: display.height });
-    touchDevice.startWithGestures({
-      onTouchStart: (x, y) => { wake(); registry.touchStart(x, y); },
-      onTouchMove:  (x, y) => { registry.touchMove(x, y); },
-      onTouchEnd:   (x, y) => { registry.touchEnd(x, y); },
-    });
-    stopTouch = () => touchDevice.stop();
-    console.log('[react-drm] touch device ready');
-  } catch (e) {
-    console.warn('[react-drm] no touch device:', (e as Error).message ?? e);
+  function startTouch(): void {
+    try {
+      const touchDevice = new TouchReader({ width: display.width, height: display.height });
+      touchDevice.startWithGestures({
+        onTouchStart: (x, y) => { wake(); registry.touchStart(x, y); },
+        onTouchMove:  (x, y) => { registry.touchMove(x, y); },
+        onTouchEnd:   (x, y) => { registry.touchEnd(x, y); },
+      });
+      stopTouch = () => { touchDevice.stop(); stopTouch = () => {}; };
+      console.log('[react-drm] touch device ready');
+    } catch (e) {
+      console.warn('[react-drm] no touch device:', (e as Error).message ?? e);
+    }
   }
+  startTouch();
 
   function suspend(): void {
     if (suspended) return;
@@ -706,10 +714,13 @@ export function render(
     clearTimers();
     stopLid();
     stopPointer();
+    stopTouch(); // drop the touch fd too — don't let it go stale across the teardown
     if (ownKeyboardWatch) stopKeyboard();
+    else options.keyboardReader?.suspend(); // release the caller's kbd fd too — don't hold it across teardown
     backlight.off();
     display.close(); // device disappears during suspend — drop the fd cleanly
     console.log('[react-drm] suspended (display closed)');
+    console.log('[react-drm][fd] post-suspend event fds:', listEventFds()); // TEMP — expect [] (touch fd may remain)
   }
 
   function resume(): void {
@@ -720,10 +731,13 @@ export function render(
     stopLid = watchLid(onLid);
     stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
     if (ownKeyboardWatch) stopKeyboard = watchKeyboard(wake);
+    else options.keyboardReader?.resume(); // re-open the caller's kbd fd closed in suspend()
+    startTouch(); // re-open the touch fd against the re-enumerated node
     backlight.on(adaptive, activeLevel);
     startIdleTimers();
     renderCurrent(true); // display was closed during suspend — force a repaint past the dedup cache
     console.log('[react-drm] resumed');
+    console.log('[react-drm][fd] post-resume event fds:', listEventFds()); // TEMP
   }
 
   return {
