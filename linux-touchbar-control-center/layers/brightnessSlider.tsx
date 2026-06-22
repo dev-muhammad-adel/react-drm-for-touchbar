@@ -1,16 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { execFile, execFileSync } from 'child_process';
+import fs from 'fs';
 import { Box, Text, Button } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7, MdKeyboard } from 'react-icons/md';
 import { useLayers } from './index';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const DISPLAY_DEVICE = 'gmux_backlight';
-const KEYBOARD_DEVICE = 'apple::kbd_backlight';
+// Device names vary by hardware: the panel backlight is gmux_backlight on
+// dual-GPU Macs but intel_backlight on single-GPU ones (e.g. 2020 13" Intel),
+// and the keyboard LED is exposed under names like ':white:kbd_backlight' or
+// 'apple::kbd_backlight'. Auto-detect instead of hardcoding so the sliders work
+// across machines and don't spam "Device not found" from the poll loop.
+// Display candidate list mirrors tiny-dfr's find_display_backlight().
+const DISPLAY_CANDIDATES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
+
+function findDevice(base: string, match: (name: string) => boolean): string | null {
+  try { return fs.readdirSync(base).find(match) ?? null; } catch { return null; }
+}
+
+const DISPLAY_DEVICE  = findDevice('/sys/class/backlight', n => DISPLAY_CANDIDATES.some(c => n.includes(c)));
+const KEYBOARD_DEVICE = findDevice('/sys/class/leds', n => n.includes('kbd_backlight'));
 const AUTO_HIDE_MS = 5000;
 
-function readBrightness(device: string): number {
+function readBrightness(device: string | null): number {
+  if (!device) return 0.5;
   try {
     const cur = parseInt(execFileSync('brightnessctl', ['--device', device, 'get'], { encoding: 'utf8' }).trim());
     const max = parseInt(execFileSync('brightnessctl', ['--device', device, 'max'], { encoding: 'utf8' }).trim());
@@ -18,7 +32,8 @@ function readBrightness(device: string): number {
   } catch { return 0.5; }
 }
 
-function applyBrightness(device: string, pct: number, minimumPct: number): void {
+function applyBrightness(device: string | null, pct: number, minimumPct: number): void {
+  if (!device) return;
   const value = Math.max(minimumPct, Math.round(pct * 100));
   execFile('brightnessctl', ['--device', device, 'set', `${value}%`], () => {});
 }
