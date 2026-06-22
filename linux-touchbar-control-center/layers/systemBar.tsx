@@ -89,7 +89,7 @@ function ifaceIcon(iface: string) {
 
 // ── System readers ─────────────────────────────────────────────────────────────
 interface CpuTick { total: number; idle: number; }
-interface NetTick { iface: string; rx: number; tx: number; }
+interface NetSample { iface: string; counters: Map<string, { rx: number; tx: number }>; }
 const IFACE_SKIP = /^(lo|CloudflareWARP|t2_ncm|docker|veth|br-|virbr)/;
 
 function tickCpu(): CpuTick[] {
@@ -123,16 +123,46 @@ function readTemp(): number | null {
   }
   return null;
 }
-function tickNet(): NetTick {
+// The active adapter is the one holding the default route (lowest metric) — NOT the one
+// with the most lifetime traffic, otherwise Wi-Fi's since-boot total always wins even when
+// you're on Ethernet / phone tether. Falls back to a non-down interface, then to anything.
+function activeIface(counters: Map<string, { rx: number; tx: number }>): string {
+  try {
+    const lines = readFileSync('/proc/net/route', 'utf8').split('\n').slice(1);
+    let route: { iface: string; metric: number } | null = null;
+    for (const line of lines) {
+      const f = line.trim().split(/\s+/);
+      if (f.length < 11) continue;
+      const iface = f[0], dest = f[1], metric = parseInt(f[6], 10);
+      if (dest !== '00000000' || IFACE_SKIP.test(iface)) continue; // 00000000 = default route
+      if (!route || metric < route.metric) route = { iface, metric };
+    }
+    if (route) return route.iface;
+  } catch { /* no default route yet — fall through */ }
+
+  let fallback: string | null = null;
+  let bestBytes = -1;
+  for (const [iface, c] of counters) {
+    let usable = false;
+    try {
+      // USB tethers / point-to-point links report operstate 'unknown' even when working.
+      const state = readFileSync(`/sys/class/net/${iface}/operstate`, 'utf8').trim();
+      usable = state !== 'down' && state !== 'lowerlayerdown';
+    } catch { /* ignore */ }
+    if (usable && c.rx + c.tx > bestBytes) { fallback = iface; bestBytes = c.rx + c.tx; }
+  }
+  return fallback ?? counters.keys().next().value ?? '?';
+}
+
+function tickNet(): NetSample {
+  const counters = new Map<string, { rx: number; tx: number }>();
   const lines = readFileSync('/proc/net/dev', 'utf8').split('\n').slice(2);
-  let best: NetTick | null = null;
   for (const line of lines) {
     const p = line.trim().split(/\s+/), iface = p[0].replace(':', '');
     if (!iface || IFACE_SKIP.test(iface)) continue;
-    const tick = { iface, rx: parseInt(p[1]), tx: parseInt(p[9]) };
-    if (!best || tick.rx + tick.tx > best.rx + best.tx) best = tick;
+    counters.set(iface, { rx: parseInt(p[1]), tx: parseInt(p[9]) });
   }
-  return best ?? { iface: '?', rx: 0, tx: 0 };
+  return { iface: activeIface(counters), counters };
 }
 function readBattery(): BatteryInfo | null {
   for (const b of ['/sys/class/power_supply/BAT0', '/sys/class/power_supply/BAT1']) {
@@ -627,8 +657,11 @@ export function SystemBar({ width, height }: { width: number; height: number }) 
       try {
         const nextCpu = tickCpu(), nextNet = tickNet(), now = Date.now();
         const dt = Math.max(0.2, (now - prevTime) / 1000);
-        const netRx = Math.max(0, Math.round((nextNet.rx - prevNet.rx) / dt));
-        const netTx = Math.max(0, Math.round((nextNet.tx - prevNet.tx) / dt));
+        // Rate is computed from the active interface's own prev/next counters, so switching
+        // adapters (e.g. unplugging the tether) never subtracts two different interfaces.
+        const cur = nextNet.counters.get(nextNet.iface), prev = prevNet.counters.get(nextNet.iface);
+        const netRx = cur && prev ? Math.max(0, Math.round((cur.rx - prev.rx) / dt)) : 0;
+        const netTx = cur && prev ? Math.max(0, Math.round((cur.tx - prev.tx) / dt)) : 0;
         rxHist = pushHist(rxHist, netRx);
         txHist = pushHist(txHist, netTx);
         setS({
