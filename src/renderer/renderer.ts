@@ -11,8 +11,8 @@ import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
 import { DisplaySizeContext, NativeDrawContext } from '../scene/display-context';
 import type { NativeDraw } from '../scene/display-context';
-import { TouchReader } from '../native/input';
-import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice, listEventFds } from '../native/keyboard';
+import { TouchReader, getTouchDevicePath } from '../native/input';
+import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
 import type { DrmDisplay } from '../native/binding';
@@ -120,6 +120,7 @@ function openEvdevStream(
   dev: string,
   onData: (chunk: Buffer) => void,
   onError: (err: Error) => void,
+  onOpen?: () => void,
 ): () => void {
   let active = true;
 
@@ -148,7 +149,7 @@ function openEvdevStream(
   worker.on('message', (msg: ArrayBuffer | { fd: number } | { error: string }) => {
     if (!active) return;
     if (msg instanceof ArrayBuffer) { onData(Buffer.from(msg)); return; }
-    if (typeof msg === 'object' && 'fd' in msg) { workerFd = (msg as { fd: number }).fd; return; }
+    if (typeof msg === 'object' && 'fd' in msg) { workerFd = (msg as { fd: number }).fd; onOpen?.(); return; }
     onError(new Error((msg as { error: string }).error));
   });
   worker.on('error', (err: Error) => { if (active) onError(err); });
@@ -180,74 +181,118 @@ function parseEvdev(
   carry.buf = count * 24 < buf.length ? buf.slice(count * 24) : Buffer.alloc(0);
 }
 
-// ── Pointer watcher ───────────────────────────────────────────────────────────
-// Reads evdev events from all pointer devices (touchpad, touchscreen, mouse)
-// across all seats. Any non-SYN event counts as user activity.
+// ── evdev watcher (shared) ────────────────────────────────────────────────────
+// watchPointer / watchKeyboard / watchLid were near-identical: enumerate evdev
+// nodes, stream each through a worker, combine the stops. They now share this
+// helper, which adds reopen retries so a node that hasn't re-enumerated yet after
+// an apple-bce resume gets picked up once it appears:
+//   • enumeration — if the device list is empty, retry up to INPUT_RETRY_MAX
+//                   times on the INPUT_RETRY_MS cadence, then log and give up.
+//   • per-device  — if a stream fails to open (or later dies), reopen that one
+//                   device, bounded the same way; the budget resets on a clean
+//                   open so a device that works then drops gets a fresh quota.
+const INPUT_RETRY_MS  = 3000; // matches the keyboard's RECONNECT_DELAY_MS
+const INPUT_RETRY_MAX = 3;    // → ~9s of reopen attempts before giving up
 
+function watchEvdev(
+  label: string,
+  enumerate: () => string[],
+  onEvent: (type: number, code: number, value: number) => void,
+): () => void {
+  let stopped = false;
+  let enumRetries = 0;
+  let enumTimer: ReturnType<typeof setTimeout> | null = null;
+  const deviceStops = new Map<string, () => void>();
+
+  // Stream one device, reopening (bounded) if it fails to open or later dies.
+  function openDevice(dev: string): void {
+    let attempts = 0;
+    let streamStop: (() => void) | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    function start(): void {
+      if (stopped) return;
+      const carry = { buf: Buffer.alloc(0) };
+      streamStop = openEvdevStream(
+        dev,
+        chunk => parseEvdev(carry, chunk, onEvent),
+        err => {
+          if (stopped) return;
+          console.warn(`[react-drm] ${label}: ${dev}: ${err.message}`);
+          if (streamStop) { streamStop(); streamStop = null; }
+          if (attempts < INPUT_RETRY_MAX) {
+            attempts++;
+            retryTimer = setTimeout(() => { retryTimer = null; start(); }, INPUT_RETRY_MS);
+          } else {
+            console.warn(`[react-drm] ${label}: ${dev}: giving up after ${attempts} reopen attempts`);
+          }
+        },
+        () => { attempts = 0; }, // clean open — reset the reopen budget
+      );
+    }
+
+    start();
+    deviceStops.set(dev, () => {
+      if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
+      if (streamStop) { streamStop(); streamStop = null; }
+    });
+  }
+
+  function tryEnumerate(): void {
+    if (stopped) return;
+    let devices: string[] = [];
+    try { devices = enumerate(); } catch { /**/ }
+    if (devices.length === 0) {
+      if (enumRetries < INPUT_RETRY_MAX) {
+        enumRetries++;
+        enumTimer = setTimeout(() => { enumTimer = null; tryEnumerate(); }, INPUT_RETRY_MS);
+      } else {
+        console.warn(`[react-drm] ${label}: no devices found, giving up after ${enumRetries} retries`);
+      }
+      return;
+    }
+    console.log(`[react-drm] ${label}: monitoring ${devices.join(', ')}`);
+    devices.forEach(openDevice);
+  }
+
+  tryEnumerate();
+  return () => {
+    stopped = true;
+    if (enumTimer) { clearTimeout(enumTimer); enumTimer = null; }
+    deviceStops.forEach(stop => stop());
+    deviceStops.clear();
+  };
+}
+
+// Pointer: any non-SYN event from a touchpad/touchscreen/mouse = user activity.
+// The Touch Bar surface is excluded — TouchReader already opens it and wakes on
+// touch, so watching it here would be a redundant second open + wake. Resolved
+// fresh each enumeration so it tracks event-number changes across re-enumeration.
 function watchPointer(onActivity: () => void): () => void {
-  let devices: string[] = [];
-  try { devices = findPointerDevices(); } catch { /**/ }
-
-  if (devices.length === 0) {
-    console.warn('[react-drm] watchPointer: no pointer devices found');
-    return () => {};
-  }
-  console.log(`[react-drm] watchPointer: monitoring ${devices.join(', ')}`);
-
-  const stops = devices.map(dev => {
-    const carry = { buf: Buffer.alloc(0) };
-    return openEvdevStream(
-      dev,
-      chunk => parseEvdev(carry, chunk, (type) => {
-        if (type !== 0) onActivity(); // any non-SYN event = user activity
-      }),
-      err => console.warn(`[react-drm] watchPointer: ${dev}: ${err.message}`),
-    );
+  return watchEvdev('watchPointer', () => {
+    const touch = getTouchDevicePath();
+    const devices = findPointerDevices();
+    return touch ? devices.filter(d => d !== touch) : devices;
+  }, (type) => {
+    if (type !== 0) onActivity();
   });
-  return () => stops.forEach(s => s());
 }
 
-// ── Keyboard watcher ──────────────────────────────────────────────────────────
-// Reads evdev events from all seat0 keyboards. EV_KEY key-down counts as
-// user activity. udev ID_INPUT_KEYBOARD=1 already excludes power buttons etc.
-
+// Keyboard: EV_KEY key-down = user activity. Only used when the caller does not
+// supply its own KeyboardReader (which has its own reconnect path).
 function watchKeyboard(onActivity: () => void): () => void {
-  let devices: string[] = [];
-  try { devices = findKeyboardDevices(); } catch { /**/ }
-
-  if (devices.length === 0) {
-    console.warn('[react-drm] watchKeyboard: no keyboard devices found');
-    return () => {};
-  }
-  console.log(`[react-drm] watchKeyboard: monitoring ${devices.join(', ')}`);
-
-  const stops = devices.map(dev => {
-    const carry = { buf: Buffer.alloc(0) };
-    return openEvdevStream(
-      dev,
-      chunk => parseEvdev(carry, chunk, (type, _code, value) => {
-        if (type === 1 && value === 1) onActivity(); // EV_KEY key-down
-      }),
-      err => console.warn(`[react-drm] watchKeyboard: ${dev}: ${err.message}`),
-    );
+  return watchEvdev('watchKeyboard', findKeyboardDevices, (type, _code, value) => {
+    if (type === 1 && value === 1) onActivity();
   });
-  return () => stops.forEach(s => s());
 }
 
-// ── Lid switch watcher ────────────────────────────────────────────────────────
-// EV_SW=5, SW_LID=0: value 1 = closed, 0 = open.
-
+// Lid: EV_SW + SW_LID — value 1 = closed, 0 = open. Single-device, wrapped to the
+// array contract the helper expects.
 function watchLid(onLid: (closed: boolean) => void): () => void {
-  let dev: string;
-  try { dev = findLidDevice(); } catch { return () => {}; }
-
-  const carry = { buf: Buffer.alloc(0) };
-  return openEvdevStream(
-    dev,
-    chunk => parseEvdev(carry, chunk, (type, code, value) => {
-      if (type === 5 && code === 0) onLid(value === 1); // EV_SW + SW_LID
-    }),
-    err => console.warn(`[react-drm] watchLid: ${err.message}`),
+  return watchEvdev(
+    'watchLid',
+    () => { try { const d = findLidDevice(); return d ? [d] : []; } catch { return []; } },
+    (type, code, value) => { if (type === 5 && code === 0) onLid(value === 1); },
   );
 }
 
@@ -709,7 +754,7 @@ export function render(
         touchRetryTimer = setTimeout(() => {
           touchRetryTimer = null;
           if (!suspended) startTouch();
-        }, 3000);
+        }, INPUT_RETRY_MS);
       }
     }
   }
@@ -729,7 +774,6 @@ export function render(
     backlight.off();
     display.close(); // device disappears during suspend — drop the fd cleanly
     console.log('[react-drm] suspended (display closed)');
-    console.log('[react-drm][fd] post-suspend event fds:', listEventFds()); // TEMP — expect [] (touch fd may remain)
   }
 
   function resume(): void {
@@ -746,7 +790,6 @@ export function render(
     startIdleTimers();
     renderCurrent(true); // display was closed during suspend — force a repaint past the dedup cache
     console.log('[react-drm] resumed');
-    console.log('[react-drm][fd] post-resume event fds:', listEventFds()); // TEMP
   }
 
   return {

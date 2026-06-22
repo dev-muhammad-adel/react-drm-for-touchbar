@@ -1,17 +1,4 @@
-import fs from 'fs';
 import { loadAddon } from './load-addon';
-
-// TEMP DIAGNOSTIC (remove after the suspend/resume hardware test): list the
-// /dev/input/event* fds this process currently holds — the in-app equivalent of
-// `ls -l /proc/self/fd | grep /dev/input/event`, so the suspend cycle is visible
-// in the journal without a live shell.
-export function listEventFds(): string[] {
-  try {
-    return fs.readdirSync('/proc/self/fd')
-      .map(fd => { try { return fs.readlinkSync(`/proc/self/fd/${fd}`); } catch { return ''; } })
-      .filter(p => p.startsWith('/dev/input/event'));
-  } catch { return []; }
-}
 
 interface KeyboardAddon {
   KeyboardReader: new (devicePath: string) => NativeKeyboardReader;
@@ -154,9 +141,8 @@ export class KeyboardReader {
     if (this.stopped || this.suspended) return;
     this.suspended = true;
     if (this.reconnectTimer) { clearTimeout(this.reconnectTimer); this.reconnectTimer = null; }
-    console.log('[react-drm][fd] kbd.suspend before close:', listEventFds()); // TEMP
     try { this.handle.stop(); } catch (_) { /* already gone */ }
-    console.log('[react-drm][fd] kbd.suspend after  close:', listEventFds()); // TEMP
+    console.log(`[react-drm] keyboard: released ${this.currentPath} for sleep`);
   }
 
   /**
@@ -166,14 +152,14 @@ export class KeyboardReader {
   resume(): void {
     if (this.stopped || !this.suspended) return;
     this.suspended = false;
-    console.log('[react-drm][fd] kbd.resume before reopen:', listEventFds()); // TEMP
     try {
       this.handle = this.openHandle();
       this.startHandle();
+      console.log(`[react-drm] keyboard: reopened ${this.currentPath} after resume`);
     } catch (_) {
+      console.warn(`[react-drm] keyboard: not back yet after resume, retrying in ${RECONNECT_DELAY_MS}ms`);
       this.scheduleReconnect(RECONNECT_DELAY_MS);
     }
-    console.log('[react-drm][fd] kbd.resume after  reopen:', listEventFds(), 'path=' + this.currentPath); // TEMP
   }
 
   isAlive(): boolean {

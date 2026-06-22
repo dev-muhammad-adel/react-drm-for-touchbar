@@ -98,6 +98,16 @@ function resolveTouchDevicePath(devicePath?: string): string {
   );
 }
 
+/**
+ * The auto-detected Touch Bar device path, or null if not found. Uses the same
+ * resolver TouchReader does, exposed so callers (e.g. the pointer activity
+ * watcher) can exclude the Touch Bar from their own device lists without
+ * re-implementing the detection or guessing by udev tag.
+ */
+export function getTouchDevicePath(): string | null {
+  try { return resolveTouchDevicePath(); } catch { return null; }
+}
+
 export interface TouchReaderOptions {
   /** Override the input device path. Defaults to auto-detect. */
   devicePath?: string;
