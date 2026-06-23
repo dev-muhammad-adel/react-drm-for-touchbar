@@ -102,14 +102,14 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   useEffect(() => { w.start(isSel ? expandedW : collapsedW); }, [isSel, expandedW, collapsedW, w]);
 
   const color   = ACCENT[player.name] ?? '#666';
-  const iconSz  = 32;
+  const iconSz  = 38;
   const vinylSz   = Math.round(height * 0.9);
   const iconBox   = Math.round(height*0.8);  // collapsed tile app icon
   const appIconSz = Math.round(height*0.8 ); // app icon shown in expanded row
   const playing = player.state.status === 'Playing';
   const PlayIcon = playing ? MdPause : MdPlayArrow;
   const icon    = iconSrcFor(player.name);
-  const sepH    = Math.round(height * 0.5);
+  const sepH    = Math.round(height );
 
   // Tap / drag anywhere on the bar to seek. Touch x is absolute, so map it
   // through the bar node's live layout box (same as Button hit-testing).
@@ -124,7 +124,7 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   // Bar fills the row remainder: total minus the fixed siblings + their gaps (8).
   // Separators: icon|prev (only with an icon), prev|play, play|next.
   const sepN     = icon ? 3 : 2;
-  const fixedW   = (icon ? appIconSz : 0) + 60 + 100 + 60 + vinylSz + sepN;
+  const fixedW   = (icon ? appIconSz : 0) + 120 + 120 + 120 + vinylSz + sepN;
   const childN   = (icon ? 1 : 0) + 3 /*controls*/ + sepN + 2 /*vinyl + bar*/;
   const barW     = Math.max(60, Math.round(expandedW - fixedW - (childN - 1) * 8));
   const fillW    = Math.round(barW * frac);
@@ -143,19 +143,19 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
         <>
           {/* app icon */}
           {icon && <Svg src={icon} width={appIconSz} height={appIconSz} style={{ width: appIconSz, height: appIconSz }} />}
-          {icon && <Box style={{ width: 1, height: sepH*2, backgroundColor: SEP+"99" }} />}
+          {icon && <Box style={{ width: 2, height: sepH*2, backgroundColor: SEP+"99" }} />}
           {/* prev */}
-          <Button width={60} height={48} color="transparent" activeColor="#555555" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
+          <Button width={120} height={48} color="transparent" activeColor="#555555" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
             <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill="#fff" />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
           {/* play/pause (icon tinted with the player accent) */}
-          <Button width={100} height={48} color="transparent" activeColor="#555555" onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+          <Button width={120} height={48} color="transparent" activeColor="#555555" onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
             <PlayIcon style={{ width: iconSz, height: iconSz }} fill={"#fff"} />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
           {/* next */}
-          <Button width={60} height={48} color="transparent" activeColor="#555555" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
+          <Button width={120} height={48} color="transparent" activeColor="#555555" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
             <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />  
