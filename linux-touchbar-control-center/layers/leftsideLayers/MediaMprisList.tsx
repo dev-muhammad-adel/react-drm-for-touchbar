@@ -138,7 +138,7 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   };
 
   return (
-    <animated.Box style={{ width: w, height, overflow: 'hidden', borderRadius: 10, backgroundColor: BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
+    <animated.Box style={{ width: w, height, overflow: 'hidden', borderRadius: 10, backgroundColor: (playing && !isSel) ? color : BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
       {isSel ? (
         <>
           {/* app icon */}
@@ -187,7 +187,9 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
         </>
       ) : (
         // collapsed: a square app-icon tile; tap to expand. Falls back to the
-        // album-art vinyl when the app icon can't be resolved.
+        // album-art vinyl when the app icon can't be resolved. When playing, the
+        // wrapper above is accent-tinted (full-bleed) so this tile stands out;
+        // the button itself stays transparent so that fill shows through.
         <Button width={collapsedW - 12} height={height} color="transparent" activeColor="#1e293b" onClick={onSelect} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
           {icon
             ? <Svg src={icon} width={iconBox} height={iconBox} style={{ width: iconBox, height: iconBox }} />
