@@ -3,7 +3,8 @@
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "./dist",
-    "composite": false
+    "composite": false,
+    "typeRoots": ["./node_modules/@types", "../node_modules/@types"]
   },
   "references": [{ "path": ".." }],
   "include": ["./**/*"],
