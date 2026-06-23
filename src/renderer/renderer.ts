@@ -202,6 +202,8 @@ function watchEvdev(
   let stopped = false;
   let enumRetries = 0;
   let enumTimer: ReturnType<typeof setTimeout> | null = null;
+  let hotplugTimer: ReturnType<typeof setTimeout> | null = null;
+  let dirWatcher: fs.FSWatcher | null = null;
   const deviceStops = new Map<string, () => void>();
 
   // Stream one device, reopening (bounded) if it fails to open or later dies.
@@ -238,27 +240,60 @@ function watchEvdev(
     });
   }
 
-  function tryEnumerate(): void {
+  // Open devices that have appeared and drop ones that vanished. Runs on initial
+  // bring-up and on every /dev/input change, so a mouse plugged in later, dock
+  // devices that enumerate after startup, and post-resume renumbering are all
+  // picked up — not just whatever existed the instant the watcher started.
+  function reconcile(initial: boolean): void {
     if (stopped) return;
     let devices: string[] = [];
     try { devices = enumerate(); } catch { /**/ }
+
     if (devices.length === 0) {
-      if (enumRetries < INPUT_RETRY_MAX) {
+      // Nothing yet — retry on the bring-up cadence, but only during the initial
+      // window; after that the /dev/input watcher drives re-checks on hotplug.
+      if (initial && enumRetries < INPUT_RETRY_MAX) {
         enumRetries++;
-        enumTimer = setTimeout(() => { enumTimer = null; tryEnumerate(); }, INPUT_RETRY_MS);
-      } else {
+        enumTimer = setTimeout(() => { enumTimer = null; reconcile(true); }, INPUT_RETRY_MS);
+      } else if (initial) {
         console.warn(`[react-drm] ${label}: no devices found, giving up after ${enumRetries} retries`);
       }
       return;
     }
-    console.log(`[react-drm] ${label}: monitoring ${devices.join(', ')}`);
-    devices.forEach(openDevice);
+    enumRetries = 0;
+
+    const want = new Set(devices);
+    let changed = false;
+    for (const dev of devices) {
+      if (!deviceStops.has(dev)) { openDevice(dev); changed = true; }
+    }
+    for (const dev of [...deviceStops.keys()]) {
+      if (!want.has(dev)) { deviceStops.get(dev)!(); deviceStops.delete(dev); changed = true; }
+    }
+    if (changed) {
+      console.log(`[react-drm] ${label}: monitoring ${[...deviceStops.keys()].join(', ') || '(none)'}`);
+    }
   }
 
-  tryEnumerate();
+  // Re-enumerate when /dev/input gains or loses nodes. Debounced — a single
+  // hotplug fires several rename events. Best-effort: if the watch can't be set
+  // up we still have the initial enumeration (just no late-add detection).
+  try {
+    dirWatcher = fs.watch('/dev/input', () => {
+      if (stopped) return;
+      if (hotplugTimer) clearTimeout(hotplugTimer);
+      hotplugTimer = setTimeout(() => { hotplugTimer = null; reconcile(false); }, 300);
+    });
+  } catch (e) {
+    console.warn(`[react-drm] ${label}: hotplug watch unavailable: ${(e as NodeJS.ErrnoException).message}`);
+  }
+
+  reconcile(true);
   return () => {
     stopped = true;
     if (enumTimer) { clearTimeout(enumTimer); enumTimer = null; }
+    if (hotplugTimer) { clearTimeout(hotplugTimer); hotplugTimer = null; }
+    if (dirWatcher) { dirWatcher.close(); dirWatcher = null; }
     deviceStops.forEach(stop => stop());
     deviceStops.clear();
   };
