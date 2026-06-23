@@ -205,18 +205,61 @@ Chrome, Chromium and other Chromium-based browsers do not provide a native
 MPRIS2 service on Linux. For these browsers install the
 **Plasma Browser Integration** extension:
 
-- [Chrome Web Store](https://chromewebstore.google.com/detail/plasma-browser-integratio/edckdgbkbpabccdcjfgnkaanhecepgbn)
-- [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/plasma-browser-integration/)
+- [Chrome Web Store](https://chromewebstore.google.com/detail/plasma-integration/cimiefiiaegbelhefglklhhakcgmhkai)
+- [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/plasma-integration/)
 
 Despite the name, this extension is **not KDE-specific**. It registers an
 `org.mpris.MediaPlayer2.plasma-browser-integration` D-Bus service that any
-desktop environment (GNOME, Hyprland, Xorg, …) can read — the progress bar
+desktop environment (GNOME, Hyprland, Xorg, …) can read. The progress bar
 appears on the Touch Bar regardless of which DE you run.
 
-No host-side package (`plasma-browser-integration` or similar) is required —
+No host-side package (`plasma-browser-integration` or similar) is required,
 the extension alone is sufficient. The progress bar updates live, shows album
 art embedded in the track title row, and supports seek (tap/drag on the
 progress track or use the skip-back/skip-forward buttons).
+
+## Keyboard shortcuts
+
+Physical keyboard shortcuts recognised by the control center. All shortcuts
+are injected via uinput — they work regardless of which application has focus.
+
+### Layer navigation
+
+| Shortcut | Action |
+|---|---|
+| Long-press **Fn** | Toggle the F‑key layer (F1–F12 and Esc on wide Touch Bars). Hold again to return. |
+| Long-press **Right Alt** (⌥) | Toggle the app dock. Long-press again to close it and return to the previous layer. |
+
+### Screenshots
+
+| Shortcut | Action |
+|---|---|
+| **Ctrl + Alt + S** | Save the current Touch Bar screen as a PNG into `~/Pictures/touchbar/`. |
+
+### Browser shortcuts
+
+Available when a supported browser window is focused and the Browser Panel is
+shown on the left side of the split layer.
+
+| Shortcut | Action |
+|---|---|
+| **Alt + ←** | Back |
+| **Alt + →** | Forward |
+| **Ctrl + R** | Reload |
+| **Alt + Home** | Home |
+| **Ctrl + T** | New tab |
+| **Ctrl + W** | Close tab |
+| **Ctrl + Tab** | Next tab |
+| **Ctrl + Shift + Tab** | Previous tab |
+
+Key overrides per browser can be configured in `linux-touchbar-control-center/config.ts`
+(`BROWSER_KEY_OVERRIDES`).
+
+### Media
+
+The Play/Pause button on the split layer injects the **Play/Pause** media key.
+Seek forward/backward and skip are available through the media progress bar
+when an MPRIS player is active (see the section above).
 
 ## Konsole integration
 
