@@ -9,6 +9,7 @@ import { useAlbumArt } from '../../hooks/useAlbumArt';
 import { appIconSource } from '../../services/appIcon';
 
 const ACCENT: Record<string, string> = {
+  firefox: '#f9731666',
   spotify: '#1db95466',
   chrome:  '#4285f466',
 };
@@ -81,7 +82,11 @@ const SEP     = '#000000'; // divider between control buttons
 
 // Freedesktop icon name per player, resolved to a renderable <Svg> path once
 // (appIconSource memoises). Falls back to the album-art vinyl when not found.
-const APP_ICON: Record<string, string> = { spotify: 'spotify', chrome: 'google-chrome' };
+const APP_ICON: Record<string, string> = {
+  firefox: 'firefox',
+  spotify: 'spotify',
+  chrome: 'google-chrome',
+};
 function iconSrcFor(name: string): string | null {
   return appIconSource(APP_ICON[name] ?? name);
 }

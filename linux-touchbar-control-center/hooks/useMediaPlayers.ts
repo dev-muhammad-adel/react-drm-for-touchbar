@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dbus, { MessageBus, Variant } from 'dbus-next';
 
-// Spotify registers a single MPRIS2 service. Chrome itself has no native MPRIS2
-// service on Linux; on KDE Plasma the `plasma-browser-integration` Chrome
-// extension exposes browser media sessions over D-Bus.
+// Spotify and Firefox expose native MPRIS2 services. Chrome itself has no
+// native MPRIS2 service on Linux; on KDE Plasma the
+// `plasma-browser-integration` extension exposes browser media sessions over
+// D-Bus.
 const PLAYER_CONFIGS = [
   { prefix: 'org.mpris.MediaPlayer2.spotify', name: 'spotify' as const },
+  { prefix: 'org.mpris.MediaPlayer2.firefox', name: 'firefox' as const },
   { prefix: 'org.mpris.MediaPlayer2.plasma-browser-integration', name: 'chrome' as const },
 ];
 
@@ -32,8 +34,8 @@ export interface MediaPlayerState {
 export interface MediaPlayer {
   /** D-Bus service name, e.g. `org.mpris.MediaPlayer2.spotify`. */
   service: string;
-  /** Human-readable source: `chrome` (via plasma-browser-integration) or `spotify`. */
-  name: 'chrome' | 'spotify';
+  /** Human-readable source for the matched player service. */
+  name: 'chrome' | 'firefox' | 'spotify';
   /** Current playback state. */
   state: MediaPlayerState;
   /** Toggle play/pause on this player. */
@@ -68,9 +70,9 @@ function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerSt
 }
 
 export interface UseMediaPlayersResult {
-  /** True when at least one Chrome/Spotify MPRIS player is present on the bus. */
+  /** True when at least one supported MPRIS player is present on the bus. */
   show: boolean;
-  /** True when no Chrome/Spotify MPRIS player is present (convenience alias). */
+  /** True when no supported MPRIS player is present (convenience alias). */
   hide: boolean;
   /** True until the first bus scan resolves — distinguishes "still discovering" from "no players". */
   loading: boolean;
@@ -79,7 +81,8 @@ export interface UseMediaPlayersResult {
 }
 
 /**
- * Tracks Chrome (via KDE plasma-browser-integration) and Spotify MPRIS2 players.
+ * Tracks supported MPRIS2 players, including Spotify, Firefox and Chrome via
+ * KDE plasma-browser-integration.
  * Returns visibility flags and an array of control/status objects.
  */
 export function useMediaPlayers(): UseMediaPlayersResult {
