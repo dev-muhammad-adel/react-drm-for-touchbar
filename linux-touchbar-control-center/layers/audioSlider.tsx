@@ -110,6 +110,7 @@ export function AudioSliderLayer({ width, height }: { width: number; height: num
   // PipeWire/PulseAudio is socket-based so chokidar can't watch it —
   // pactl subscribe is the audio equivalent of a file watcher.
   useEffect(() => {
+    scheduleHide(); // auto-close after inactivity, even if the slider is never touched
     const proc = spawn('pactl', ['subscribe'], { env: PW_ENV });
 
     proc.stdout?.on('data', (chunk: Buffer) => {

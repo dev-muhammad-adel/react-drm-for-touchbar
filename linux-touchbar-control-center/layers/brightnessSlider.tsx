@@ -3,6 +3,7 @@ import { execFile, execFileSync } from 'child_process';
 import fs from 'fs';
 import { Box, Text, Button } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7, MdKeyboard } from 'react-icons/md';
+import { BackButton } from '../components/BackButton';
 import { useLayers } from './index';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -188,6 +189,7 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
 
   return (
     <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+      <BackButton to="splitted" animation="slide-down" />
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
         <BrightnessControl
           label="KEYS"
