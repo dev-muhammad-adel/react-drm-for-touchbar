@@ -47,9 +47,9 @@ export function DockLayer({ width, height }: { width: number; height: number }) 
   return (
     <Box style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
       {/* Back to the main split layer — kept off-center so the dock stays centered. */}
-      {/* <Box style={{ position: 'absolute', left: 6, top: Math.round((height - 60) / 2) }}>
-        <BackButton to="splitted" animation="slide-right" />
-      </Box> */}
+      <Box style={{ position: 'absolute', left: 6, top: 0 , height, alignItems: 'center' }}>
+        <BackButton to="splitted" animation="slide-down" />
+      </Box>
 
       <Box style={{
         flexDirection: 'row',

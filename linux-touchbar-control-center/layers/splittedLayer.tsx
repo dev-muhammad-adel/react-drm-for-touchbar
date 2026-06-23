@@ -15,6 +15,9 @@ import { VlcPanel } from './leftsideLayers/VlcPanel';
 import { DolphinPanel } from './leftsideLayers/DolphinPanel';
 import { MediaMprisList } from './leftsideLayers/MediaMprisList';
 import { keys } from '../services/keyInjector';
+import { CiWavePulse1 } from 'react-icons/ci';
+import { LuDock } from 'react-icons/lu';
+import { BsWindowDock } from 'react-icons/bs';
 
 
 // ── Media control ─────────────────────────────────────────────────────────────
@@ -65,10 +68,10 @@ interface RightBtn {
 
 const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
   { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40 ,color:"#444444" , activeColor:"#555555"},
-  { key: 'linux',      icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
   { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
   { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
-  { key: 'playpause',  icon: <MdPlayArrow    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  { key: 'linux',      icon: <CiWavePulse1        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  { key: 'playpause',  icon: <BsWindowDock    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
   // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
 ];
 
@@ -113,13 +116,16 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const [isMediaMprisListPinned, setIsMediaMprisListPinned] = useAtom(mediaMprisListPinnedAtom);
   const mediaPlaying = useMemo(() => players.some(p => p.state.status === 'Playing'), [players]);
   const mediaBtns: RightBtn[] = useMemo(() => {
-    const base: RightBtn[] = [
-      { ...BASE_BTNS[0], onClick: () => go('media', 'slide-left') },
-      { ...BASE_BTNS[1], onClick: () => go('systembar', 'slide-up') },
-      { ...BASE_BTNS[2], onClick: () => go('audio-slider', 'slide-up') },
-      { ...BASE_BTNS[3], onClick: () => go('brightness-slider', 'slide-up') },
-      { ...BASE_BTNS[4], onClick: () => keys.pressKey(KEY.PLAYPAUSE) },
-    ];
+    // Dispatch each button's action by its key, not its position, so reordering
+    // BASE_BTNS can't silently wire a button to the wrong action.
+    const actions: Record<string, () => void> = {
+      back:       () => go('media', 'slide-left'),
+      linux:      () => go('systembar', 'slide-up'),
+      volume:     () => go('audio-slider', 'slide-up'),
+      brightness: () => go('brightness-slider', 'slide-up'),
+      playpause:  () => go('dock', 'slide-up'),
+    };
+    const base: RightBtn[] = BASE_BTNS.map(b => ({ ...b, onClick: actions[b.key] ?? (() => {}) }));
     if (showMedia) {
       base.splice(1, 0, {
         key: 'media',
