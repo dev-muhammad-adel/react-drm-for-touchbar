@@ -218,6 +218,9 @@ the extension alone is sufficient. The progress bar updates live, shows album
 art embedded in the track title row, and supports seek (tap/drag on the
 progress track or use the skip-back/skip-forward buttons).
 
+**Note that browsers installed with flatpak are not supported**.
+Please install browsers from their original packages (deb,rpm...).
+
 ## Keyboard shortcuts
 
 Physical keyboard shortcuts recognised by the control center. All shortcuts
