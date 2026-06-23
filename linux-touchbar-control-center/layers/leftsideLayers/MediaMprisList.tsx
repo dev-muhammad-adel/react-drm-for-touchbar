@@ -1,15 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Text, Button, SwipeZone, Svg, animated, useSpringValue } from 'react-drm';
+import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
+import { Box, Text, Button, Svg, LayoutContext, animated, useSpringValue } from 'react-drm';
+import type { BoxNode } from 'react-drm';
 import {
   MdSkipPrevious, MdPlayArrow, MdPause, MdSkipNext,
 } from 'react-icons/md';
 import { useMediaPlayers } from '../../hooks/useMediaPlayers';
 import { useAlbumArt } from '../../hooks/useAlbumArt';
-import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
+import { appIconSource } from '../../services/appIcon';
 
 const ACCENT: Record<string, string> = {
-  spotify: '#1db954',
-  chrome:  '#4285f4',
+  spotify: '#1db95466',
+  chrome:  '#4285f466',
 };
 
 const FONT = '';
@@ -73,37 +74,132 @@ function Vinyl({ size, accent, artUrl, spinning }: { size: number; accent: strin
   );
 }
 
+type Player = ReturnType<typeof useMediaPlayers>['players'][number];
+
+const BG_CARD = '#444'; // each accordion item sits on this card background
+const SEP     = '#000000'; // divider between control buttons
+
+// Freedesktop icon name per player, resolved to a renderable <Svg> path once
+// (appIconSource memoises). Falls back to the album-art vinyl when not found.
+const APP_ICON: Record<string, string> = { spotify: 'spotify', chrome: 'google-chrome' };
+function iconSrcFor(name: string): string | null {
+  return appIconSource(APP_ICON[name] ?? name);
+}
+
+// One accordion item on a card background. Its width is a spring: it slides to
+// `expandedW` when selected and back to `collapsedW` otherwise. Selected = full
+// transport + vinyl + title/artist; collapsed = a square app-icon tile (tap to
+// expand). overflow:hidden so the wider content clips smoothly while it grows.
+function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect }: {
+  player: Player; isSel: boolean; expandedW: number; collapsedW: number; height: number; onSelect: () => void;
+}) {
+  const w = useSpringValue(isSel ? expandedW : collapsedW, { config: { tension: 280, friction: 30 } });
+  useEffect(() => { w.start(isSel ? expandedW : collapsedW); }, [isSel, expandedW, collapsedW, w]);
+
+  const color   = ACCENT[player.name] ?? '#666';
+  const iconSz  = Math.round(height * 0.48);
+  const vinylSz   = Math.round(height * 0.9);
+  const iconBox   = Math.round(height);  // collapsed tile app icon
+  const appIconSz = Math.round(height ); // app icon shown in expanded row
+  const playing = player.state.status === 'Playing';
+  const PlayIcon = playing ? MdPause : MdPlayArrow;
+  const icon    = iconSrcFor(player.name);
+  const sepH    = Math.round(height * 0.5);
+
+  // Tap / drag anywhere on the bar to seek. Touch x is absolute, so map it
+  // through the bar node's live layout box (same as Button hit-testing).
+  const [dragUs, setDragUs] = useState<number | null>(null);
+  const layoutCtx = useContext(LayoutContext);
+  const barRef    = useRef<BoxNode | null>(null);
+
+  const len      = player.state.length;
+  const shownPos = dragUs ?? player.state.position; // show the drag preview while scrubbing
+  const frac     = len > 0 ? Math.max(0, Math.min(1, shownPos / len)) : 0;
+  const barH     = height; // progress bar spans the full item height
+  // Bar fills the row remainder: total minus the fixed siblings + their gaps (8).
+  // Separators: icon|prev (only with an icon), prev|play, play|next.
+  const sepN     = icon ? 3 : 2;
+  const fixedW   = (icon ? appIconSz : 0) + 60 + 100 + 60 + vinylSz + sepN;
+  const childN   = (icon ? 1 : 0) + 3 /*controls*/ + sepN + 2 /*vinyl + bar*/;
+  const barW     = Math.max(60, Math.round(expandedW - fixedW - (childN - 1) * 8));
+  const fillW    = Math.round(barW * frac);
+
+  const seekFrom = (tx: number, commit: boolean) => {
+    const lb = barRef.current ? layoutCtx.current.get(barRef.current) : undefined;
+    if (!lb || lb.w <= 0 || len <= 0) { if (commit) setDragUs(null); return; }
+    const f = Math.max(0, Math.min(1, (tx - lb.x) / lb.w));
+    if (commit) { player.seek(f * len); setDragUs(null); }
+    else setDragUs(Math.round(f * len));
+  };
+
+  return (
+    <animated.Box style={{ width: w, height, overflow: 'hidden', borderRadius: 8, backgroundColor: BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
+      {isSel ? (
+        <>
+          {/* app icon */}
+          {icon && <Svg src={icon} width={appIconSz} height={appIconSz} style={{ width: appIconSz, height: appIconSz }} />}
+          {icon && <Box style={{ width: 1, height: sepH*2, backgroundColor: SEP+"99" }} />}
+          {/* prev */}
+          <Button width={60} height={48} color="transparent" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
+            <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill="#fff" />
+          </Button>
+          <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
+          {/* play/pause (icon tinted with the player accent) */}
+          <Button width={100} height={48} color="transparent" activeColor="#666666" onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+            <PlayIcon style={{ width: iconSz, height: iconSz }} fill={"#fff"} />
+          </Button>
+          <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
+          {/* next */}
+          <Button width={60} height={48} color="transparent" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
+            <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
+          </Button>
+          <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />  
+          {/* flat progress bar — tap or drag to seek; track text sits inside */}
+          <Button
+            width={barW}
+            height={barH}
+            color="transparent"
+            activeColor="transparent"
+            onTouchStart={(tx) => seekFrom(tx, false)}
+            onTouchMove={(tx) => seekFrom(tx, false)}
+            onTouchEnd={(tx) => seekFrom(tx, true)}
+            onTouchCancel={() => setDragUs(null)}
+            style={{ borderRadius: 0 }}
+          >
+            <Box ref={barRef} style={{ width: barW, height: barH, position: 'relative', borderRadius: 0, overflow: 'hidden'}}>
+            
+          <Box style={{ height , width:vinylSz , position:"absolute",zIndex:2 ,alignItems:"center"}}>
+
+          <Vinyl size={height-2} accent={color} artUrl={player.state.artUrl} spinning={playing}  />
+          </Box>
+              {fillW > 0 && <Box style={{ position: 'absolute', left: vinylSz/2, top: 0, width: fillW - (vinylSz/2), height: barH, backgroundColor: color }} />}
+              <Box style={{ marginLeft: vinylSz, position: 'absolute', left: 0, top: 0, width: barW - (vinylSz), height: barH, flexDirection: 'column', justifyContent: 'center', paddingLeft: 10, paddingRight: 10,zIndex:-1 }}>
+                <Text  color="#fff" fontSize={15} fontFamily={FONT}>{player.state.title || 'Unknown'}</Text>
+                <Text color="#cbd5e1" fontSize={12} fontFamily={FONT}>{player.state.artist}</Text>
+              </Box>
+            </Box>
+          </Button>
+        </>
+      ) : (
+        // collapsed: a square app-icon tile; tap to expand. Falls back to the
+        // album-art vinyl when the app icon can't be resolved.
+        <Button width={collapsedW - 12} height={height} color="transparent" activeColor="#1e293b" onClick={onSelect} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+          {icon
+            ? <Svg src={icon} width={iconBox} height={iconBox} style={{ width: iconBox, height: iconBox }} />
+            : <Vinyl size={vinylSz} accent={color} artUrl={player.state.artUrl} spinning={playing} />}
+        </Button>
+      )}
+    </animated.Box>
+  );
+}
+
 export function MediaMprisList({ width, height }: { width: number; height: number }) {
   const { players } = useMediaPlayers();
 
-  const [index, setIndex] = useState(0);
-  const [dragX, setDragX] = useState(0);
-
-  // Keep index in range when a player disappears — otherwise a stale index
-  // pushes the track fully off-screen (blank panel) until the user swipes back.
-  useEffect(() => {
-    setIndex(i => Math.min(i, Math.max(0, players.length - 1)));
-  }, [players.length]);
-
-const next = () => {
-  if (index >= players.length - 1) return;
-  setIndex(i => i + 1);
-};
-
-const prev = () => {
-  if (index <= 0) return;
-  setIndex(i => i - 1);
-};
-
-  const iconSz = Math.round(height * 0.48);
-  // Viewport between the two chevrons: panel width minus both 24px chevron
-  // buttons and the two 6px gaps of the row. One carousel item must equal this
-  // exactly, or paging by itemWidth drifts off-center.
-  const itemWidth = width - 24 * 2 - 6 * 2;
-  const trackWidth = useMemo(() => players.length * itemWidth, [players.length, itemWidth]);
-
-  const atStart = index <= 0;                      // left chevron disabled
-  const atEnd   = index >= players.length - 1;     // right chevron disabled
+  // Track the selected player by its service id (stable across list changes).
+  // If the selected player disappears we fall back to the first one — no stale
+  // index can push anything off-screen.
+  const [selectedService, setSelectedService] = useState<string | null>(null);
 
   if (players.length === 0) {
     return (
@@ -115,147 +211,25 @@ const prev = () => {
     );
   }
 
+  const selected   = players.find(p => p.service === selectedService) ?? players[0];
+  const collapsedW = height; // square tile per collapsed player
+  // The selected item takes whatever width the collapsed tiles leave behind.
+  const gaps       = Math.max(0, players.length - 1) * 6;
+  const expandedW  = Math.max(160, width - (players.length - 1) * collapsedW - gaps);
+
   return (
-    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center',gap:6 }}>
-
-      {/* left arrow */}
-      <Button
-        width={24}
-        height={height}
-        color="transparent"
-        activeColor={atStart ? 'transparent' : '#1e293b'}
-        onClick={atStart ? undefined : prev}
-        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6, opacity: atStart ? 0.3 : 1 }}
-      >
-        <FaChevronLeft style={{ width: 12, height: 12 }} fill={atStart ? '#555' : '#fff'} />
-      </Button>
-
-      {/* VIEWPORT */}
-      <Box
-        style={{
-          flex: 1,
-          overflow: 'hidden',
-          flexDirection: 'row',
-        }}
-      >
-
-        <SwipeZone
-          width={itemWidth}
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+      {players.map((player) => (
+        <AccordionItem
+          key={player.service}
+          player={player}
+          isSel={player.service === selected.service}
+          expandedW={expandedW}
+          collapsedW={collapsedW}
           height={height}
-          threshold={80}
-          onScrollMove={(dx) => setDragX(dx)}
-          onScrollEnd={() => setDragX(0)}
-          onSwipeLeft={() => {
-            setDragX(0);
-            next();
-          }}
-          onSwipeRight={() => {
-            setDragX(0);
-            prev();
-          }}
-        >
-
-          {/* TRACK */}
-          <Box
-            style={{
-              flexDirection: 'row',
-              width: trackWidth,
-              marginLeft: -(index * itemWidth) + dragX,
-            }}
-          >
-
-            {players.map((player) => {
-              const color = ACCENT[player.name] ?? '#666';
-
-              return (
-                <Box
-                  key={player.service}
-                  style={{
-                    width: itemWidth,
-                    height,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    paddingLeft: 8,
-                    paddingRight: 8,
-                    borderRadius: 8,
-                    // backgroundColor: i === 0 ? 'red' : 'blue',
-                  }}
-                >
-
-                  {/* prev */}
-                  <Button
-                    width={60}
-                    height={height}
-                    color="#4f4b4f" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
-                    onClick={player.previous}
-                  >
-                    <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill='#fff' />
-                  </Button>
-
-                  {/* play/pause */}
-                  <Button
-                    width={100}
-                    height={height}
-                    color={color}
-                    onClick={player.playPause}
-                    style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
-                  >
-                    {player.state.status === 'Playing'
-                      ? <MdPause style={{ width: iconSz, height: iconSz }} fill="#fff" />
-                      : <MdPlayArrow style={{ width: iconSz, height: iconSz }} fill="#fff" />
-                    }
-                  </Button>
-
-                  {/* next */}
-                  <Button
-                    width={60}
-                    height={height}
-                    color="#4f4b4f" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
-                    onClick={player.next}
-                  >
-                    <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
-                  </Button>
-
-                  {/* spinning vinyl with album art */}
-                  <Vinyl
-                    size={Math.round(height * 0.9)}
-                    accent={color}
-                    artUrl={player.state.artUrl}
-                    spinning={player.state.status === 'Playing'}
-                  />
-
-                  {/* text */}
-                  <Box style={{ flexDirection: 'column' }}>
-                    <Text color="#fff" fontSize={15} fontFamily={FONT}>
-                      {player.state.title || 'Unknown'}
-                    </Text>
-
-                    <Text color="#94a3b8" fontSize={12} fontFamily={FONT}>
-                      {player.state.artist}
-                    </Text>
-                  </Box>
-
-                </Box>
-              );
-            })}
-
-          </Box>
-        </SwipeZone>
-      </Box>
-
-      {/* right arrow */}
-      <Button
-        width={24}
-        height={height}
-        color="transparent"
-        activeColor={atEnd ? 'transparent' : '#1e293b'}
-        onClick={atEnd ? undefined : next}
-        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6, opacity: atEnd ? 0.3 : 1 }}
-      >
-        <FaChevronRight style={{ width: 12, height: 12 }} fill={atEnd ? '#555' : '#fff'} />
-      </Button>
-
+          onSelect={() => setSelectedService(player.service)}
+        />
+      ))}
     </Box>
   );
 }

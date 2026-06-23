@@ -21,6 +21,12 @@ export interface MediaPlayerState {
   status: PlayerStatus;
   /** Album-art URL from MPRIS `mpris:artUrl` (http/https/file/data), or '' if none. */
   artUrl: string;
+  /** Track length in microseconds (MPRIS `mpris:length`), 0 if unknown. */
+  length: number;
+  /** Last sampled playback position in microseconds (MPRIS `Position`). */
+  position: number;
+  /** Current track object path (MPRIS `mpris:trackid`), needed for SetPosition. */
+  trackId: string;
 }
 
 export interface MediaPlayer {
@@ -36,11 +42,13 @@ export interface MediaPlayer {
   next(): void;
   /** Go back to the previous track. */
   previous(): void;
+  /** Seek to an absolute position in microseconds (MPRIS `SetPosition`). */
+  seek(positionUs: number): void;
 }
 
-const IDLE: MediaPlayerState = { title: '', artist: '', status: 'Stopped', artUrl: '' };
+const IDLE: MediaPlayerState = { title: '', artist: '', status: 'Stopped', artUrl: '', length: 0, position: 0, trackId: '' };
 
-function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerState, 'title' | 'artist' | 'artUrl'> {
+function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerState, 'title' | 'artist' | 'artUrl' | 'length' | 'trackId'> {
   const m = meta ?? {};
   const artistRaw = m['xesam:artist']?.value;
   let title = (m['xesam:title']?.value as string) ?? '';
@@ -53,6 +61,9 @@ function readMeta(meta: Record<string, Variant> | undefined): Pick<MediaPlayerSt
     title,
     artist: Array.isArray(artistRaw) ? artistRaw.join(', ') : ((artistRaw as string) ?? ''),
     artUrl: (m['mpris:artUrl']?.value as string) ?? '',
+    // mpris:length is an int64 → dbus-next gives a BigInt; coerce to Number (µs).
+    length: Number(m['mpris:length']?.value ?? 0),
+    trackId: (m['mpris:trackid']?.value as string) ?? '',
   };
 }
 
@@ -131,6 +142,7 @@ export function useMediaPlayers(): UseMediaPlayersResult {
               [service]: {
                 ...readMeta(meta),
                 status: (all.PlaybackStatus?.value as PlayerStatus) ?? 'Stopped',
+                position: Number(all.Position?.value ?? 0),
               },
             }));
           } catch { /* player closed */ }
@@ -142,19 +154,40 @@ export function useMediaPlayers(): UseMediaPlayersResult {
             const current = prev[service] ?? IDLE;
             const next: MediaPlayerState = { ...current };
             if (changed.PlaybackStatus) next.status = changed.PlaybackStatus.value as PlayerStatus;
-            if (changed.Metadata) Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
-        
-            if (next.title === current.title && next.artist === current.artist
-                && next.status === current.status && next.artUrl === current.artUrl) {
-              return prev;
+            if (changed.Metadata) {
+              Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
+              next.position = 0; // new track → restart the progress bar
             }
             return { ...prev, [service]: next };
           });
         });
 
+        // Position is not push-notified: a Seeked signal covers jumps, and a 1s
+        // poll keeps the bar moving during normal playback.
+        player.on('Seeked', (pos: bigint | number) => {
+          if (!alive) return;
+          setStates(prev => prev[service]
+            ? { ...prev, [service]: { ...prev[service], position: Number(pos) } }
+            : prev);
+        });
+
+        const poll = setInterval(async () => {
+          try {
+            const v = await props.Get(PLAYER, 'Position');
+            if (!alive) return;
+            const position = Number((v as Variant)?.value ?? 0);
+            setStates(prev => {
+              const cur = prev[service];
+              if (!cur || cur.position === position) return prev;
+              return { ...prev, [service]: { ...cur, position } };
+            });
+          } catch { /* player closed */ }
+        }, 1000);
+
         await applyAll();
 
         cleanups.push(() => {
+          clearInterval(poll);
           props.removeAllListeners('PropertiesChanged');
           player.removeAllListeners('Seeked');
         });
@@ -180,6 +213,18 @@ export function useMediaPlayers(): UseMediaPlayersResult {
   const next      = useCallback((service?: string) => send(service, 'Next'),      [send]);
   const previous  = useCallback((service?: string) => send(service, 'Previous'),  [send]);
 
+  // Absolute seek via MPRIS Player.SetPosition(o trackId, x positionµs).
+  const seek = useCallback((service: string | undefined, positionUs: number) => {
+    const bus = busRef.current;
+    const svc = service ?? services[0];
+    const tid = svc ? states[svc]?.trackId : undefined;
+    if (!bus || !svc || !tid) return;
+    bus.call(new dbus.Message({
+      destination: svc, path: OBJ, interface: PLAYER, member: 'SetPosition',
+      signature: 'ox', body: [tid, BigInt(Math.max(0, Math.round(positionUs)))],
+    })).catch(() => {});
+  }, [services, states]);
+
   const players = useMemo<MediaPlayer[]>(() => {
     return services.map(service => {
       const match = PLAYER_CONFIGS.find(c => service.startsWith(c.prefix));
@@ -190,9 +235,10 @@ export function useMediaPlayers(): UseMediaPlayersResult {
         playPause: () => playPause(service),
         next:      () => next(service),
         previous:  () => previous(service),
+        seek:      (positionUs: number) => seek(service, positionUs),
       };
     });
-  }, [services, states, playPause, next, previous]);
+  }, [services, states, playPause, next, previous, seek]);
 
   const show = players.length > 0;
 
