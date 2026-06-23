@@ -1,3 +1,5 @@
+import { execSync } from 'node:child_process';
+import process from 'node:process';
 import { KEY } from 'react-drm';
 import type { KeyId } from 'react-drm';
 import type { IconType } from 'react-icons';
@@ -75,8 +77,6 @@ export const ACTIVE_WINDOW = {
 // ─── Screenshots ────────────────────────────────────────────────────────────
 
 // The app usually runs under sudo — save into the real user's home, not /root.
-import { execSync } from 'child_process';
-
 const home = process.env.SUDO_USER ? `/home/${process.env.SUDO_USER}` : (process.env.HOME ?? '.');
 
 // Use nodejs to get the path to the images folder independent from the user's language.
