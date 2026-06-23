@@ -102,10 +102,10 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   useEffect(() => { w.start(isSel ? expandedW : collapsedW); }, [isSel, expandedW, collapsedW, w]);
 
   const color   = ACCENT[player.name] ?? '#666';
-  const iconSz  = Math.round(height * 0.48);
+  const iconSz  = 32;
   const vinylSz   = Math.round(height * 0.9);
-  const iconBox   = Math.round(height);  // collapsed tile app icon
-  const appIconSz = Math.round(height ); // app icon shown in expanded row
+  const iconBox   = Math.round(height*0.8);  // collapsed tile app icon
+  const appIconSz = Math.round(height*0.8 ); // app icon shown in expanded row
   const playing = player.state.status === 'Playing';
   const PlayIcon = playing ? MdPause : MdPlayArrow;
   const icon    = iconSrcFor(player.name);

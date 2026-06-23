@@ -19,7 +19,7 @@ export function KonsolePanel({ width, height }: { width: number; height: number 
     newTab, closeTab, nextTab, prevTab, sendSuggestion,
   } = useKonsole();
 
-  const ICON_SZ   = Math.round(height * 0.52);
+  const ICON_SZ   =32;
   const DOT_SZ    = 8;
   const middleW   = Math.round(width * 0.65);
 
@@ -28,7 +28,7 @@ export function KonsolePanel({ width, height }: { width: number; height: number 
       <Button
         color="#444444"
         activeColor={accent ?? GREEN}
-        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 10, flex: 1 }}
+        style={{ height, alignItems: 'center', justifyContent: 'center', borderRadius: 10, flex: 1 }}
         onClick={onClick}
       >
         {children}

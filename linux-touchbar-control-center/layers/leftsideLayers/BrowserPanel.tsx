@@ -21,7 +21,7 @@ export function BrowserPanel({ width, height }: { width: number; height: number 
   const [confirmClose, setConfirmClose] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const ICON_SZ = Math.round(height * 0.58);
+  const ICON_SZ = 32;
 
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -66,6 +66,7 @@ export function BrowserPanel({ width, height }: { width: number; height: number 
           alignItems: 'center',
           justifyContent: 'center',
           width: BTN_W,
+          height: height,
           borderTopLeftRadius: radiusLeft ? 10 : 0,
           borderBottomLeftRadius: radiusLeft ? 10 : 0,
           borderTopRightRadius: radiusRight ? 10 : 0,
