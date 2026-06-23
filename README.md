@@ -221,7 +221,7 @@ progress track or use the skip-back/skip-forward buttons).
 ## Keyboard shortcuts
 
 Physical keyboard shortcuts recognised by the control center. All shortcuts
-are injected via uinput — they work regardless of which application has focus.
+are injected via uinput. They work regardless of which application has focus.
 
 ### Layer navigation
 
@@ -254,12 +254,6 @@ shown on the left side of the split layer.
 
 Key overrides per browser can be configured in `linux-touchbar-control-center/config.ts`
 (`BROWSER_KEY_OVERRIDES`).
-
-### Media
-
-The Play/Pause button on the split layer injects the **Play/Pause** media key.
-Seek forward/backward and skip are available through the media progress bar
-when an MPRIS player is active (see the section above).
 
 ## Konsole integration
 
