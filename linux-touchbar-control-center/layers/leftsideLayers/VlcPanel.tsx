@@ -24,7 +24,7 @@ export function VlcPanel({ width, height }: { width: number; height: number }) {
   // (percentage left isn't supported), and the row fills `width` precisely.
   const PLAY_W = 110, TIME_W = 96, GAP = 8;
   const trackH = Math.max(10, height - 16);   // full height − 16px
-  const radius = 8;                           // small corners
+  const radius = 10;                           // small corners
   const barW = Math.max(80, width - PLAY_W - TIME_W * 2 - GAP * 3);
   const fillW = Math.round(barW * pct);
 
@@ -64,10 +64,10 @@ export function VlcPanel({ width, height }: { width: number; height: number }) {
       <Button
         width={PLAY_W}
         height={height}
-        color="#3a3a3a"
-        activeColor="#4f4b4f"
+        color="#444444"
+        activeColor="#555555"
         onClick={playPause}
-        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
       >
         {status === 'Playing'
           ? <MdPause style={{ width: 32, height: 32 }} fill="#e5e5e5" stroke="none" />

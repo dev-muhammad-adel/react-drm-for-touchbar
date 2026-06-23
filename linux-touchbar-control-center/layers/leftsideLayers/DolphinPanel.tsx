@@ -23,7 +23,7 @@ export function DolphinPanel({ width, height }: { width: number; height: number 
   if (!connected) {
     return (
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, gap: 10 }}>
-        <Box style={{ width: 3, height: 34, borderRadius: 2, backgroundColor: ACCENT }} />
+        <Box style={{ width: 3, height: 34, borderRadius: 10, backgroundColor: ACCENT }} />
         <Text color={DIM} fontSize={14} fontFamily="IosevkaTerm Nerd Font">
           Dolphin — waiting for D-Bus…
         </Text>
@@ -35,9 +35,9 @@ export function DolphinPanel({ width, height }: { width: number; height: number 
     return (
       <Button
         // width={BTN_W}
-        color="#4f4b4f"
-        activeColor="#666666"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }}
+        color="#444444"
+        activeColor="#555555"
+        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
         onClick={enabled ? onClick : () => {}}
       >
         {children}
@@ -99,7 +99,7 @@ export function DolphinPanel({ width, height }: { width: number; height: number 
         <Button
           key={p.path}
           width={CHIP_W}
-          color="#3a3740"
+          color="#333"
           activeColor={ACCENT}
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8 }}
           onClick={() => openDir(p.path)}

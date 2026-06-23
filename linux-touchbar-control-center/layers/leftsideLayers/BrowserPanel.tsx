@@ -10,8 +10,8 @@ import { useBrowserKeys } from '../../hooks/useBrowserKeys';
 const DIM       = '#cccccc';
 const CLOSE_CLR = '#f87171';
 const CLOSE_CONFIRM_MS = 3000;
-const BTN_BG = '#4f4b4f';
-const BTN_ACTIVE_BG = '#666666';
+const BTN_BG = '#444444';
+const BTN_ACTIVE_BG = '#555555';
 const GROUP_GAP = 12;
 const BTN_W = 130;
 
@@ -66,10 +66,10 @@ export function BrowserPanel({ width, height }: { width: number; height: number 
           alignItems: 'center',
           justifyContent: 'center',
           width: BTN_W,
-          borderTopLeftRadius: radiusLeft ? 8 : 0,
-          borderBottomLeftRadius: radiusLeft ? 8 : 0,
-          borderTopRightRadius: radiusRight ? 8 : 0,
-          borderBottomRightRadius: radiusRight ? 8 : 0,
+          borderTopLeftRadius: radiusLeft ? 10 : 0,
+          borderBottomLeftRadius: radiusLeft ? 10 : 0,
+          borderTopRightRadius: radiusRight ? 10 : 0,
+          borderBottomRightRadius: radiusRight ? 10 : 0,
         }}
         onClick={onClick}
       >

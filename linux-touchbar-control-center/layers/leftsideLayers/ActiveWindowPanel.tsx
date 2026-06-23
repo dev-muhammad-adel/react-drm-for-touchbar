@@ -53,7 +53,7 @@ export function ActiveWindowPanel({ width, height }: { width: number; height: nu
       activeColor="transparent"
       // onClick={next}
     >
-      <Box style={{ flex: 1  , borderRadius: 6  , justifyContent: 'center' }}>
+      <Box style={{ flex: 1  , borderRadius: 10  , justifyContent: 'center' }}>
         <Box style={{ width:200,justifyContent:'center' ,flexDirection:'column' }}>
   
           {/* <Box  style={{height:20 }}>

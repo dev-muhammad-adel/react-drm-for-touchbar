@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Box, Button, KEY } from 'react-drm';
+import { Box, Button, KEY, animated, useSpringValue } from 'react-drm';
 import { useAtom } from 'jotai';
 import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
 import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSearch, MdMusicNote } from 'react-icons/md';
@@ -64,13 +64,44 @@ interface RightBtn {
 }
 
 const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
-  { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40 ,color:"#4f4b4f" , activeColor:"#666666"},
-  { key: 'linux',      icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
-  { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
-  { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
-  { key: 'playpause',  icon: <MdPlayArrow    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
-  // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#4f4b4f" , activeColor:"#666666"},
+  { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40 ,color:"#444444" , activeColor:"#555555"},
+  { key: 'linux',      icon: <FaLinux        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  { key: 'playpause',  icon: <MdPlayArrow    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
 ];
+
+const EQ_BAR_W = 4;
+const EQ_BARS = [
+  { h: 12, dur: 540, delay: 0   },
+  { h: 24, dur: 700, delay: 120 },
+  { h: 18, dur: 600, delay: 60  },
+  { h: 28, dur: 480, delay: 180 },
+];
+
+function EqBar({ h, dur, delay, playing }: { h: number; dur: number; delay: number; playing: boolean }) {
+  const op = useSpringValue(1);
+  useEffect(() => {
+    if (playing) {
+      op.start({ to: 0.3, loop: { reverse: true }, config: { duration: dur }, delay });
+    } else {
+      op.stop();
+      op.start({ to: 1, config: { duration: 200 } });
+    }
+    return () => { op.stop(); };
+  }, [playing, op, dur, delay]);
+
+  return <animated.Box style={{ width: EQ_BAR_W, height: h, opacity: op, backgroundColor: '#cccccc', borderRadius: 2 }} />;
+}
+
+function EqualizerIcon({ playing }: { playing: boolean }) {
+  return (
+    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 3, height: ICON_SIZE }}>
+      {EQ_BARS.map((b, i) => <EqBar key={i} {...b} playing={playing} />)}
+    </Box>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -78,8 +109,9 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const { go } = useLayers(); // outer context — navigates top-level layers
   const leftRef = useRef<LayerHostHandle>(null);
   const { class: activeClass } = useActiveWindow();
-  const { show: showMedia, loading: mediaLoading } = useMediaPlayers();
+  const { show: showMedia, loading: mediaLoading, players } = useMediaPlayers();
   const [isMediaMprisListPinned, setIsMediaMprisListPinned] = useAtom(mediaMprisListPinnedAtom);
+  const mediaPlaying = useMemo(() => players.some(p => p.state.status === 'Playing'), [players]);
   const mediaBtns: RightBtn[] = useMemo(() => {
     const base: RightBtn[] = [
       { ...BASE_BTNS[0], onClick: () => go('media', 'slide-left') },
@@ -91,10 +123,10 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     if (showMedia) {
       base.splice(1, 0, {
         key: 'media',
-        icon: <MdMusicNote style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,
+        icon: <EqualizerIcon playing={mediaPlaying} />,
         width: 120,
-        color: isMediaMprisListPinned ? '#2d5a3d' : '#4f4b4f',
-        activeColor: isMediaMprisListPinned ? '#3d7a52' : '#666666',
+        color: isMediaMprisListPinned ? '#333' : '#444444',
+        activeColor: isMediaMprisListPinned ? '#444' : '#555555',
         // Just toggle the pin — the navigation effect below reacts to the
         // change and drives the left panel (no manual go() here, which would
         // fire the fade twice).
@@ -103,7 +135,7 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     }
 
     return base;
-  }, [ showMedia, isMediaMprisListPinned, activeClass]);
+  }, [ showMedia, isMediaMprisListPinned, activeClass, mediaPlaying]);
 
   // Right panel width depends on the visible buttons + 2px gaps.
   const rightW = mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 2;

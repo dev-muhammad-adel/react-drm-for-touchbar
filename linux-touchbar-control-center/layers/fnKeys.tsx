@@ -31,8 +31,8 @@ export function FnKeys({ width, height }: { width: number; height: number }) {
       {showEsc && (
         <Button
           key="esc"
-          color="#4f4b4f"
-          activeColor="#666666"
+          color="#444444"
+          activeColor="#555555"
           style={keyStyle}
           onClick={() => keys.pressKey(KEY.ESC)}
         >
@@ -43,8 +43,8 @@ export function FnKeys({ width, height }: { width: number; height: number }) {
       {KEYS.map((key, i) => (
         <Button
           key={key}
-          color="#4f4b4f"
-          activeColor="#666666"
+          color="#444444"
+          activeColor="#555555"
           style={keyStyle}
           onClick={() => keys.pressF((i + 1) as 1|2|3|4|5|6|7|8|9|10|11|12)}
         >

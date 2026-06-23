@@ -138,24 +138,24 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   };
 
   return (
-    <animated.Box style={{ width: w, height, overflow: 'hidden', borderRadius: 8, backgroundColor: BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
+    <animated.Box style={{ width: w, height, overflow: 'hidden', borderRadius: 10, backgroundColor: BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
       {isSel ? (
         <>
           {/* app icon */}
           {icon && <Svg src={icon} width={appIconSz} height={appIconSz} style={{ width: appIconSz, height: appIconSz }} />}
           {icon && <Box style={{ width: 1, height: sepH*2, backgroundColor: SEP+"99" }} />}
           {/* prev */}
-          <Button width={60} height={48} color="transparent" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
+          <Button width={60} height={48} color="transparent" activeColor="#555555" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
             <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill="#fff" />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
           {/* play/pause (icon tinted with the player accent) */}
-          <Button width={100} height={48} color="transparent" activeColor="#666666" onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+          <Button width={100} height={48} color="transparent" activeColor="#555555" onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
             <PlayIcon style={{ width: iconSz, height: iconSz }} fill={"#fff"} />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
           {/* next */}
-          <Button width={60} height={48} color="transparent" activeColor="#666666" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
+          <Button width={60} height={48} color="transparent" activeColor="#555555" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
             <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />  

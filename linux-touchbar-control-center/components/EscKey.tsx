@@ -10,8 +10,8 @@ export function EscKey({ width, height }: { width: number; height: number }) {
   return (
     <Box style={{ width,backgroundColor: '#000' }}>
       <Button
-        color="#4f4b4f"
-        activeColor="#666666"
+        color="#444444"
+        activeColor="#555555"
         style={{
           flex: 1,
           alignItems: 'center',

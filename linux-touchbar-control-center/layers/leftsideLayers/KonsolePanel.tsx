@@ -1,4 +1,4 @@
-import React from 'react';
+  import React from 'react';
 import { Box, Button, Text } from 'react-drm';
 import {
   MdAdd, MdClose, MdChevronLeft, MdChevronRight,
@@ -26,9 +26,9 @@ export function KonsolePanel({ width, height }: { width: number; height: number 
   function Btn({ onClick, children, accent }: { onClick: () => void; children: React.ReactNode; accent?: string }) {
     return (
       <Button
-        color="#3a3740"
+        color="#444444"
         activeColor={accent ?? GREEN}
-        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 8, flex: 1 }}
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 10, flex: 1 }}
         onClick={onClick}
       >
         {children}
@@ -63,7 +63,7 @@ export function KonsolePanel({ width, height }: { width: number; height: number 
         <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={GREEN} stroke="none" />
       </Btn>
       <Box style={{ width: 40, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color="#cccccc" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
+        <Text color="#fff" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
           {tabCount > 0 ? `${activeTabIdx + 1}/${tabCount}` : '–'}
         </Text>
       </Box>
