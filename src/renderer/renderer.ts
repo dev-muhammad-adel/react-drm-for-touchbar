@@ -351,10 +351,10 @@ function readInt(path: string): number {
 }
 
 class Backlight {
-  private readonly tbFile:   string | null;
-  private readonly tbMax:    number;
-  private readonly dispFile: string | null;
-  private readonly dispMax:  number;
+  private tbFile:   string | null;
+  private tbMax:    number;
+  private dispFile: string | null;
+  private dispMax:  number;
   private lidClosed = false;
   private activeHwLevel = 2; // raw level currently written while active
 
@@ -407,7 +407,26 @@ class Backlight {
   }
 
   off(): void {
+    this.activeHwLevel = 0;
     this.write(0);
+  }
+
+  /**
+   * Re-resolve the backlight sysfs paths after the device re-enumerated
+   * (e.g. after S3 suspend/resume).  The DRM card re-uses DrmDisplay.reopen();
+   * the backlight needs the same treatment so the cached tbFile/dispFile paths
+   * don't point at a stale or not-yet-available node.
+   */
+  reopen(): void {
+    const tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
+    this.tbFile   = tbDir ? `${tbDir}/brightness` : null;
+    this.tbMax    = tbDir ? readInt(`${tbDir}/max_brightness`) : 0;
+
+    const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
+    this.dispFile = dispDir ? `${dispDir}/brightness` : null;
+    this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
+
+    this.activeHwLevel = 2; // reset tracking — hardware state is unknown after re-enumeration
   }
 }
 
@@ -814,6 +833,7 @@ export function render(
   function resume(): void {
     if (!suspended) return;
     display.reopen(); // throws if the card is not back yet — caller retries
+    backlight.reopen(); // re-resolve sysfs paths after device re-enumeration
     suspended = false;
     state = 'active';
     stopLid = watchLid(onLid);
