@@ -195,6 +195,29 @@ must be installed for Xorg sessions. Unsupported Wayland desktops can still
 run the Touch Bar UI after manual installation, but application-specific
 controls that depend on the focused window will not work.
 
+## Media progress bar support (mpris)
+
+The control center displays a visual playback progress bar for media players
+that expose an MPRIS2 D-Bus interface. Spotify registers its own
+`org.mpris.MediaPlayer2.spotify` service and works without additional setup.
+
+Chrome, Chromium and other Chromium-based browsers do not provide a native
+MPRIS2 service on Linux. For these browsers install the
+**Plasma Browser Integration** extension:
+
+- [Chrome Web Store](https://chromewebstore.google.com/detail/plasma-browser-integratio/edckdgbkbpabccdcjfgnkaanhecepgbn)
+- [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/plasma-browser-integration/)
+
+Despite the name, this extension is **not KDE-specific**. It registers an
+`org.mpris.MediaPlayer2.plasma-browser-integration` D-Bus service that any
+desktop environment (GNOME, Hyprland, Xorg, …) can read — the progress bar
+appears on the Touch Bar regardless of which DE you run.
+
+No host-side package (`plasma-browser-integration` or similar) is required —
+the extension alone is sufficient. The progress bar updates live, shows album
+art embedded in the track title row, and supports seek (tap/drag on the
+progress track or use the skip-back/skip-forward buttons).
+
 ## Konsole integration
 
 The Konsole panel can show suggestions without additional configuration.
