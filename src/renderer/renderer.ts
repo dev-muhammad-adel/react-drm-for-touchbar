@@ -338,6 +338,12 @@ function watchLid(onLid: (closed: boolean) => void): () => void {
 const TB_BACKLIGHT_NAMES  = ['display-pipe', 'appletb_backlight'];
 const DISP_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
 
+// After resume the appletb_backlight HID interface re-binds late; re-apply and
+// verify the level on this cadence until the panel confirms it (or the window
+// expires — past that, the self-healing write() fixes it on the next wake/dim).
+const SETTLE_INTERVAL_MS = 1000;
+const SETTLE_WINDOW_MS   = 20_000;
+
 function findBacklightDir(candidates: string[]): string | null {
   try {
     const base = '/sys/class/backlight';
@@ -351,25 +357,41 @@ function readInt(path: string): number {
 }
 
 class Backlight {
+  private tbDir:    string | null;
   private tbFile:   string | null;
   private tbMax:    number;
   private dispFile: string | null;
   private dispMax:  number;
   private lidClosed = false;
   private activeHwLevel = 2; // raw level currently written while active
+  private settleTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
-    const tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
+    this.tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
+    this.tbFile  = this.tbDir ? `${this.tbDir}/brightness` : null;
+    this.tbMax   = this.tbDir ? readInt(`${this.tbDir}/max_brightness`) : 0;
     const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
-    this.tbFile   = tbDir   ? `${tbDir}/brightness`   : null;
-    this.tbMax    = tbDir   ? readInt(`${tbDir}/max_brightness`)   : 0;
     this.dispFile = dispDir ? `${dispDir}/brightness` : null;
     this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
   }
 
+  // Re-resolve the Touch Bar backlight node. After S3 resume the
+  // appletb_backlight HID interface re-binds a beat after the appletbdrm card
+  // attachTouchBar() waits for, so the cached path can be null or stale.
+  private resolveTb(): void {
+    this.tbDir  = findBacklightDir(TB_BACKLIGHT_NAMES);
+    this.tbFile = this.tbDir ? `${this.tbDir}/brightness` : null;
+    this.tbMax  = this.tbDir ? readInt(`${this.tbDir}/max_brightness`) : 0;
+  }
+
   private write(value: number): void {
+    // Self-heal: if the node is absent (not yet re-enumerated after resume) try
+    // to re-resolve it before giving up, so writes start landing the instant the
+    // HID backlight interface re-appears instead of no-op'ing until next resume.
+    if (!this.tbFile || !fs.existsSync(this.tbFile)) this.resolveTb();
     if (!this.tbFile) return;
     try { fs.writeFileSync(this.tbFile, String(Math.round(value))); } catch (e) {
+      this.tbFile = null; // drop the stale path so the next write re-resolves
       console.warn('[react-drm] backlight write failed (need root?):', (e as NodeJS.ErrnoException).code);
     }
   }
@@ -418,9 +440,7 @@ class Backlight {
    * don't point at a stale or not-yet-available node.
    */
   reopen(): void {
-    const tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
-    this.tbFile   = tbDir ? `${tbDir}/brightness` : null;
-    this.tbMax    = tbDir ? readInt(`${tbDir}/max_brightness`) : 0;
+    this.resolveTb();
 
     const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
     this.dispFile = dispDir ? `${dispDir}/brightness` : null;
@@ -428,6 +448,36 @@ class Backlight {
 
     this.activeHwLevel = 2; // reset tracking — hardware state is unknown after re-enumeration
   }
+
+  /**
+   * Apply the active level after resume and keep re-applying until the panel
+   * confirms it. The appletb_backlight node may still be absent (write no-ops)
+   * or get reset to its probe default (level 1 = "50%") as the HID interface
+   * re-enumerates during attachTouchBar()'s config reprobes. A single on() in
+   * resume() therefore races the re-bind and can leave the backlight stuck at
+   * the default. Verify against actual_brightness and retry on a short schedule.
+   */
+  onVerified(adaptive: boolean, level: 0 | 1 | 2): void {
+    this.stopSettle();
+    const deadline = Date.now() + SETTLE_WINDOW_MS;
+    const apply = (): void => {
+      this.on(adaptive, level);
+      const actual = this.tbDir ? readInt(`${this.tbDir}/actual_brightness`) : -1;
+      const settled = !!this.tbFile && actual === this.activeHwLevel;
+      // Stop once the panel confirms the level, or after the window expires.
+      // Past the window the self-healing write() is the safety net: the next
+      // wake()/dim() re-resolves the node and lands the write anyway.
+      if (settled || Date.now() > deadline) this.stopSettle();
+    };
+    apply();
+    if (!this.settleTimer) this.settleTimer = setInterval(apply, SETTLE_INTERVAL_MS);
+  }
+
+  private stopSettle(): void {
+    if (this.settleTimer) { clearInterval(this.settleTimer); this.settleTimer = null; }
+  }
+
+  stop(): void { this.stopSettle(); }
 }
 
 // ── Pixel shift (AMOLED burn-in protection) ───────────────────────────────────
@@ -825,6 +875,7 @@ export function render(
     if (touchRetryTimer) { clearTimeout(touchRetryTimer); touchRetryTimer = null; } // cancel any in-flight touch retry
     if (ownKeyboardWatch) stopKeyboard();
     else options.keyboardReader?.suspend(); // release the caller's kbd fd too — don't hold it across teardown
+    backlight.stop(); // cancel any in-flight resume settle loop
     backlight.off();
     display.close(); // device disappears during suspend — drop the fd cleanly
     console.log('[react-drm] suspended (display closed)');
@@ -841,7 +892,7 @@ export function render(
     if (ownKeyboardWatch) stopKeyboard = watchKeyboard(wake);
     else options.keyboardReader?.resume(); // re-open the caller's kbd fd closed in suspend()
     startTouch(); // re-open the touch fd against the re-enumerated node
-    backlight.on(adaptive, activeLevel);
+    backlight.onVerified(adaptive, activeLevel); // retry until the panel confirms — HID backlight re-binds late
     startIdleTimers();
     renderCurrent(true); // display was closed during suspend — force a repaint past the dedup cache
     console.log('[react-drm] resumed');
@@ -858,6 +909,7 @@ export function render(
       stopPointer();
       stopKeyboard();
       stopTouch();
+      backlight.stop(); // cancel any in-flight resume settle loop
       if (touchRetryTimer) { clearTimeout(touchRetryTimer); touchRetryTimer = null; } // cancel any in-flight touch retry
     },
     update: doUpdate,
