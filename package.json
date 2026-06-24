@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "description": "React renderer targeting Linux DRM/KMS via libdrm + Cairo",
+  "license": "GPL-3.0-or-later",
+  "author": "Muhammad Adel",
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
   "exports": {
