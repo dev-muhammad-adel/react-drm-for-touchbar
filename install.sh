@@ -225,7 +225,7 @@ detect_session() {
     *gnome*) WINDOW_BACKEND=gnome ;;
     *kde*|*plasma*) WINDOW_BACKEND=plasma ;;
     *hyprland*) WINDOW_BACKEND=hyprland ;;
-    *niri*) WINDOW_BACKEND=niri; DESKTOP_SUPPORTED=0; DESKTOP_ABORT_REASON="Niri has no active-window backend" ;;
+    *niri*) WINDOW_BACKEND=niri ;;
     *) WINDOW_BACKEND=unsupported; DESKTOP_SUPPORTED=0; DESKTOP_ABORT_REASON="no active-window backend exists for this Wayland desktop" ;;
   esac
 }
@@ -496,7 +496,7 @@ analyze() {
     exit 2
   fi
   if [[ $DESKTOP_SUPPORTED -eq 0 ]]; then
-    fail "$DESKTOP_ABORT_REASON; react-drm currently supports GNOME, Plasma and Hyprland on Wayland, plus Xorg"
+    fail "$DESKTOP_ABORT_REASON; react-drm currently supports GNOME, Plasma, Hyprland and Niri on Wayland, plus Xorg"
   fi
   if [[ "$DISTRO_FAMILY" == fedora ]]; then
     [[ "$OS_VERSION_ID" =~ ^[0-9]+$ ]] || fail "unable to determine the Fedora version"
