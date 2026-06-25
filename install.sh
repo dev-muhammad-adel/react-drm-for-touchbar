@@ -18,7 +18,10 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || print
 readonly TOUCHBAR_VENDOR_ID="05ac"
 readonly TOUCHBAR_PRODUCT_ID="8302"
 readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus)
-readonly REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
+# Each entry is a '|'-separated group; the group is satisfied when at least one
+# of its alternatives is loadable. The Touch Bar DRM driver ships under either
+# name depending on the kernel/fork (appletbdrm upstream, t2bdrm on some forks).
+readonly REQUIRED_KERNEL_MODULES=('appletbdrm|t2bdrm' hid-appletb-bl)
 readonly COMMON_RUNTIME_PACKAGES=(brightnessctl cava)
 
 ANALYSIS_MISSING_COMMANDS=()
@@ -288,9 +291,13 @@ check_deploy_files() {
 }
 
 detect_kernel_modules() {
-  local module
-  for module in "${REQUIRED_KERNEL_MODULES[@]}"; do
-    modinfo "$module" >/dev/null 2>&1 || ANALYSIS_MISSING_MODULES+=("$module")
+  local group alt found
+  for group in "${REQUIRED_KERNEL_MODULES[@]}"; do
+    found=0
+    for alt in ${group//|/ }; do
+      if modinfo "$alt" >/dev/null 2>&1; then found=1; break; fi
+    done
+    [[ $found -eq 1 ]] || ANALYSIS_MISSING_MODULES+=("$group")
   done
 }
 
