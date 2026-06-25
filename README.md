@@ -47,7 +47,7 @@ Supported installer environments:
 - Ubuntu 25.10 or newer and Ubuntu derivatives that provide Node.js 20.19.0
   or newer
 - Arch Linux and supported Arch derivatives
-- GNOME, KDE Plasma or Hyprland on Wayland
+- GNOME, KDE Plasma , Niri or Hyprland on Wayland
 - Any Xorg desktop with `xprop`
 
 Ubuntu 24.04 is not supported because its repositories provide Node.js 18.
