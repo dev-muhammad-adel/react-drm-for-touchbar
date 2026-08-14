@@ -1,6 +1,5 @@
 import React from 'react';
-import path from 'path';
-import { Box, Gif, Text, animated, useSpringValue } from 'react-drm';
+import { Box } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
@@ -34,23 +33,13 @@ function GotaiProvider({ children }: { children: React.ReactNode }) {
 
 export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
 
-  // const { booted, opacity } = useBootSequence();
+  const { booted, opacity } = useBootSequence();
 
   usePomodoroEngine();
 
-  // if (!booted) return <BootScreen width={width} height={height} opacity={opacity} />;
-
-  // Manual <Gif> test. The asset is 75×56; keep aspect ratio at the bar height.
-  // if (!booted) return (<Box style={{ width, height, backgroundColor: '#000',  justifyContent: 'center' }}> 
-  //   <Gif
-  //     src={path.join(__dirname, 'public', 'boot.gif')}
-  //     height={height}
-  //     width={Math.round(height * 960 / 445)} // keep aspect ratio of the source (960×445)
-  //     loop={false}
-  //     playing={!booted}
-  //   />
-  //   </Box>
-  // );
+  if (!booted) {
+    return <BootScreen width={width} height={height} opacity={opacity} />;
+  }
 
   // Wide Touch Bars (no physical Esc key) report a wider panel — show a fixed
   // Esc at the far left and inset the layer area by its width. Only in 'all'

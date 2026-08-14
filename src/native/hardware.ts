@@ -12,9 +12,9 @@
 export const TOUCHBAR_DRM_DRIVERS = ['appletbdrm', 't2bdrm'] as const;
 
 // Touch Bar backlight sysfs node, in preference order. The HID backlight ships
-// as appletb_backlight upstream or t2tb_backlight on some forks; 'display-pipe'
-// is the generic DRM-pipe fallback.
-export const TOUCHBAR_BACKLIGHT_NAMES = ['display-pipe', 'appletb_backlight', 't2tb_backlight'] as const;
+// as t2tb_backlight in KaiT2en or appletb_backlight upstream; 'display-pipe' is
+// retained only as the generic DRM-pipe fallback.
+export const TOUCHBAR_BACKLIGHT_NAMES = ['t2tb_backlight', 'appletb_backlight', 'display-pipe'] as const;
 
 // Host display (laptop panel) backlight candidates, in preference order. Used
 // to drive the on-screen brightness slider, not the Touch Bar itself: the panel

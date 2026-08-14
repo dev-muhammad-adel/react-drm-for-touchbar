@@ -283,6 +283,7 @@ Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   exports.Set("findKeyboardDevices", Napi::Function::New(env, FindKeyboardDevices));
   exports.Set("findPointerDevices",  Napi::Function::New(env, FindPointerDevices));
   exports.Set("findLidDevice",       Napi::Function::New(env, FindLidDevice));
+  exports.Set("readLidClosed",       Napi::Function::New(env, ReadLidClosed));
   exports.Set("usbReset",            Napi::Function::New(env, UsbReset));
   return exports;
 }

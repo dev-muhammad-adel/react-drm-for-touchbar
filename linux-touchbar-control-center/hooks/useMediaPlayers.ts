@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dbus, { MessageBus, Variant } from 'dbus-next';
 
-// Spotify and Firefox expose native MPRIS2 services. Chrome itself has no
-// native MPRIS2 service on Linux; on KDE Plasma the
-// `plasma-browser-integration` extension exposes browser media sessions over
-// D-Bus.
+// Modern Chromium builds expose browser media sessions directly. Plasma
+// Browser Integration remains a fallback for browsers without native MPRIS2.
 const PLAYER_CONFIGS = [
   { prefix: 'org.mpris.MediaPlayer2.spotify', name: 'spotify' as const },
   { prefix: 'org.mpris.MediaPlayer2.firefox', name: 'firefox' as const },
+  { prefix: 'org.mpris.MediaPlayer2.brave', name: 'chrome' as const },
+  { prefix: 'org.mpris.MediaPlayer2.chromium', name: 'chrome' as const },
   { prefix: 'org.mpris.MediaPlayer2.plasma-browser-integration', name: 'chrome' as const },
 ];
 
@@ -81,8 +81,8 @@ export interface UseMediaPlayersResult {
 }
 
 /**
- * Tracks supported MPRIS2 players, including Spotify, Firefox and Chrome via
- * KDE plasma-browser-integration.
+ * Tracks supported MPRIS2 players, including Spotify, Firefox and
+ * Chromium-based browsers.
  * Returns visibility flags and an array of control/status objects.
  */
 export function useMediaPlayers(): UseMediaPlayersResult {
@@ -130,14 +130,18 @@ export function useMediaPlayers(): UseMediaPlayersResult {
 
     services.forEach(service => {
       (async () => {
-        const obj    = await bus.getProxyObject(service, OBJ);
-        if (!alive) return;
-        const props  = obj.getInterface(PROPS);
-        const player = obj.getInterface(PLAYER);
-
         const applyAll = async () => {
           try {
-            const all = await props.GetAll(PLAYER) as Record<string, Variant>;
+            const reply = await bus.call(new dbus.Message({
+              destination: service,
+              path: OBJ,
+              interface: PROPS,
+              member: 'GetAll',
+              signature: 's',
+              body: [PLAYER],
+            }));
+            if (!reply) return;
+            const all = reply.body[0] as Record<string, Variant>;
             if (!alive) return;
             const meta = all.Metadata?.value as Record<string, Variant> | undefined;
             setStates(prev => ({
@@ -151,49 +155,10 @@ export function useMediaPlayers(): UseMediaPlayersResult {
           } catch { /* player closed */ }
         };
 
-        props.on('PropertiesChanged', (iface: string, changed: Record<string, Variant>) => {
-          if (!alive || iface !== PLAYER) return;
-          setStates(prev => {
-            const current = prev[service] ?? IDLE;
-            const next: MediaPlayerState = { ...current };
-            if (changed.PlaybackStatus) next.status = changed.PlaybackStatus.value as PlayerStatus;
-            if (changed.Metadata) {
-              Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
-              next.position = 0; // new track → restart the progress bar
-            }
-            return { ...prev, [service]: next };
-          });
-        });
-
-        // Position is not push-notified: a Seeked signal covers jumps, and a 1s
-        // poll keeps the bar moving during normal playback.
-        player.on('Seeked', (pos: bigint | number) => {
-          if (!alive) return;
-          setStates(prev => prev[service]
-            ? { ...prev, [service]: { ...prev[service], position: Number(pos) } }
-            : prev);
-        });
-
-        const poll = setInterval(async () => {
-          try {
-            const v = await props.Get(PLAYER, 'Position');
-            if (!alive) return;
-            const position = Number((v as Variant)?.value ?? 0);
-            setStates(prev => {
-              const cur = prev[service];
-              if (!cur || cur.position === position) return prev;
-              return { ...prev, [service]: { ...cur, position } };
-            });
-          } catch { /* player closed */ }
-        }, 1000);
-
         await applyAll();
+        const poll = setInterval(applyAll, 1000);
 
-        cleanups.push(() => {
-          clearInterval(poll);
-          props.removeAllListeners('PropertiesChanged');
-          player.removeAllListeners('Seeked');
-        });
+        cleanups.push(() => clearInterval(poll));
       })().catch(() => {});
     });
 

@@ -3,6 +3,8 @@
 react-drm provides a React renderer for drawing directly to Linux DRM/KMS
 displays using libdrm and Cairo. This repository includes a control center
 that replaces the standard Touch Bar interface on T2 MacBooks running Linux.
+This copy is integrated with KaiT2en and is installed through the KaiT2en
+application installer.
 
 The control center provides:
 
@@ -18,60 +20,43 @@ The control center provides:
 react-drm replaces the existing Touch Bar interface. `tiny-dfr`,
 `mac-touchbar-plus` and other Touch Bar daemons must not run alongside it.
 
-### Installer
-
-Run the installer as your regular user from the repository root:
+From the KaiT2en repository root, install or update only react-drm with:
 
 ```sh
-./install.sh
+sudo ./scripts/fedora/install-apps.sh --react-drm-only
 ```
 
-The installer performs three phases:
-
-1. **Analysis** detects the system, session, hardware, kernel modules,
-   conflicting daemons and required packages. It resolves the complete package
-   transaction without changing the system.
-2. **Purge** stops and removes detected `tiny-dfr` or `mac-touchbar-plus`
-   installations after a separate confirmation.
-3. **Deploy** installs dependencies, builds the current local source, installs
-   the udev rules and production user service, and starts react-drm.
-
-It can also update an existing installation. Update the local source using the
-same method used to obtain it, then run the updated `install.sh` again. The
-installer does not download source updates itself.
-
-Supported installer environments:
-
-- Fedora 44 or newer
-- Debian 13 or newer
-- Ubuntu 25.10 or newer and Ubuntu derivatives that provide Node.js 20.19.0
-  or newer
-- Arch Linux and supported Arch derivatives
-- GNOME, KDE Plasma , Niri or Hyprland on Wayland
-- Any Xorg desktop with `xprop`
-
-Ubuntu 24.04 is not supported because its repositories provide Node.js 18.
-react-drm requires Node.js 20.19.0 or newer. NixOS is detected but requires a
-native Nix package or module and is not modified by the installer. Other
-Wayland desktops currently lack an active-window backend and are rejected by
-the installer.
-
-Arch-based systems receive a full `pacman -Syu` because partial upgrades are
-unsupported. Debian and Ubuntu package lists and Fedora repository metadata
-are refreshed before package installation.
-
-Run only the non-destructive analysis with:
+The react-drm directory provides an equivalent shortcut that is run as the
+desktop user:
 
 ```sh
-./install.sh analyze
+./apps/react-drm/install.sh
+```
+
+The installer:
+
+- verifies that the Mac model has a T2 Touch Bar;
+- installs the Fedora build and runtime dependencies;
+- removes conflicting Touch Bar daemons;
+- installs the udev rules and required user groups;
+- copies the current source to `~/react-drm` and builds it there;
+- installs Window Monitor Pro when GNOME is active;
+- installs and starts `react-drm.service` for the invoking user.
+
+Run the same command after updating the KaiT2en repository. It rebuilds only
+react-drm; `t2-fan-control` and `t2-smc-control` are not rebuilt. The complete
+KaiT2en application installer remains available as:
+
+```sh
+sudo ./scripts/fedora/install-apps.sh
 ```
 
 ### Uninstall
 
-Run the separate uninstaller from the repository root:
+Run the separate uninstaller as the desktop user:
 
 ```sh
-./uninstall.sh
+./apps/react-drm/uninstall.sh
 ```
 
 It stops and removes the react-drm user service, restores the firmware Touch
@@ -79,80 +64,7 @@ Bar interface and removes the react-drm udev rules. Project files, npm
 dependencies, system packages and `video`/`input` group memberships are left
 unchanged.
 
-### Manual installation
-
-Use this path for unsupported distributions or desktop environments. Package
-names differ between distributions, so install the equivalents of:
-
-- Node.js 20.19.0 or newer, npm and Python 3 for `node-gyp`
-- A C++ compiler, `make` and `pkg-config`
-- Development files for libdrm, Cairo, librsvg and libudev/systemd
-- `brightnessctl` and `cava`
-- `xprop` when using Xorg
-- systemd/logind and a systemd user session for suspend handling and the
-  supplied service
-
-The kernel must provide the Touch Bar DRM driver (`appletbdrm` upstream, or
-`t2bdrm` on some forks) and `hid-appletb-bl`. Verify both before continuing
-(either DRM driver name is fine):
-
-```sh
-modinfo appletbdrm || modinfo t2bdrm
-modinfo hid-appletb-bl
-```
-
-Stop, disable and remove `tiny-dfr`, `mac-touchbar-plus` or any other Touch Bar
-daemon using the method appropriate for your distribution.
-
-Build from the repository root. `npm ci` uses the root lockfile and installs
-the root package together with the `linux-touchbar-control-center` workspace:
-
-```sh
-npm ci
-npm run build
-```
-
-`npm ci` may show deprecation warnings for `npmlog`, `are-we-there-yet` and
-`gauge`. They are transitive dependencies of `@benmalka/foxdriver` and do not
-by themselves indicate a failed build.
-
-Add your user to the groups required for DRM access, input devices and key
-injection:
-
-```sh
-sudo usermod -aG video,input "$USER"
-```
-
-Install and apply the udev rules:
-
-```sh
-sudo install -m 0644 system/99-react-drm.rules /etc/udev/rules.d/99-react-drm.rules
-sudo udevadm control --reload
-sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
-sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
-```
-
-Log out of the desktop session and back in before starting react-drm. Opening a
-new terminal is not sufficient to activate the new supplementary groups.
-
-After logging back in, install the service:
-
-```sh
-install -Dm644 system/react-drm.service ~/.config/systemd/user/react-drm.service
-```
-
-The supplied unit expects the repository at `~/react-drm`. If it is stored
-elsewhere, edit `WorkingDirectory`, `ExecStart` and `ExecStopPost` in
-`~/.config/systemd/user/react-drm.service` to use its absolute path. The unit
-runs the compiled app with `node dist/index.js` and sets `NODE_ENV=production`;
-it does not run the TypeScript entrypoint or hot reload watcher.
-
-Then enable and start it:
-
-```sh
-systemctl --user daemon-reload
-systemctl --user enable --now react-drm.service
-```
+### Service status
 
 Check its status and log with:
 
@@ -172,7 +84,7 @@ Stop the user service before running the control center manually:
 
 ```sh
 systemctl --user stop react-drm.service
-cd linux-touchbar-control-center
+cd apps/react-drm/linux-touchbar-control-center
 npm run dev
 ```
 
@@ -181,8 +93,8 @@ installed systemd service uses the compiled production build instead.
 
 ## Active window integration
 
-Application-specific controls require an active-window backend. The matching
-backend is selected automatically:
+Application-specific controls require an active-window backend. The KaiT2en
+installer deploys the required backend and react-drm selects it automatically:
 
 - GNOME Wayland uses
   [Window Monitor Pro](https://extensions.gnome.org/extension/8549/window-monitor-pro/),
@@ -191,10 +103,11 @@ backend is selected automatically:
 - Hyprland uses its IPC socket
 - Xorg uses `xprop`
 
-Window Monitor Pro must be installed and enabled on GNOME Wayland. `xprop`
-must be installed for Xorg sessions. Unsupported Wayland desktops can still
-run the Touch Bar UI after manual installation, but application-specific
-controls that depend on the focused window will not work.
+On GNOME Wayland the KaiT2en installer includes and enables Window Monitor Pro.
+A logout and login may be required when the extension is installed for the
+first time. `xprop` must be installed for Xorg sessions. Unsupported Wayland
+desktops can still run the Touch Bar UI, but application-specific controls
+that depend on the focused window will not work.
 
 ## Media progress bar support (mpris)
 
@@ -202,22 +115,27 @@ The control center displays a visual playback progress bar for media players
 that expose an MPRIS2 D-Bus interface. Spotify registers its own
 `org.mpris.MediaPlayer2.spotify` service and works without additional setup.
 
-Chrome, Chromium and other Chromium-based browsers do not provide a native
-MPRIS2 service on Linux. For these browsers install the
-**Plasma Browser Integration** extension:
+Current Brave and Chromium builds expose their media sessions directly through
+MPRIS2. This also works when the browser is installed as a Flatpak. Verify the
+active service during playback with:
+
+```sh
+busctl --user list | grep org.mpris.MediaPlayer2
+```
+
+react-drm recognizes `brave` and `chromium` services directly. Some other
+Chromium-based browsers do not expose MPRIS2. For those browsers, Plasma Browser
+Integration can provide an
+`org.mpris.MediaPlayer2.plasma-browser-integration` service:
 
 - [Chrome Web Store](https://chromewebstore.google.com/detail/plasma-integration/cimiefiiaegbelhefglklhhakcgmhkai)
 - [Firefox Add-ons](https://addons.mozilla.org/en-US/firefox/addon/plasma-integration/)
 
-Despite the name, this extension is **not KDE-specific**. It registers an
-`org.mpris.MediaPlayer2.plasma-browser-integration` D-Bus service that any
-desktop environment (GNOME, Hyprland, Xorg, …) can read. The progress bar
-appears on the Touch Bar regardless of which DE you run.
-
-No host-side package (`plasma-browser-integration` or similar) is required,
-the extension alone is sufficient. The progress bar updates live, shows album
-art embedded in the track title row, and supports seek (tap/drag on the
-progress track or use the skip-back/skip-forward buttons).
+The extension requires the native Plasma Browser Integration host supplied by
+the distribution; the extension alone cannot publish a D-Bus service. The
+progress bar works on any desktop once an MPRIS2 service is present. It updates
+live, shows album art embedded in the track title row, and supports seek
+(tap/drag on the progress track or use the skip-back/skip-forward buttons).
 
 ## Keyboard shortcuts
 

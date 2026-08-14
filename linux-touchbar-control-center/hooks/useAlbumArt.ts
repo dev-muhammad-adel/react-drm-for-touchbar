@@ -15,6 +15,17 @@ function mimeFromExt(path: string): string {
   return 'image/jpeg';
 }
 
+function mimeFromBuffer(buf: Buffer, path: string): string {
+  if (buf.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return 'image/png';
+  }
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.subarray(0, 4).toString('ascii') === 'GIF8') return 'image/gif';
+  if (buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
+      buf.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  return mimeFromExt(path);
+}
+
 async function resolveArt(url: string): Promise<string> {
   const hit = cache.get(url);
   if (hit) return hit;
@@ -25,7 +36,7 @@ async function resolveArt(url: string): Promise<string> {
   } else if (url.startsWith('file://') || url.startsWith('/')) {
     const path = url.startsWith('file://') ? decodeURIComponent(url.slice('file://'.length)) : url;
     const buf  = await readFile(path);
-    dataUri = `data:${mimeFromExt(path)};base64,${buf.toString('base64')}`;
+    dataUri = `data:${mimeFromBuffer(buf, path)};base64,${buf.toString('base64')}`;
   } else {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`art fetch ${res.status}`);

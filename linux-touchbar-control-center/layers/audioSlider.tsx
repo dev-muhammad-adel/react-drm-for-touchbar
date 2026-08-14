@@ -41,15 +41,21 @@ function readVolume(): number {
   } catch { return 0.5; }
 }
 
-function applyVolume(pct: number): void {
+function applyVolume(pct: number, done: () => void): void {
   if (USE_WPCTL) {
-    execFile('wpctl', ['set-volume', '@DEFAULT_AUDIO_SINK@', pct.toFixed(2)],
+    execFile('wpctl', ['set-volume', '@DEFAULT_AUDIO_SINK@', pct.toFixed(4)],
       { env: PW_ENV },
-      (err) => { if (err) console.error('[audioSlider] wpctl:', err.message); },
+      (err) => {
+        if (err) console.error('[audioSlider] wpctl:', err.message);
+        done();
+      },
     );
   } else {
     execFile('pactl', ['set-sink-volume', '@DEFAULT_SINK@', `${Math.round(pct * 100)}%`],
-      (err) => { if (err) console.error('[audioSlider] pactl:', err.message); },
+      (err) => {
+        if (err) console.error('[audioSlider] pactl:', err.message);
+        done();
+      },
     );
   }
 }
@@ -90,6 +96,8 @@ export function AudioSliderLayer({ width, height }: { width: number; height: num
   const [vol, setVol] = useState<number>(() => readVolume());
   const drag = useRef<{ x: number; v: number } | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const volumeWriteBusy = useRef(false);
+  const queuedVolume = useRef<number | null>(null);
 
   function clearHideTimer() {
     if (hideTimer.current) {
@@ -128,7 +136,25 @@ export function AudioSliderLayer({ width, height }: { width: number; height: num
   }, []);
 
   function clamp(v: number) { return Math.max(0, Math.min(1, v)); }
-  function update(v: number) { setVol(v); applyVolume(v); }
+
+  function flushVolume() {
+    if (volumeWriteBusy.current || queuedVolume.current === null) return;
+
+    const value = queuedVolume.current;
+    queuedVolume.current = null;
+    volumeWriteBusy.current = true;
+
+    applyVolume(value, () => {
+      volumeWriteBusy.current = false;
+      flushVolume();
+    });
+  }
+
+  function update(v: number) {
+    setVol(v);
+    queuedVolume.current = v;
+    flushVolume();
+  }
 
   function onMove(x: number) {
     if (!drag.current) return;
@@ -161,6 +187,7 @@ export function AudioSliderLayer({ width, height }: { width: number; height: num
         onTouchMove={onMove}
         onTouchEnd={() => {
           drag.current = null;
+          flushVolume();
           scheduleHide();
         }}
       >

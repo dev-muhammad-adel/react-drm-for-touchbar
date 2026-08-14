@@ -1,5 +1,9 @@
 #include "udev_keyboard.h"
+#include <fcntl.h>
+#include <linux/input.h>
 #include <libudev.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -179,6 +183,38 @@ Napi::Value FindLidDevice(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::String::New(env, found);
+}
+
+Napi::Value ReadLidClosed(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "react-drm: lid device path must be a string")
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  const std::string path = info[0].As<Napi::String>().Utf8Value();
+  int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (fd < 0) {
+    Napi::Error::New(env, "react-drm: failed to open lid switch " + path)
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  unsigned long switches[(SW_MAX / (sizeof(unsigned long) * 8)) + 1] = {};
+  int ret = ioctl(fd, EVIOCGSW(sizeof(switches)), switches);
+  close(fd);
+  if (ret < 0) {
+    Napi::Error::New(env, "react-drm: failed to read lid switch " + path)
+      .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  const size_t bits_per_long = sizeof(unsigned long) * 8;
+  const bool closed = switches[SW_LID / bits_per_long]
+                      & (1UL << (SW_LID % bits_per_long));
+  return Napi::Boolean::New(env, closed);
 }
 
 Napi::Value FindPointerDevices(const Napi::CallbackInfo& info) {

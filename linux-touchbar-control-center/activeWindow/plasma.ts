@@ -7,8 +7,8 @@ import type { ActiveWindow, ActiveWindowBackend } from './types';
 
 // KDE Plasma Wayland via KWin scripting (~/active-window.sh, made push-based).
 // KWin exposes no D-Bus query for the focused window, but a *loaded* script can
-// hook workspace.windowActivated (and each window's captionChanged) and print
-// the focus state on every change. KWin routes print() to the journal, so we
+// hook workspace.windowActivated (and each window's captionChanged) and log the
+// focus state on every change. KWin routes console.info() to the journal, so we
 // inject a persistent script and tail journalctl for our marker lines.
 //
 // KDE-on-Xorg is handled by the xorg backend (EWMH props over the X protocol);
@@ -28,8 +28,8 @@ function scriptSource(marker: string): string {
   return `
 var active = null;
 function emit(w) {
-  if (w) print(${m} + " " + w.resourceClass + "\\t" + w.caption + "\\t" + w.pid);
-  else   print(${m} + " \\t\\t0");
+  if (w) console.info(${m} + " " + w.resourceClass + "\\t" + w.caption + "\\t" + w.pid);
+  else   console.info(${m} + " \\t\\t0");
 }
 function onCaption() { emit(active); }
 function onActivated(w) {
@@ -80,7 +80,7 @@ export const plasma: ActiveWindowBackend = {
       fs.writeFileSync(scriptFile, scriptSource(marker), { mode: 0o644 });
 
       // Start following the journal *before* loading the script, anchored a
-      // second in the past, so the script's initial print() can't slip through
+      // second in the past, so the script's initial log line can't slip through
       // before journalctl attaches.
       const since = journalStamp(new Date(Date.now() - 1000));
       const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
