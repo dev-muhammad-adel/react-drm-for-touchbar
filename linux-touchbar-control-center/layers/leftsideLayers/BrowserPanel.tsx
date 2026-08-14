@@ -4,8 +4,8 @@ import {
   MdArrowBack, MdArrowForward, MdRefresh, MdHome,
   MdAdd, MdCheck, MdClose, MdChevronLeft, MdChevronRight,
 } from 'react-icons/md';
-import { useActiveWindow } from '../../hooks/useActiveWindow';
-import { useBrowserKeys } from '../../hooks/useBrowserKeys';
+import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
+import { useBrowserKeys } from '@/lib/hooks/useBrowserKeys';
 
 const DIM       = '#cccccc';
 const CLOSE_CLR = '#f87171';

@@ -2,7 +2,7 @@ import React, { useRef, useContext, useState } from 'react';
 import { Box, Text, Button, LayoutContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
 import { MdPlayArrow, MdPause } from 'react-icons/md';
-import { useVlc } from '../../hooks/useVlc';
+import { useVlc } from '@/lib/hooks/useVlc';
 
 const ORANGE = '#fb923c';
 const FONT = 'IosevkaTerm Nerd Font';

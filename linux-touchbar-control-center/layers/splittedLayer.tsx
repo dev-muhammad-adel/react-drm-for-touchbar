@@ -5,16 +5,18 @@ import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
 import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSearch, MdMusicNote } from 'react-icons/md';
 import { LayerHost, useLayers } from '.';
 import type { Layer, LayerHostHandle } from '.';
-import { useActiveWindow } from '../hooks/useActiveWindow';
-import { useMediaPlayers } from '../hooks/useMediaPlayers';
-import { mediaMprisListPinnedAtom } from '../store/mediaMprisList';
+import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
+import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
+import { mediaMprisListPinnedAtom } from '@/store/mediaMprisList';
 import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
 import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
 import { VlcPanel } from './leftsideLayers/VlcPanel';
 import { DolphinPanel } from './leftsideLayers/DolphinPanel';
+import { VsCodePanel } from './leftsideLayers/VsCodePanel';
+import { GwenviewPanel } from './leftsideLayers/GwenviewPanel';
 import { MediaMprisList } from './leftsideLayers/MediaMprisList';
-import { keys } from '../services/keyInjector';
+import { keys } from '@/lib/services/keyInjector';
 import { CiWavePulse1 } from 'react-icons/ci';
 import { LuDock } from 'react-icons/lu';
 import { BsWindowDock } from 'react-icons/bs';
@@ -25,7 +27,7 @@ import { BsWindowDock } from 'react-icons/bs';
 
 const ICON_SIZE = 32;
 
-type SplittedLeftLayerName = 'window' | 'browser' | 'konsole' | 'vlc' | 'dolphin' | 'mediaMprisList';
+type SplittedLeftLayerName = 'window' | 'browser' | 'konsole' | 'vlc' | 'dolphin' | 'vscode' | 'gwenview' | 'mediaMprisList';
 
 const BROWSER_CLASSES = [
   'firefox', 'firefox-esr',
@@ -39,12 +41,19 @@ const BROWSER_CLASSES = [
   'waterfox', 'librewolf', 'floorp',
 ];
 
+// Matches VS Code's own DOCK.apps entry (config.ts) — 'code' covers both the
+// stable and Insiders Linux packages, 'code-oss' the distro-packaged open
+// source build.
+const CODE_CLASSES = ['code', 'code-oss', 'codium', 'vscodium'];
+
 function resolveLeftSideLayerByClass(activeClass: string): SplittedLeftLayerName {
   const cls = activeClass.toLowerCase();
   if (cls && BROWSER_CLASSES.some(b => cls.includes(b))) return 'browser';
   if (cls.includes('konsole')) return 'konsole';
   if (cls.includes('vlc')) return 'vlc';
   if (cls.includes('dolphin')) return 'dolphin';
+  if (cls.includes('gwenview')) return 'gwenview';
+  if (cls && CODE_CLASSES.some(c => cls.includes(c))) return 'vscode';
   return 'window';
 }
 
@@ -54,6 +63,8 @@ const SPLITTED_LEFT_LAYERS: Layer[] = [
   { name: 'konsole', component: KonsolePanel,      animation: 'fade' },
   { name: 'vlc',     component: VlcPanel,          animation: 'fade' },
   { name: 'dolphin', component: DolphinPanel,      animation: 'fade' },
+  { name: 'vscode',  component: VsCodePanel,       animation: 'fade' },
+  { name: 'gwenview', component: GwenviewPanel,    animation: 'fade' },
   { name: 'mediaMprisList', component: MediaMprisList, animation: 'fade' },
 ];
 

@@ -2,8 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { execFile, execFileSync, spawn } from 'child_process';
 import { Box, Text, Button } from 'react-drm';
 import { MdVolumeOff, MdVolumeDown, MdVolumeUp } from 'react-icons/md';
-import { BackButton } from '../components/BackButton';
+import { BackButton } from '@/components/BackButton';
 import { useLayers } from './index';
+import { createLogger } from 'react-drm';
+
+const log = createLogger('audioSlider');
 
 // When running as root the session socket isn't inherited — pass it explicitly.
 const PW_ENV: NodeJS.ProcessEnv = {

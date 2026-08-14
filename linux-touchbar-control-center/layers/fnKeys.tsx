@@ -1,8 +1,8 @@
 import React, { useContext } from 'react';
 import { Box, Text, Button, KEY, DisplaySizeContext } from 'react-drm';
-import { BackButton } from '../components/BackButton';
-import { keys } from '../services/keyInjector';
-import { ESC_KEY } from '../config';
+import { BackButton } from '@/components/BackButton';
+import { keys } from '@/lib/services/keyInjector';
+import { ESC_KEY } from '@/lib/utils/configLoader';
 
 const KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'] as const;
 

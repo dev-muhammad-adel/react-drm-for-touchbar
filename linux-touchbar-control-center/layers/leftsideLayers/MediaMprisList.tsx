@@ -4,9 +4,9 @@ import type { BoxNode } from 'react-drm';
 import {
   MdSkipPrevious, MdPlayArrow, MdPause, MdSkipNext,
 } from 'react-icons/md';
-import { useMediaPlayers } from '../../hooks/useMediaPlayers';
-import { useAlbumArt } from '../../hooks/useAlbumArt';
-import { appIconSource } from '../../services/appIcon';
+import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
+import { useAlbumArt } from '@/lib/hooks/useAlbumArt';
+import { appIconSource } from 'react-drm';
 
 const ACCENT: Record<string, string> = {
   firefox: '#f9731666',

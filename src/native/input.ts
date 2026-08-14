@@ -1,5 +1,8 @@
 import fs from 'fs';
 import { loadAddon } from './load-addon';
+import { createLogger } from '../logger';
+
+const log = createLogger('touch');
 
 interface InputAddon {
   TouchReader: new (devicePath: string) => NativeTouchReader;
@@ -52,10 +55,23 @@ export const KEY = {
   ENTER:          28,
   ESC:             1,
   BACKSPACE:      14,
-  // Letters used in browser combos
+  PAGEUP:        104,
+  PAGEDOWN:      109,
+  GRAVE:          41,
+  F5:             63,
+  F10:            68,
+  F11:            87,
+  // Letters used in browser/editor combos
+  KEY_B:          48,
+  KEY_COMMA:      51,
+  KEY_F:          33,
+  KEY_H:          35,
+  KEY_P:          25,
   KEY_R:          19,
+  KEY_S:          31,
   KEY_T:          20,
   KEY_W:          17,
+  KEY_Z:          44,
 } as const;
 
 // Touch Bar raw axis ranges
@@ -65,8 +81,8 @@ const TOUCH_MAX_Y = 127;
 // Fallback logical display size (after rotation) for the T2 Touch Bar, used
 // only when the caller doesn't supply the real DRM display dimensions. The
 // renderer passes display.width/height so touch tracks the auto-detected mode.
-const DEFAULT_DISPLAY_W = 2008;
-const DEFAULT_DISPLAY_H = 60;
+export const DEFAULT_DISPLAY_W = 2008;
+export const DEFAULT_DISPLAY_H = 60;
 
 function resolveTouchDevicePath(devicePath?: string): string {
   if (devicePath) return devicePath;
@@ -167,7 +183,7 @@ export class TouchReader {
       try {
         callback(type, rawX, rawY);
       } catch (e) {
-        console.error('[react-drm] touch handler threw:', e);
+        log.error('handler threw:', e);
       }
     });
   }

@@ -16,6 +16,11 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# User's live editable config — seeded from config.blueprint.ts by install.sh
+# (or by configLoader.ts's runtime fallback); never tracked so edits survive
+# git pull.
+linux-touchbar-control-center/config.ts
+
 # Test/coverage output
 coverage/
 

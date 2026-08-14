@@ -3,7 +3,7 @@ import { Box, Button, Text } from 'react-drm';
 import {
   MdAdd, MdClose, MdChevronLeft, MdChevronRight,
 } from 'react-icons/md';
-import { useKonsole } from '../../hooks/useKonsole';
+import { useKonsole } from '@/lib/hooks/useKonsole';
 
 const GREEN  = '#22c55e';
 const ORANGE = '#f97316';

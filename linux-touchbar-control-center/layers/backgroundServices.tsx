@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { execFile } from 'child_process';
 import { Box, Text } from 'react-drm';
-import { BackButton } from '../components/BackButton';
+import { BackButton } from '@/components/BackButton';
 
 interface Service {
   name:  string;

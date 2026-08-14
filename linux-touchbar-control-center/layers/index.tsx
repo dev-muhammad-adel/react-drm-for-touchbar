@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Box, KeyboardContext, useKeyPressed, useTouchLock, animated, useTransition, easings } from 'react-drm';
 import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions, SpringValue } from 'react-drm';
-import { LAYER_TRANSITION } from '../config';
-import { useKeyGesture } from '../hooks/useKeyGesture';
+import { LAYER_TRANSITION } from '@/lib/utils/configLoader';
+import { useKeyGesture } from '@/lib/hooks/useKeyGesture';
 
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions };
 

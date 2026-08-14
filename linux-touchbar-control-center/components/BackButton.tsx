@@ -1,8 +1,8 @@
 import React from 'react';
 import { Button } from 'react-drm';
 import { MdCancel } from 'react-icons/md';
-import { useLayers } from '../layers';
-import type { LayerAnimation, SwitchOptions } from '../layers';
+import { useLayers } from '@/layers';
+import type { LayerAnimation, SwitchOptions } from '@/layers';
 
 export function BackButton({
   to = 'splitted',

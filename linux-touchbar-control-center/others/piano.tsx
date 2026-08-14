@@ -3,7 +3,10 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import { Box, Button, Text, LayoutContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
-import { registerSuspendHooks } from '../services/suspend';
+import { registerSuspendHooks } from '@/lib/services/suspend';
+import { createLogger } from 'react-drm';
+
+const log = createLogger('piano');
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
 
@@ -49,7 +52,7 @@ class FluidSynth {
 }
 
 const sf2 = SF2_PATHS.find(p => { try { fs.accessSync(p); return true; } catch { return false; } });
-if (!sf2) console.warn('[piano] No soundfont found — running silently');
+if (!sf2) log.warn('no soundfont found — running silently');
 
 // fluidsynth holds a running PipeWire stream to the T2 speakers (apple_bce) for
 // its whole life, and any open stream during suspend-fix-t2's `rmmod -f apple-bce`

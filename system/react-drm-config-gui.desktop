@@ -1,0 +1,14 @@
+# Launches config-gui against the conventional install path
+# (~/react-drm/linux-touchbar-control-center/config.ts). electron isn't a
+# standalone binary — it's the npm workspace's hoisted node_modules/.bin/electron
+# run against the config-gui app directory, same as `npm start` would.
+# Install: install -Dm644 system/react-drm-config-gui.desktop \
+#            ~/.local/share/applications/react-drm-config-gui.desktop
+[Desktop Entry]
+Type=Application
+Name=Touch Bar Config
+Comment=Edit the touch bar's config.ts
+Exec=%h/react-drm/node_modules/.bin/electron %h/react-drm/config-gui
+Icon=preferences-system
+Terminal=false
+Categories=Settings;

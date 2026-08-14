@@ -2,6 +2,9 @@ import fs from 'fs';
 import { loadAddon } from './load-addon';
 import { TOUCHBAR_DRM_DRIVERS } from './hardware';
 import type { DrawCommand, BinaryFrame } from '../scene/serialize';
+import { createLogger } from '../logger';
+
+const log = createLogger('display');
 
 const TOUCHBAR_DRM_RE = new RegExp(`DRIVER=(${TOUCHBAR_DRM_DRIVERS.join('|')})`, 'i');
 
@@ -54,6 +57,23 @@ interface NativeHandle {
 }
 
 /**
+ * Common surface the renderer drives regardless of where pixels end up —
+ * the real Touch Bar (DrmDisplay) or a browser preview (PreviewDisplay).
+ * Both are thin wrappers around the same native CairoRenderer; only what
+ * owns/exposes the framebuffer differs.
+ */
+export interface Display {
+  readonly width: number;
+  readonly height: number;
+  render(commands: DrawCommand[], clips?: DamageRect[]): void;
+  renderBinary(frame: BinaryFrame, clips?: DamageRect[]): void;
+  drawBars(opts: BarsOpts): void;
+  screenshot(filePath: string): void;
+  close(): void;
+  reopen(): void;
+}
+
+/**
  * USBDEVFS_RESET ioctl on a USB device node (`/dev/bus/usb/BBB/DDD`).
  * Wakes the Touch Bar firmware's display interface out of its idle sleep —
  * the state where every transfer (including config switches) fails with
@@ -63,7 +83,7 @@ export function usbReset(devnode: string): void {
   loadNative().usbReset(devnode);
 }
 
-export class DrmDisplay {
+export class DrmDisplay implements Display {
   private handle: NativeHandle;
   private readonly devicePath?: string;
   private closed = false;
@@ -79,7 +99,7 @@ export class DrmDisplay {
     const info = this.handle.setup();
     this.width = info.width;
     this.height = info.height;
-    console.log(`[react-drm] DRM display ready: ${this.width}×${this.height} on ${resolvedPath}`);
+    log.info(`DRM display ready: ${this.width}×${this.height} on ${resolvedPath}`);
   }
 
   // clips: damage rects (logical coords) for partial flush. Omit → whole-FB.
@@ -123,8 +143,29 @@ export class DrmDisplay {
     const info = this.handle.setup();
     this.closed = false;
     if (info.width !== this.width || info.height !== this.height) {
-      console.warn(`[react-drm] display size changed on reopen: ${info.width}×${info.height} (was ${this.width}×${this.height})`);
+      log.warn(`size changed on reopen: ${info.width}×${info.height} (was ${this.width}×${this.height})`);
     }
-    console.log(`[react-drm] DRM display reopened on ${resolvedPath}`);
+    log.info(`DRM display reopened on ${resolvedPath}`);
   }
+}
+
+/**
+ * Construct the display backend selected by REACT_DRM_BACKEND:
+ *   'drm'     (default) — real Touch Bar over DRM/KMS.
+ *   'preview' — in-memory framebuffer streamed to a browser, for development
+ *               on a desktop with no Touch Bar / DRM device / root. See
+ *               src/dev/preview-server.ts.
+ */
+export function createDisplay(devicePath?: string): Display {
+  const backend = process.env.REACT_DRM_BACKEND ?? 'drm';
+  if (backend === 'preview') {
+    // Lazy require: keeps the native DRM path free of any preview-only code paths.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PreviewDisplay } = require('./preview-display') as typeof import('./preview-display');
+    return new PreviewDisplay();
+  }
+  if (backend !== 'drm') {
+    log.warn(`unknown REACT_DRM_BACKEND=${backend}, falling back to 'drm'`);
+  }
+  return new DrmDisplay(devicePath);
 }

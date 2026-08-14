@@ -158,7 +158,7 @@ export async function attachTouchBar(): Promise<void> {
       fs.writeFileSync(cfg, '0');
       fs.writeFileSync(cfg, '2');
     } catch (e) {
-      console.warn('[suspend] attach attempt failed, retrying:', e instanceof Error ? e.message : e);
+      log.warn('attach attempt failed, retrying:', e instanceof Error ? e.message : e);
     }
     if (readConfigValue(dev) === '2') break;
     if (Date.now() > deadline) throw new Error('could not switch Touch Bar to config 2');
@@ -185,7 +185,7 @@ export async function attachTouchBar(): Promise<void> {
         fs.accessSync(node, fs.constants.W_OK);
         fs.accessSync(cfg, fs.constants.W_OK);
         if (readConfigValue(dev) === '2')
-          console.warn('[suspend] config 2 active but no DRM card — reprobe');
+          log.warn('config 2 active but no DRM card — reprobe');
         if (readConfigValue(dev) === '') usbReset(node);
         fs.writeFileSync(cfg, '0');
         await sleep(500);
@@ -193,7 +193,7 @@ export async function attachTouchBar(): Promise<void> {
         cfg = path.join(dev, 'bConfigurationValue');
         fs.writeFileSync(cfg, '2');
       } catch (e) {
-        console.warn('[suspend] reprobe attempt failed, retrying:', e instanceof Error ? e.message : e);
+        log.warn('reprobe attempt failed, retrying:', e instanceof Error ? e.message : e);
       }
       nextReprobe = Date.now() + 2000;
     }
@@ -222,7 +222,7 @@ export async function attachTouchBar(): Promise<void> {
 export async function ensureTouchBarAttached(): Promise<void> {
   if (appletbdrmCardPresent()) return;
   if (!findTouchBarUsb()) return; // no Touch Bar hardware — nothing to attach
-  console.log('[suspend] no appletbdrm card — attaching Touch Bar');
+  log.info('no appletbdrm card — attaching Touch Bar');
   await attachTouchBar();
 }
 
@@ -254,7 +254,7 @@ export async function watchSleep(cb: SleepCallbacks): Promise<void> {
       '--why=Release Touch Bar DRM fd and audio before apple-bce teardown',
       '/bin/sh', '-c', 'read _ || true',
     ], { stdio: ['pipe', 'ignore', 'inherit'] });
-    holder.on('error', e => console.warn('[suspend] systemd-inhibit failed:', e.message));
+    holder.on('error', e => log.warn('systemd-inhibit failed:', e.message));
     holder.on('exit', () => { holder = null; });
   }
 
@@ -269,26 +269,26 @@ export async function watchSleep(cb: SleepCallbacks): Promise<void> {
   manager.on('PrepareForSleep', (sleeping: boolean) => {
     void (async () => {
       if (sleeping) {
-        console.log('[suspend] system going to sleep — quiescing');
+        log.info('system going to sleep — quiescing');
         for (const h of hooks().values()) { try { h.onSleep?.(); } catch { /* hook error must not block sleep */ } }
         try { await cb.onSleep(); } catch (e) {
-          console.error('[suspend] quiesce failed:', e instanceof Error ? e.message : e);
+          log.error('quiesce failed:', e instanceof Error ? e.message : e);
         } finally {
           releaseLock(); // let the suspend proceed
         }
       } else {
-        console.log('[suspend] system resumed — re-attaching Touch Bar');
+        log.info('system resumed — re-attaching Touch Bar');
         takeLock();
         try {
           await cb.onResume();
           for (const h of hooks().values()) { try { h.onResume?.(); } catch { /* keep going */ } }
-          console.log('[suspend] resume complete');
+          log.info('resume complete');
         } catch (e) {
-          console.error('[suspend] resume failed:', e instanceof Error ? e.message : e);
+          log.error('resume failed:', e instanceof Error ? e.message : e);
         }
       }
     })();
   });
 
-  console.log('[suspend] logind sleep watcher active (delay inhibitor held)');
+  log.info('logind sleep watcher active (delay inhibitor held)');
 }

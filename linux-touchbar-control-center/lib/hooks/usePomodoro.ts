@@ -3,7 +3,7 @@ import { useAtom } from 'jotai';
 import {
   POMO_SESSION,
   pomoElapsedAtom, pomoRunningAtom, pomoSessionsAtom, pomoFlashAtom,
-} from '../store/pomodoro';
+} from '@/store/pomodoro';
 
 export function usePomodoroEngine() {
   const [running]              = useAtom(pomoRunningAtom);

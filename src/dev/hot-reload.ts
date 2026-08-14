@@ -3,7 +3,10 @@ import path from 'path';
 import React from 'react';
 import { render } from '../renderer/renderer';
 import type { RenderResult, RenderOptions } from '../renderer/renderer';
-import type { DrmDisplay } from '../native/binding';
+import type { Display } from '../native/binding';
+import { createLogger } from '../logger';
+
+const log = createLogger('hot-reload');
 
 
 function findWatchRoot(startDir: string): string {
@@ -56,7 +59,7 @@ const IGNORED_DIR = /(^|[/\\])(node_modules|\.git|dist|build)([/\\]|$)/;
 function watchDir(dir: string, onChange: (changed: string[]) => void): () => void {
   let debounce: ReturnType<typeof setTimeout> | null = null;
   const pending = new Set<string>();
-  console.log(`[hot-reload] watching ${dir}`);
+  log.info(`watching ${dir}`);
 
   const watcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
     if (!filename) return;
@@ -78,7 +81,7 @@ function watchDir(dir: string, onChange: (changed: string[]) => void): () => voi
 
 export function renderHot(
   appModulePath: string,
-  display: DrmDisplay,
+  display: Display,
   options?: RenderOptions & {
     appProps?: Record<string, unknown>;
     watch?: boolean;
@@ -99,7 +102,7 @@ export function renderHot(
   let lastGood: React.ReactNode = initialEl;
 
   const uncaughtHandler = (err: unknown) => {
-    console.error('[react-drm] uncaught exception (process survived):', err);
+    log.error('uncaught exception (process survived):', err);
     try { result.update(lastGood); } catch { /* best-effort restore */ }
   };
   process.on('uncaughtException', uncaughtHandler);
@@ -116,7 +119,7 @@ export function renderHot(
     try {
       el = load();
     } catch (err) {
-      console.error('[hot-reload] load failed:', err);
+      log.error('load failed:', err);
       return; // keep showing last good render
     }
     try {
@@ -124,7 +127,7 @@ export function renderHot(
       lastGood = el;
       process.stdout.write('\r[hot-reload] reloaded\n');
     } catch (err) {
-      console.error('[hot-reload] update failed:', err);
+      log.error('update failed:', err);
       try { result.update(lastGood); } catch { /* best-effort restore */ }
     }
   });

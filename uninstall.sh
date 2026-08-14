@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SERVICE_FILE="$HOME/.config/systemd/user/react-drm.service"
 UDEV_RULE="/etc/udev/rules.d/99-react-drm.rules"
 LEGACY_UDEV_RULE="/etc/udev/rules.d/99-react-drm-uinput.rules"
+CONFIG_GUI_LAUNCHER="$HOME/.local/share/applications/react-drm-config-gui.desktop"
 
 info(){ printf '[uninstall] %s\n' "$*"; }
 fail(){ printf '[uninstall] error: %s\n' "$1" >&2; exit 1; }
@@ -84,10 +85,17 @@ remove_udev_rules() {
   sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
 }
 
+remove_config_gui_launcher() {
+  [[ -e "$CONFIG_GUI_LAUNCHER" ]] || return 0
+  info "Removing config editor launcher"
+  rm -f "$CONFIG_GUI_LAUNCHER"
+}
+
 main() {
   confirm_uninstall
   remove_service
   remove_udev_rules
+  remove_config_gui_launcher
   info "Uninstallation completed successfully"
 }
 

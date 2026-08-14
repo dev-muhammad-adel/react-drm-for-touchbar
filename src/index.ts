@@ -4,7 +4,7 @@ export { Box } from './components/Box';
 export { Text } from './components/Text';
 export { Button } from './components/Button';
 export { Svg } from './components/Svg';
-export { Gif } from './components/Gif';
+export { Gif, toPremultBGRA } from './components/Gif';
 export { SwipeZone } from './components/SwipeZone';
 export { ScrollRow } from './components/ScrollRow';
 export type { BoxProps } from './components/Box';
@@ -44,7 +44,13 @@ export { DisplaySizeContext, NativeDrawContext } from './scene/display-context';
 export type { DisplaySize, NativeDraw } from './scene/display-context';
 export { SAFE_INSET, SAFE_INSET_X, SAFE_INSET_Y } from './scene/safe-area';
 export type { SafeAreaInsets } from './scene/safe-area';
+export { invalidate } from './renderer/invalidate';
 export { renderHot } from './dev/hot-reload';
+export { appIconSource } from './appIcon';
+export { createLogger } from './logger';
+export type { Logger } from './logger';
+export { startPreviewServer } from './dev/preview-server';
+export type { PreviewServerOptions, PreviewServerHandle } from './dev/preview-server';
 export {
   animated,
   useSpring, useSpringValue, useSprings, useTransition,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Svg } from 'react-drm';
-import { useAnimate, ease } from '../hooks/useAnimate';
+import { useAnimate, ease } from '@/lib/hooks/useAnimate';
 
 interface LoaderProps {
   width?: number;

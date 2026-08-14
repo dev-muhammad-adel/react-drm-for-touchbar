@@ -27,13 +27,14 @@ static const int EXTRA_KEYS[] = {
   // Navigation keys
   102,                // KEY_HOME
   103, 105, 106, 108, // KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_DOWN
-  // Navigation keys
-  102,             // KEY_HOME
+  104, 109,           // KEY_PAGEUP, KEY_PAGEDOWN
   // Extra useful keys
   28,              // KEY_ENTER
    1,              // KEY_ESC
   57,              // KEY_SPACE
   14,              // KEY_BACKSPACE
+  41,              // KEY_GRAVE
+  51,              // KEY_COMMA
   // Digits 1-0
    2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
   // Letters A-Z (linux keycodes)

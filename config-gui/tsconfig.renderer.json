@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "dist/renderer",
+    "rootDir": "renderer",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": ["renderer/**/*.ts"]
+}

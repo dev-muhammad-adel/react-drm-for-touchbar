@@ -3,7 +3,7 @@ import { Box } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
 import { LayerHost } from './layers';
 
-import { ESC_KEY, DOCK, FN_LAYER } from './config';
+import { ESC_KEY, DOCK, FN_LAYER } from './lib/utils/configLoader';
 import { EscKey } from './components/EscKey';
 import { SafeArea } from './components/SafeArea';
 import { BootScreen } from './components/BootScreen';
@@ -17,8 +17,8 @@ import { GamesLayer } from './layers/gamesLayer';
 import { DockLayer } from './layers/dock';
 import { DinoLayer } from './layers/dino';
 import { PongLayer } from './layers/pong';
-import { useBootSequence } from './hooks/useBootSequence';
-import { usePomodoroEngine } from './hooks/usePomodoro';
+import { useBootSequence } from '@/lib/hooks/useBootSequence';
+import { usePomodoroEngine } from '@/lib/hooks/usePomodoro';
 import { Provider } from 'jotai';
 
 

@@ -1,6 +1,9 @@
 import { spawn } from 'child_process';
 import { readdirSync } from 'fs';
-import type { DockApp } from '../config';
+import type { DockApp } from '@/lib/utils/configLoader';
+import { createLogger } from 'react-drm';
+
+const log = createLogger('dock');
 
 /**
  * Launch a desktop app from the Touch Bar process.
@@ -37,7 +40,7 @@ export function launchApp(app: DockApp): void {
     child = spawn(command, args, { detached: true, stdio: 'ignore' });
   }
 
-  child.on('error', err => console.error('[dock] launch failed:', command, err.message));
+  child.on('error', err => log.error('launch failed:', command, err.message));
   child.unref();
 }
 

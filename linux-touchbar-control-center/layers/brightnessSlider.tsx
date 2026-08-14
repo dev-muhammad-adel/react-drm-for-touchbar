@@ -3,7 +3,7 @@ import { execFile, execFileSync } from 'child_process';
 import fs from 'fs';
 import { Box, Text, Button, DISPLAY_BACKLIGHT_NAMES } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7, MdKeyboard } from 'react-icons/md';
-import { BackButton } from '../components/BackButton';
+import { BackButton } from '@/components/BackButton';
 import { useLayers } from './index';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

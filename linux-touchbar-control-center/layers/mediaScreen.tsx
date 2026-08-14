@@ -10,8 +10,8 @@ import {
   MdVolumeOff, MdVolumeDown, MdVolumeUp,
   MdApps,
 } from 'react-icons/md';
-import { BackButton } from '../components/BackButton';
-import { keys } from '../services/keyInjector';
+import { BackButton } from '@/components/BackButton';
+import { keys } from '@/lib/services/keyInjector';
 
 const isBuilt = __dirname.includes(path.sep + 'dist' + path.sep);
 

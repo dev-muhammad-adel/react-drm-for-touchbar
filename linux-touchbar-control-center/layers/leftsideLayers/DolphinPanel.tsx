@@ -5,7 +5,7 @@ import {
   MdVisibility, MdVerticalSplit, MdImage,
   MdCreateNewFolder, MdTerminal, MdDelete, MdFolder,
 } from 'react-icons/md';
-import { useDolphin } from '../../hooks/useDolphin';
+import { useDolphin } from '@/lib/hooks/useDolphin';
 
 const ACCENT   = '#1d99f3'; // KDE blue
 const DIM      = '#94a3b8';

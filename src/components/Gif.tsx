@@ -4,6 +4,9 @@ import { parseGIF, decompressFrames } from 'gifuct-js';
 import { invalidate } from '../renderer/invalidate';
 import type { GifNode } from '../scene/types';
 import type { Style } from '../scene/style';
+import { createLogger } from '../logger';
+
+const log = createLogger('Gif');
 
 export interface GifProps {
   /** Absolute path to a `.gif` file. */
@@ -36,7 +39,7 @@ interface Decoded {
 // expects on little-endian (memory order B,G,R,A). GIF alpha is effectively
 // 1-bit (0 or 255), so the common paths are exact copies; the general branch
 // covers the rare partially-transparent pixel correctly.
-function toPremultBGRA(rgba: Uint8Array, w: number, h: number): Buffer {
+export function toPremultBGRA(rgba: Uint8Array, w: number, h: number): Buffer {
   const out = Buffer.allocUnsafe(w * h * 4);
   for (let i = 0; i < w * h; i++) {
     const s = i * 4;
@@ -157,7 +160,7 @@ export function Gif(props: GifProps): React.ReactElement {
         if (playing) play(dec, 0);
         else draw(dec, 0); // paused: show the first frame
       })
-      .catch(e => console.warn('[react-drm] <Gif> failed to load', src, (e as Error).message));
+      .catch(e => log.warn('failed to load', src, (e as Error).message));
 
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [src, playing, loop]);

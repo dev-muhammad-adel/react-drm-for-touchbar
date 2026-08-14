@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text, Button, Gif } from 'react-drm';
 import { useLayers } from '..';
-import { useActiveWindow } from '../../hooks/useActiveWindow';
+import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import path from 'path';
 
 // const APP_ROOT = process.cwd();

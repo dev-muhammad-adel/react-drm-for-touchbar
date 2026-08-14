@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text, Button, KEY } from 'react-drm';
-import { keys } from '../services/keyInjector';
+import { keys } from '@/lib/services/keyInjector';
 
 /**
  * On-screen Esc key for wide Touch Bars that have no physical Esc.

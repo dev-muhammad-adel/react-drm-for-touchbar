@@ -91,6 +91,136 @@ npm run dev
 `npm run dev` is the development entrypoint and keeps hot reload enabled. The
 installed systemd service uses the compiled production build instead.
 
+## Browser preview (no Touch Bar / DRM hardware)
+
+Touch Bar UI can be developed and previewed in an ordinary desktop browser —
+no MacBook, no Touch Bar, no `/dev/dri` device and no root required. The
+preview shows the *actual* pixels the native Cairo renderer draws (the same
+renderer the physical Touch Bar uses), streamed over WebSocket to a
+`<canvas>`. It is not a separate HTML/DOM re-implementation of the UI:
+
+```
+React → react-drm renderer → Cairo → in-memory framebuffer
+                                        ├─ production  → DRM/KMS → physical Touch Bar
+                                        └─ development → WebSocket → browser <canvas>
+```
+
+**Dependencies**: the same native build dependencies as DRM mode (Node.js,
+a C++ compiler and the libdrm/Cairo/librsvg/pango development headers — see
+[Manual installation](#manual-installation)). A DRM device, root and Touch Bar
+hardware are only needed to compile the native addon once, not to *run*
+preview mode.
+
+**Build** once from the repository root:
+
+```sh
+npm run build
+```
+
+**Run** — from `linux-touchbar-control-center`:
+
+```sh
+npm run dev          # real Touch Bar over DRM/KMS
+npm run dev:preview  # browser preview instead
+```
+
+`dev:preview` sets `REACT_DRM_BACKEND=preview`, which makes `createDisplay()`
+construct a `PreviewDisplay` (an in-memory framebuffer wrapped by the same
+`CairoRenderer` class the DRM path uses) instead of `DrmDisplay`, and starts a
+small HTTP + WebSocket server. It prints:
+
+```
+[react-drm] preview server running
+  http://127.0.0.1:8787
+```
+
+**Open that URL** in a browser to see the Touch Bar. The canvas is the real
+logical Touch Bar resolution (2008×60 by default — the same fallback size used
+elsewhere in the project) and is scaled up with CSS for visibility;
+scaling is nearest-neighbor so it stays pixel-accurate.
+
+Backend selection follows the project's existing environment-variable
+convention (alongside `REACT_DRM_DEVICE_PATH`, `REACT_DRM_PROFILE`, etc.):
+
+| Variable                  | Values                     | Default | Meaning |
+|----------------------------|-----------------------------|---------|---------|
+| `REACT_DRM_BACKEND`        | `drm` \| `preview`          | `drm`   | Which display backend `createDisplay()` builds |
+| `REACT_DRM_PREVIEW_PORT`   | port number                 | `8787`  | Preview HTTP/WebSocket port |
+
+### Input mapping
+
+Mouse and touch on the preview page simulate Touch Bar touch input:
+
+| Browser event                                | Touch Bar equivalent |
+|-----------------------------------------------|-----------------------|
+| `mousedown` / `touchstart`                    | finger down |
+| `mousemove` while pressed / `touchmove`       | finger drag |
+| `mouseup` / `touchend`                        | finger up |
+
+The page converts its own canvas coordinates to logical Touch Bar pixel
+coordinates (accounting for the CSS scale factor), sends them as small JSON
+WebSocket messages (`{ type: "touchstart" | "touchmove" | "touchend", x, y }`),
+and the preview server forwards them directly into the same
+`touchStart`/`touchMove`/`touchEnd` API real Touch Bar hardware already
+drives — there is no separate input system for the preview.
+
+### Standalone panel window (no browser tab)
+
+`preview-app/` docks the preview to the bottom of the screen as a real panel
+— reserved space, like waybar — instead of requiring a manual browser tab.
+It's a small Python/GTK app (`gtk_layer_app.py`) using
+[`gtk-layer-shell`](https://github.com/wmww/gtk-layer-shell) (the same
+library waybar itself is built with) to anchor a window via the Wayland
+layer-shell protocol, with an exclusive zone that actually reserves the
+space so other windows don't overlap it.
+
+**This requires a layer-shell compositor** — niri, Sway, Hyprland, River, or
+similar wlroots-family Wayland compositors. It does not apply to GNOME, KDE,
+or X11-only sessions; there's no equivalent protocol there for a
+non-compositor app to reserve screen space.
+
+It draws no HTML/DOM UI and doesn't embed a browser engine at all: it speaks
+`preview-server.ts`'s WebSocket protocol directly (a small hand-rolled RFC
+6455 client — see the comment at the top of `gtk_layer_app.py` for why it
+doesn't use libsoup's client) and paints the received RGBA bytes straight
+onto a `GtkImage` via `GdkPixbuf`, which matches the wire format byte-for-byte
+with no conversion needed.
+
+Dependencies (all standard Linux desktop packages — nothing to install via
+npm): `python3-gobject`, `gtk3`, `gtk-layer-shell`. On Fedora:
+
+```sh
+sudo dnf install python3-gobject gtk3 gtk-layer-shell
+```
+
+Start the preview server first, from `linux-touchbar-control-center`:
+
+```sh
+npm run dev:preview
+```
+
+Then in another terminal, from the repository root:
+
+```sh
+npm run preview:window
+```
+
+Press <kbd>Esc</kbd> while it's focused to close it (it has no titlebar).
+
+### Notes
+
+- A frame is only sent when the renderer actually produces one — the existing
+  flush-rate cap (`RenderOptions.flushFps`, default 30) already throttles
+  this upstream, so there's no added busy loop. A slow or backed-up browser
+  tab has frames dropped for it rather than queued in memory.
+- The server keeps the last frame in memory, so reloading the page or opening
+  a second tab shows the current UI immediately instead of a blank canvas.
+- The control center still opens a real keyboard device for global shortcuts
+  (e.g. the screenshot combo) even in preview mode — this needs the same
+  `video`/`input` group membership and fresh login session as
+  [Manual installation](#manual-installation) already describes. Touch Bar
+  hardware and a DRM device are not needed either way.
+
 ## Active window integration
 
 Application-specific controls require an active-window backend. The KaiT2en

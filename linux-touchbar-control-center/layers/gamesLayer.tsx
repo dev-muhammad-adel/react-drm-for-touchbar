@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Button, Text } from 'react-drm';
 import { MdSportsEsports, MdPiano, MdSportsTennis } from 'react-icons/md';
-import { BackButton } from '../components/BackButton';
+import { BackButton } from '@/components/BackButton';
 import { useLayers } from '.';
 
 export function GamesLayer({ width, height }: { width: number; height: number }) {

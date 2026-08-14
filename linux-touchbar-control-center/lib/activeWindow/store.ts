@@ -7,7 +7,10 @@ import { gnome } from './gnome';
 import { plasma } from './plasma';
 import { xorg } from './xorg';
 import { detectSession } from './detect';
-import { ACTIVE_WINDOW } from '../config';
+import { ACTIVE_WINDOW } from '@/lib/utils/configLoader';
+import { createLogger } from 'react-drm';
+
+const log = createLogger('activeWindow');
 
 // One backend connection shared by every useActiveWindow() consumer —
 // refcounted so the socket closes when the last subscriber unmounts
@@ -63,7 +66,7 @@ async function ensureStarted(): Promise<void> {
     } catch { /* try next */ }
   }
   starting = false;
-  if (!stop) console.warn('[react-drm] no active-window backend available');
+  if (!stop) log.warn('no active-window backend available');
   else if (listeners.size === 0) { stop(); stop = null; current = EMPTY; } // everyone left mid-start
 }
 

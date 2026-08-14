@@ -248,6 +248,128 @@ private:
   std::unique_ptr<CairoRenderer> renderer_;
 };
 
+// Browser-preview backend: same CairoRenderer as DrmDisplayWrapper, but the
+// framebuffer is a plain heap allocation instead of a DRM dumb buffer, so it
+// runs on any Linux desktop with no /dev/dri device, no root, no hardware.
+// No dirty()/rotation/clip-rect handling — there's no scanout to notify, and
+// the browser side always redraws the whole canvas from whatever frame it
+// last received.
+class PreviewDisplayWrapper : public Napi::ObjectWrap<PreviewDisplayWrapper> {
+public:
+  static Napi::Object Init(Napi::Env env, Napi::Object exports) {
+    Napi::Function func = DefineClass(env, "PreviewDisplay", {
+      InstanceMethod("setup",          &PreviewDisplayWrapper::Setup),
+      InstanceMethod("render",         &PreviewDisplayWrapper::Render),
+      InstanceMethod("renderBinary",   &PreviewDisplayWrapper::RenderBinary),
+      InstanceMethod("drawBars",       &PreviewDisplayWrapper::DrawBars),
+      InstanceMethod("screenshot",     &PreviewDisplayWrapper::Screenshot),
+      InstanceMethod("getWidth",       &PreviewDisplayWrapper::GetWidth),
+      InstanceMethod("getHeight",      &PreviewDisplayWrapper::GetHeight),
+      InstanceMethod("getFrameBuffer", &PreviewDisplayWrapper::GetFrameBuffer),
+      InstanceMethod("close",          &PreviewDisplayWrapper::Close),
+    });
+    exports.Set("PreviewDisplay", func);
+    return exports;
+  }
+
+  PreviewDisplayWrapper(const Napi::CallbackInfo& info)
+    : Napi::ObjectWrap<PreviewDisplayWrapper>(info) {
+    Napi::Env env = info.Env();
+    width_  = info.Length() > 0 && info[0].IsNumber() ? info[0].As<Napi::Number>().Uint32Value() : 2008;
+    height_ = info.Length() > 1 && info[1].IsNumber() ? info[1].As<Napi::Number>().Uint32Value() : 60;
+    if (width_ == 0 || height_ == 0) {
+      Napi::RangeError::New(env, "PreviewDisplay: width/height must be > 0").ThrowAsJavaScriptException();
+      return;
+    }
+    stride_ = width_ * 4;
+    buf_.assign((size_t)stride_ * height_, 0);
+  }
+
+private:
+  Napi::Value Setup(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    renderer_ = std::make_unique<CairoRenderer>(buf_.data(), width_, height_, stride_, /*rotate90=*/false);
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("width",  Napi::Number::New(env, width_));
+    result.Set("height", Napi::Number::New(env, height_));
+    return result;
+  }
+
+  Napi::Value Render(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) { Napi::TypeError::New(env, "Call setup() before render()").ThrowAsJavaScriptException(); return env.Undefined(); }
+    if (info.Length() < 1 || !info[0].IsArray()) { Napi::TypeError::New(env, "render() expects an array of draw commands").ThrowAsJavaScriptException(); return env.Undefined(); }
+    renderer_->render(env, info[0].As<Napi::Array>());
+    return env.Undefined();
+  }
+
+  Napi::Value RenderBinary(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) { Napi::TypeError::New(env, "Call setup() before renderBinary()").ThrowAsJavaScriptException(); return env.Undefined(); }
+    if (info.Length() < 3 || !info[0].IsTypedArray() || !info[1].IsArray() || !info[2].IsArray()) {
+      Napi::TypeError::New(env, "renderBinary(data: Float32Array, strings: string[], buffers: Buffer[], clips?: DamageRect[])").ThrowAsJavaScriptException();
+      return env.Undefined();
+    }
+    renderer_->renderBinary(env, info[0].As<Napi::Float32Array>(), info[1].As<Napi::Array>(), info[2].As<Napi::Array>());
+    return env.Undefined();
+  }
+
+  Napi::Value DrawBars(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) { Napi::TypeError::New(env, "Call setup() before drawBars()").ThrowAsJavaScriptException(); return env.Undefined(); }
+    if (info.Length() < 1 || !info[0].IsObject()) { Napi::TypeError::New(env, "drawBars(opts)").ThrowAsJavaScriptException(); return env.Undefined(); }
+    renderer_->drawBars(env, info[0].As<Napi::Object>());
+    return env.Undefined();
+  }
+
+  Napi::Value Screenshot(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) { Napi::TypeError::New(env, "Call setup() before screenshot()").ThrowAsJavaScriptException(); return env.Undefined(); }
+    if (info.Length() < 1 || !info[0].IsString()) { Napi::TypeError::New(env, "screenshot(path: string)").ThrowAsJavaScriptException(); return env.Undefined(); }
+    try {
+      renderer_->screenshot(info[0].As<Napi::String>().Utf8Value());
+    } catch (const std::exception& e) {
+      Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+    }
+    return env.Undefined();
+  }
+
+  Napi::Value GetWidth(const Napi::CallbackInfo& info)  { return Napi::Number::New(info.Env(), width_); }
+  Napi::Value GetHeight(const Napi::CallbackInfo& info) { return Napi::Number::New(info.Env(), height_); }
+
+  // Copies the current framebuffer out for the browser preview, converting
+  // Cairo's in-memory BGRX byte order (see cairo_renderer.cpp's ARGB32/
+  // XRGB8888 note) to the RGBA byte order canvas ImageData requires, and
+  // forcing alpha opaque (Cairo's alpha byte is meaningless for our XRGB-style
+  // content and may hold stale/partial values from antialiased edges).
+  Napi::Value GetFrameBuffer(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!renderer_) { Napi::TypeError::New(env, "Call setup() before getFrameBuffer()").ThrowAsJavaScriptException(); return env.Undefined(); }
+    Napi::Buffer<uint8_t> out = Napi::Buffer<uint8_t>::New(env, buf_.size());
+    const uint8_t* src = buf_.data();
+    uint8_t* dst = out.Data();
+    const size_t n = buf_.size() / 4;
+    for (size_t i = 0; i < n; i++) {
+      const size_t o = i * 4;
+      dst[o + 0] = src[o + 2]; // R ← B
+      dst[o + 1] = src[o + 1]; // G
+      dst[o + 2] = src[o + 0]; // B ← R
+      dst[o + 3] = 0xFF;       // A (always opaque)
+    }
+    return out;
+  }
+
+  Napi::Value Close(const Napi::CallbackInfo& info) {
+    renderer_.reset();
+    return info.Env().Undefined();
+  }
+
+  uint32_t width_ = 0, height_ = 0, stride_ = 0;
+  std::vector<uint8_t> buf_;
+  std::unique_ptr<CairoRenderer> renderer_;
+};
+
 // USBDEVFS_RESET on a /dev/bus/usb/BBB/DDD node. The Touch Bar firmware puts
 // the display interface to sleep when idle; once asleep, every transfer —
 // including the SET_CONFIGURATION behind a bConfigurationValue write — fails
@@ -275,6 +397,7 @@ Napi::Value UsbReset(const Napi::CallbackInfo& info) {
 
 Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
   DrmDisplayWrapper::Init(env, exports);
+  PreviewDisplayWrapper::Init(env, exports);
   TouchReader::Init(env, exports);
   KeyInjector::Init(env, exports);
   KeyboardReader::Init(env, exports);

@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "tsx --conditions=development index.tsx",
     "dev:profile": "DRM_DAMAGE_LOG=1 REACT_DRM_PROFILE=1 tsx --conditions=development index.tsx",
-    "build": "npm --prefix .. run build && tsc -p tsconfig.json",
-    "start": "NODE_ENV=production node ./dist/index.js"
+    "dev:preview": "REACT_DRM_BACKEND=preview tsx --conditions=development index.tsx",
+    "build": "npm --prefix .. run build && rm -rf dist && tsc -p tsconfig.json && tsc-alias -p tsconfig.json && cp -r assets dist/",
+    "start": "NODE_ENV=production node ./dist/index.js",
+    "start:preview": "NODE_ENV=production REACT_DRM_BACKEND=preview node ./dist/index.js"
   },
   "dependencies": {
     "@benmalka/foxdriver": "^0.6.0",
@@ -20,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
-    "@types/ws": "^8.18.1"
+    "@types/ws": "^8.18.1",
+    "tsc-alias": "^1.9.1"
   }
 }

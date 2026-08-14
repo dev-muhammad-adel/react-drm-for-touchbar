@@ -168,6 +168,59 @@ export function browserKeysFor(windowClass: string): BrowserKeymap {
   return { ...DEFAULT_BROWSER_KEYS, ...overrides };
 }
 
+// ─── VS Code shortcuts ──────────────────────────────────────────────────────
+
+export type VsCodeKeymap = {
+  back:            number[];
+  forward:         number[];
+  prevEditor:      number[];
+  nextEditor:      number[];
+  toggleSidebar:   number[];
+  toggleTerminal:  number[];
+  run:             number[];
+  stop:            number[];
+  stepOver:        number[];
+  stepInto:        number[];
+  stepOut:         number[];
+  undo:            number[];
+  redo:            number[];
+  find:            number[];
+  replace:         number[];
+  commandPalette:  number[];
+  settings:        number[];
+};
+
+/** Fallback shortcuts, used for any VS Code-family window without an override below. */
+export const DEFAULT_VSCODE_KEYS: VsCodeKeymap = {
+  back:           [KEY.LEFTALT,  KEY.LEFT],
+  forward:        [KEY.LEFTALT,  KEY.RIGHT],
+  prevEditor:     [KEY.LEFTCTRL, KEY.PAGEUP],
+  nextEditor:     [KEY.LEFTCTRL, KEY.PAGEDOWN],
+  toggleSidebar:  [KEY.LEFTCTRL, KEY.KEY_B],
+  toggleTerminal: [KEY.LEFTCTRL, KEY.GRAVE],
+  run:            [KEY.F5],
+  stop:           [KEY.LEFTSHIFT, KEY.F5],
+  stepOver:       [KEY.F10],
+  stepInto:       [KEY.F11],
+  stepOut:        [KEY.LEFTSHIFT, KEY.F11],
+  undo:           [KEY.LEFTCTRL, KEY.KEY_Z],
+  redo:           [KEY.LEFTCTRL, KEY.LEFTSHIFT, KEY.KEY_Z],
+  find:           [KEY.LEFTCTRL, KEY.KEY_F],
+  replace:        [KEY.LEFTCTRL, KEY.KEY_H],
+  commandPalette: [KEY.LEFTCTRL, KEY.LEFTSHIFT, KEY.KEY_P],
+  settings:       [KEY.LEFTCTRL, KEY.KEY_COMMA],
+};
+
+export const VSCODE_KEY_OVERRIDES: Record<string, Partial<VsCodeKeymap>> = {
+  // codium: {},
+};
+
+/** Resolve the effective keymap for a VS Code-family window class. */
+export function vscodeKeysFor(windowClass: string): VsCodeKeymap {
+  const overrides = VSCODE_KEY_OVERRIDES[windowClass.toLowerCase()] ?? {};
+  return { ...DEFAULT_VSCODE_KEYS, ...overrides };
+}
+
 // ─── App dock (Plank-style) ───────────────────────────────────────────────────
 
 export type DockApp = {

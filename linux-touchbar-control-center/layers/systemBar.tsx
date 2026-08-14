@@ -3,16 +3,16 @@ import { useAtom } from 'jotai';
 import {
   POMO_SESSION,
   pomoElapsedAtom, pomoRunningAtom, pomoSessionsAtom, pomoFlashAtom,
-} from '../store/pomodoro';
+} from '@/store/pomodoro';
 import { readFileSync, readdirSync, writeFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { Box, Text, Button, LayoutContext, NativeDrawContext, DisplaySizeContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
 import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeveloperBoard, MdDeviceHub, MdMemory, MdReplay, MdRouter, MdThermostat, MdWhatshot, MdWifi } from 'react-icons/md';
 import type { IconType } from 'react-icons';
-import { CAVA, SYSTEMBAR } from '../config';
+import { CAVA, SYSTEMBAR } from '@/lib/utils/configLoader';
 import { useLayers } from './index';
-import { BackButton } from '../components/BackButton';
+import { BackButton } from '@/components/BackButton';
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 const BG      = '#0d1117';

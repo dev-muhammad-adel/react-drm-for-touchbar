@@ -4,7 +4,8 @@
     "rootDir": ".",
     "outDir": "./dist",
     "composite": false,
-    "typeRoots": ["./node_modules/@types", "../node_modules/@types"]
+    "typeRoots": ["./node_modules/@types", "../node_modules/@types"],
+    "paths": { "@/*": ["./*"] }
   },
   "references": [{ "path": ".." }],
   "include": ["./**/*"],

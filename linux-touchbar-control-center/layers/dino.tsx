@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box } from 'react-drm';
-import { BackButton } from '../components/BackButton';
-import { DinoGame } from '../others/dino';
+import { BackButton } from '@/components/BackButton';
+import { DinoGame } from '@/others/dino';
 
 const BACK_W = 60;
 
