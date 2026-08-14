@@ -21,8 +21,13 @@ import {
 } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
-import type { DrmDisplay } from '../native/binding';
+import type { Display } from '../native/binding';
 import { TOUCHBAR_BACKLIGHT_NAMES, DISPLAY_BACKLIGHT_NAMES } from '../native/hardware';
+import { createLogger } from '../logger';
+
+const log = createLogger('renderer');
+const backlightLog = createLogger('backlight');
+const profileLog = createLogger('profile');
 
 export interface RenderOptions {
   /**

@@ -14,7 +14,9 @@ export type { SvgProps } from './components/Svg';
 export type { GifProps } from './components/Gif';
 export type { SwipeZoneProps } from './components/SwipeZone';
 export type { ScrollRowProps } from './components/ScrollRow';
-export { DrmDisplay, usbReset } from './native/binding';
+export { DrmDisplay, usbReset, createDisplay } from './native/binding';
+export type { Display, DamageRect, BarsOpts } from './native/binding';
+export { PreviewDisplay } from './native/preview-display';
 export {
   TOUCHBAR_DRM_DRIVERS,
   TOUCHBAR_BACKLIGHT_NAMES,

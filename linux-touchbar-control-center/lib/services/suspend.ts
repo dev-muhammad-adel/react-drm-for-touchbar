@@ -2,8 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import { spawn } from 'child_process';
 import dbus from 'dbus-next';
-import { usbReset, TOUCHBAR_DRM_DRIVERS, TOUCHBAR_USB_VENDOR_ID, TOUCHBAR_USB_PRODUCT_ID } from 'react-drm';
-import { SLEEP } from '../config';
+import { usbReset, TOUCHBAR_DRM_DRIVERS, TOUCHBAR_USB_VENDOR_ID, TOUCHBAR_USB_PRODUCT_ID, createLogger } from 'react-drm';
+import { SLEEP } from '@/lib/utils/configLoader';
+
+const log = createLogger('suspend');
 
 const TOUCHBAR_DRM_RE = new RegExp(`DRIVER=(${TOUCHBAR_DRM_DRIVERS.join('|')})`, 'i');
 
