@@ -8,6 +8,8 @@ import type { Layer, LayerHostHandle } from '.';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
 import { mediaMprisListPinnedAtom } from '@/store/mediaMprisList';
+import { useVolumeControl, readVolume, TRACK_W, clampVolume } from '@/lib/hooks/useVolume';
+import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, TRACK_W as BRIGHTNESS_TRACK_W, clamp01 } from '@/lib/hooks/useBrightness';
 import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
 import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
@@ -75,6 +77,10 @@ interface RightBtn {
   color: string;
   activeColor: string;
   onClick: () => void;
+  onLongPress?: () => void;
+  onTouchStart?: (x: number, y: number) => void;
+  onTouchMove?: (x: number, y: number) => void;
+  onTouchEnd?: (x: number, y: number) => void;
 }
 
 const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
@@ -126,6 +132,16 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const { show: showMedia, loading: mediaLoading, players } = useMediaPlayers();
   const [isMediaMprisListPinned, setIsMediaMprisListPinned] = useAtom(mediaMprisListPinnedAtom);
   const mediaPlaying = useMemo(() => players.some(p => p.state.status === 'Playing'), [players]);
+  const { setVolume } = useVolumeControl();
+  const { setBrightness } = useDisplayBrightnessControl();
+  // Long-press-and-drag on the volume/brightness buttons: the touch never
+  // leaves the button's registered gesture (layer swaps don't retarget an
+  // in-progress touch), so the whole hold-then-slide-left/right gesture is
+  // driven from here even after the corresponding slider layer is on screen.
+  const volDragRef = useRef<{ x: number; v: number } | null>(null);
+  const volTouchXRef = useRef(0);
+  const brightDragRef = useRef<{ x: number; v: number } | null>(null);
+  const brightTouchXRef = useRef(0);
   const mediaBtns: RightBtn[] = useMemo(() => {
     // Dispatch each button's action by its key, not its position, so reordering
     // BASE_BTNS can't silently wire a button to the wrong action.
@@ -137,6 +153,36 @@ export function SplittedLayer({ width, height }: { width: number; height: number
       playpause:  () => go('dock', 'slide-up'),
     };
     const base: RightBtn[] = BASE_BTNS.map(b => ({ ...b, onClick: actions[b.key] ?? (() => {}) }));
+    const volumeBtn = base.find(b => b.key === 'volume');
+    if (volumeBtn) {
+      volumeBtn.onTouchStart = (x) => { volTouchXRef.current = x; };
+      volumeBtn.onLongPress = () => {
+        volDragRef.current = { x: volTouchXRef.current, v: readVolume() };
+        go('audio-slider', 'slide-up');
+      };
+      volumeBtn.onTouchMove = (x) => {
+        if (!volDragRef.current) return;
+        const nv = clampVolume(volDragRef.current.v + (x - volDragRef.current.x) / TRACK_W);
+        setVolume(nv);
+        volDragRef.current = { x, v: nv };
+      };
+      volumeBtn.onTouchEnd = () => { volDragRef.current = null; };
+    }
+    const brightnessBtn = base.find(b => b.key === 'brightness');
+    if (brightnessBtn) {
+      brightnessBtn.onTouchStart = (x) => { brightTouchXRef.current = x; };
+      brightnessBtn.onLongPress = () => {
+        brightDragRef.current = { x: brightTouchXRef.current, v: readBrightness(DISPLAY_DEVICE) };
+        go('brightness-slider', 'slide-up');
+      };
+      brightnessBtn.onTouchMove = (x) => {
+        if (!brightDragRef.current) return;
+        const nv = clamp01(brightDragRef.current.v + (x - brightDragRef.current.x) / BRIGHTNESS_TRACK_W);
+        setBrightness(nv);
+        brightDragRef.current = { x, v: nv };
+      };
+      brightnessBtn.onTouchEnd = () => { brightDragRef.current = null; };
+    }
     if (showMedia) {
       base.splice(1, 0, {
         key: 'media',
@@ -200,6 +246,10 @@ export function SplittedLayer({ width, height }: { width: number; height: number
                color={ btn.color}
           activeColor={ btn.activeColor}
             onClick={btn.onClick}
+            onLongPress={btn.onLongPress}
+            onTouchStart={btn.onTouchStart}
+            onTouchMove={btn.onTouchMove}
+            onTouchEnd={btn.onTouchEnd}
             style={{
               alignItems: 'center',
               justifyContent: 'center',
