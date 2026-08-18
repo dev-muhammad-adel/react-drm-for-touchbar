@@ -40,6 +40,7 @@ The installer:
 - removes conflicting Touch Bar daemons;
 - installs the udev rules and required user groups;
 - copies the current source to `~/react-drm` and builds it there;
+- builds the Touch Bar configuration GUI and adds it to the application menu;
 - installs Window Monitor Pro when GNOME is active;
 - installs and starts `react-drm.service` for the invoking user.
 
