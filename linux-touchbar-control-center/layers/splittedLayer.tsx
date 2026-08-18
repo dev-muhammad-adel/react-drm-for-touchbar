@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Box, Button, KEY, animated, useSpringValue } from 'react-drm';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
 import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSearch, MdMusicNote } from 'react-icons/md';
 import { LayerHost, useLayers } from '.';
@@ -8,8 +8,9 @@ import type { Layer, LayerHostHandle } from '.';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
 import { mediaMprisListPinnedAtom } from '@/store/mediaMprisList';
-import { useVolumeControl, readVolume, TRACK_W, clampVolume } from '@/lib/hooks/useVolume';
+import { useVolumeControl, readVolume, clampVolume } from '@/lib/hooks/useVolume';
 import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, TRACK_W as BRIGHTNESS_TRACK_W, clamp01 } from '@/lib/hooks/useBrightness';
+import { audioTrackAnchorAtom, ANCHOR_TRACK_W } from '@/store/audioTrackAnchor';
 import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
 import { BrowserPanel } from './leftsideLayers/BrowserPanel';
 import { KonsolePanel } from './leftsideLayers/KonsolePanel';
@@ -132,8 +133,9 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   const { show: showMedia, loading: mediaLoading, players } = useMediaPlayers();
   const [isMediaMprisListPinned, setIsMediaMprisListPinned] = useAtom(mediaMprisListPinnedAtom);
   const mediaPlaying = useMemo(() => players.some(p => p.state.status === 'Playing'), [players]);
-  const { setVolume } = useVolumeControl();
+  const { setVolume, syncVolume } = useVolumeControl();
   const { setBrightness } = useDisplayBrightnessControl();
+  const setAudioTrackAnchor = useSetAtom(audioTrackAnchorAtom);
   // Long-press-and-drag on the volume/brightness buttons: the touch never
   // leaves the button's registered gesture (layer swaps don't retarget an
   // in-progress touch), so the whole hold-then-slide-left/right gesture is
@@ -148,8 +150,8 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     const actions: Record<string, () => void> = {
       back:       () => go('media', 'slide-left'),
       linux:      () => go('systembar', 'slide-up'),
-      volume:     () => go('audio-slider', 'slide-up'),
-      brightness: () => go('brightness-slider', 'slide-up'),
+      volume:     () => { setAudioTrackAnchor(null); go('audio-slider', 'fade'); },
+      brightness: () => go('brightness-slider', 'fade'),
       playpause:  () => go('dock', 'slide-up'),
     };
     const base: RightBtn[] = BASE_BTNS.map(b => ({ ...b, onClick: actions[b.key] ?? (() => {}) }));
@@ -157,12 +159,30 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     if (volumeBtn) {
       volumeBtn.onTouchStart = (x) => { volTouchXRef.current = x; };
       volumeBtn.onLongPress = () => {
-        volDragRef.current = { x: volTouchXRef.current, v: readVolume() };
-        go('audio-slider', 'slide-up');
+        const startVol = readVolume();
+        volDragRef.current = { x: volTouchXRef.current, v: startVol };
+        // The shared volume atom only refreshes on live pactl events while
+        // AudioSliderLayer is mounted — if volume changed externally while
+        // it wasn't (e.g. a hardware key), the atom can be stale here. Sync
+        // it to the freshly-read value so SliderTrack's fill (which drives
+        // where the knob actually renders) agrees with the anchor math below
+        // — otherwise the knob lands wherever the stale fill puts it, not on
+        // the touch point.
+        syncVolume(startVol);
+        // Anchor the track so its knob (at fill*ANCHOR_TRACK_W along the
+        // track) lands exactly on the touch point: trackLeft = touchX -
+        // vol*ANCHOR_TRACK_W. Set once — stays correct for the whole drag
+        // since the knob's own fill-driven position already absorbs the
+        // finger's movement. Sensitivity here must match ANCHOR_TRACK_W (not
+        // the default TRACK_W) since that's the width the anchored track
+        // actually renders at.
+        // 5.5 is half of the inset safe x of pixel shifting
+        setAudioTrackAnchor({ x: volTouchXRef.current -( startVol * ANCHOR_TRACK_W )-5.5});
+        go('audio-slider', 'fade');
       };
       volumeBtn.onTouchMove = (x) => {
         if (!volDragRef.current) return;
-        const nv = clampVolume(volDragRef.current.v + (x - volDragRef.current.x) / TRACK_W);
+        const nv = clampVolume(volDragRef.current.v + (x - volDragRef.current.x) / ANCHOR_TRACK_W);
         setVolume(nv);
         volDragRef.current = { x, v: nv };
       };

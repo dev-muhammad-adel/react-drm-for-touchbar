@@ -88,7 +88,7 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
     hideTimer.current = setTimeout(() => {
       displayDrag.current = null;
       keyboardDrag.current = null;
-      go('splitted', 'slide-down');
+      go('splitted', 'fade');
     }, AUTO_HIDE_MS);
   }
 
@@ -131,7 +131,7 @@ export function BrightnessSliderLayer({ width, height }: { width: number; height
 
   return (
     <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-      <BackButton to="splitted" animation="slide-down" />
+      <BackButton to="splitted" animation="fade" />
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
         <BrightnessControl
           value={keyboardBrightness}
