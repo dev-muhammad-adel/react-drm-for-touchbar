@@ -22,7 +22,7 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: 'Panels',
-    sections: ['ESC_KEY', 'ACTIVE_WINDOW', 'SCREENSHOT', 'DOLPHIN', 'KONSOLE', 'SYSTEMBAR', 'CAVA', 'FN_LAYER'],
+    sections: ['ESC_KEY', 'ACTIVE_WINDOW', 'SCREENSHOT', 'DOLPHIN', 'KONSOLE', 'SYSTEMBAR', 'CAVA', 'FN_LAYER', 'FN_KEYS'],
   },
 ];
 
@@ -34,7 +34,7 @@ const SECTION_LABELS: Record<SectionName, string> = {
   DEFAULT_VSCODE_KEYS: 'VS Code Keys', VSCODE_KEY_OVERRIDES: 'VS Code Overrides',
   ESC_KEY: 'Esc Key', ACTIVE_WINDOW: 'Active Window', SCREENSHOT: 'Screenshot',
   LAYER_TRANSITION: 'Transitions', DOLPHIN: 'Dolphin', KONSOLE: 'Konsole',
-  SYSTEMBAR: 'System Bar', CAVA: 'Audio Visualizer', FN_LAYER: 'Fn Layer',
+  SYSTEMBAR: 'System Bar', CAVA: 'Audio Visualizer', FN_LAYER: 'Fn Layer', FN_KEYS: 'Fn Keys',
 };
 
 const SECTION_DESCRIPTIONS: Record<SectionName, string> = {
@@ -54,6 +54,7 @@ const SECTION_DESCRIPTIONS: Record<SectionName, string> = {
   SYSTEMBAR: 'CPU, memory, and network stats',
   CAVA: 'Audio visualizer bars',
   FN_LAYER: 'How the Fn key reaches the F-key layer',
+  FN_KEYS: 'Extra keys shown after F1–F12 in the Fn-key layer',
 };
 
 const BROWSER_ACTIONS = ['back', 'forward', 'reload', 'home', 'newTab', 'closeTab', 'nextTab', 'prevTab'];
@@ -66,7 +67,7 @@ const VSCODE_ACTIONS = [
 const UNION_FIELDS: Record<string, string[]> = {
   'ESC_KEY.onLayers': ['all', 'fn'],
   'ACTIVE_WINDOW.backend': ['auto', 'hyprland', 'niri', 'gnome', 'plasma', 'xorg'],
-  'FN_LAYER.mode': ['hold', 'toggle'],
+  'FN_LAYER.mode': ['hold', 'toggle', 'double-tap'],
 };
 
 function isPlainObject(v: JsonValue): v is Record<string, JsonValue> {
@@ -323,6 +324,7 @@ function renderSection(name: SectionName, panel: HTMLElement): void {
     case 'DEFAULT_VSCODE_KEYS': return renderKeymap(panel, name, value, VSCODE_ACTIONS);
     case 'BROWSER_KEY_OVERRIDES': return renderOverrides(panel, name, value, BROWSER_ACTIONS);
     case 'VSCODE_KEY_OVERRIDES': return renderOverrides(panel, name, value, VSCODE_ACTIONS);
+    case 'FN_KEYS': return renderFnKeys(panel, value);
     default: return renderGenericObject(panel, value, [name]);
   }
 }
@@ -738,6 +740,71 @@ function renderOverrideBlock(
   }
 
   return block;
+}
+
+// ── FN_KEYS ──────────────────────────────────────────────────────────────────
+
+function renderFnKeys(container: HTMLElement, fnKeys: Record<string, JsonValue>): void {
+  const list = document.createElement('div');
+  container.appendChild(list);
+
+  function extraArray(): Record<string, JsonValue>[] {
+    return (fnKeys.extra as Record<string, JsonValue>[] | undefined) ?? [];
+  }
+
+  function renderList(): void {
+    list.innerHTML = '';
+    extraArray().forEach((entry, i) => {
+      const row = document.createElement('div');
+      row.className = 'field-row';
+
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.value = (entry.label as string | undefined) ?? '';
+      labelInput.placeholder = 'label, e.g. prt sc';
+      labelInput.addEventListener('change', () => {
+        entry.label = labelInput.value;
+        setPath(['FN_KEYS', 'extra'], extraArray());
+        markDirty();
+      });
+      row.appendChild(labelInput);
+
+      const codes = [entry.key as number];
+      row.appendChild(renderKeyCapture(codes, newCodes => {
+        if (!newCodes.length) return;
+        entry.key = newCodes[newCodes.length - 1];
+        setPath(['FN_KEYS', 'extra'], extraArray());
+        markDirty();
+      }));
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'Remove';
+      removeBtn.className = 'danger';
+      removeBtn.type = 'button';
+      removeBtn.addEventListener('click', () => {
+        extraArray().splice(i, 1);
+        setPath(['FN_KEYS', 'extra'], extraArray());
+        markDirty();
+        renderList();
+      });
+      row.appendChild(removeBtn);
+
+      list.appendChild(row);
+    });
+  }
+  renderList();
+
+  const addBtn = document.createElement('button');
+  addBtn.textContent = '+ Add key';
+  addBtn.className = 'secondary';
+  addBtn.type = 'button';
+  addBtn.addEventListener('click', () => {
+    extraArray().push({ label: 'key', key: keyNames.ESC ?? 1 });
+    setPath(['FN_KEYS', 'extra'], extraArray());
+    markDirty();
+    renderList();
+  });
+  container.appendChild(addBtn);
 }
 
 function renderKeyCapture(codes: number[], onChange: (codes: number[]) => void): HTMLElement {
