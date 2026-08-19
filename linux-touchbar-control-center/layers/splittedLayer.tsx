@@ -157,10 +157,16 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     const base: RightBtn[] = BASE_BTNS.map(b => ({ ...b, onClick: actions[b.key] ?? (() => {}) }));
     const volumeBtn = base.find(b => b.key === 'volume');
     if (volumeBtn) {
-      volumeBtn.onTouchStart = (x) => { volTouchXRef.current = x; };
-      volumeBtn.onLongPress = () => {
+      // Enters the anchored live-drag: reads the current volume, anchors the
+      // track to the touch point, and switches to audio-slider near-instantly
+      // (a live drag can't wait out a leisurely fade — every touchmove that
+      // lands during a slow transition updates volume on a layer that isn't
+      // visible yet, so the drag's start goes unseen). Called from onLongPress
+      // (finger held still) and, faster, from onTouchMove the moment real drag
+      // intent is detected — whichever happens first.
+      const enterVolumeDrag = (touchX: number) => {
         const startVol = readVolume();
-        volDragRef.current = { x: volTouchXRef.current, v: startVol };
+        volDragRef.current = { x: touchX, v: startVol };
         // The shared volume atom only refreshes on live pactl events while
         // AudioSliderLayer is mounted — if volume changed externally while
         // it wasn't (e.g. a hardware key), the atom can be stale here. Sync
@@ -177,12 +183,26 @@ export function SplittedLayer({ width, height }: { width: number; height: number
         // the default TRACK_W) since that's the width the anchored track
         // actually renders at.
         // 5.5 is half of the inset safe x of pixel shifting
-        setAudioTrackAnchor({ x: volTouchXRef.current -( startVol * ANCHOR_TRACK_W )-5.5});
-        go('audio-slider', 'fade');
+        setAudioTrackAnchor({ x: touchX -( startVol * ANCHOR_TRACK_W )-5.5});
+        go('audio-slider', {
+          fromLayerSwitch: { outAnim: 'fade', duration: 5 },
+          toLayerSwitch:   { inAnim: 'fade', duration: 500, showAfter: 0 },
+        });
+      };
+
+      volumeBtn.onTouchStart = (x) => { volTouchXRef.current = x; };
+      volumeBtn.onLongPress = () => {
+        if (volDragRef.current) return; // already entered via an early drag-move
+        enterVolumeDrag(volTouchXRef.current);
       };
       volumeBtn.onTouchMove = (x) => {
-        if (!volDragRef.current) return;
-        const nv = clampVolume(volDragRef.current.v + (x - volDragRef.current.x) / ANCHOR_TRACK_W);
+        if (!volDragRef.current) {
+          // Finger started moving before the long-press timer fired — real
+          // drag intent doesn't wait; enter as soon as it's past tap jitter.
+          if (Math.abs(x - volTouchXRef.current) < 8) return;
+          enterVolumeDrag(volTouchXRef.current);
+        }
+        const nv = clampVolume(volDragRef.current!.v + (x - volDragRef.current!.x) / ANCHOR_TRACK_W);
         setVolume(nv);
         volDragRef.current = { x, v: nv };
       };
@@ -190,14 +210,28 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     }
     const brightnessBtn = base.find(b => b.key === 'brightness');
     if (brightnessBtn) {
+      // See enterVolumeDrag above — same reasoning: a live drag can't wait out
+      // a leisurely transition, so switch fast and let onTouchMove trigger
+      // this itself the moment real drag intent is detected, not just onLongPress.
+      const enterBrightnessDrag = (touchX: number) => {
+        brightDragRef.current = { x: touchX, v: readBrightness(DISPLAY_DEVICE) };
+        go('brightness-slider', {
+          fromLayerSwitch: { outAnim: 'slide-up', duration: 100 },
+          toLayerSwitch:   { inAnim: 'slide-up', duration: 100, showAfter: 0 },
+        });
+      };
+
       brightnessBtn.onTouchStart = (x) => { brightTouchXRef.current = x; };
       brightnessBtn.onLongPress = () => {
-        brightDragRef.current = { x: brightTouchXRef.current, v: readBrightness(DISPLAY_DEVICE) };
-        go('brightness-slider', 'slide-up');
+        if (brightDragRef.current) return; // already entered via an early drag-move
+        enterBrightnessDrag(brightTouchXRef.current);
       };
       brightnessBtn.onTouchMove = (x) => {
-        if (!brightDragRef.current) return;
-        const nv = clamp01(brightDragRef.current.v + (x - brightDragRef.current.x) / BRIGHTNESS_TRACK_W);
+        if (!brightDragRef.current) {
+          if (Math.abs(x - brightTouchXRef.current) < 8) return; // still just tap jitter
+          enterBrightnessDrag(brightTouchXRef.current);
+        }
+        const nv = clamp01(brightDragRef.current!.v + (x - brightDragRef.current!.x) / BRIGHTNESS_TRACK_W);
         setBrightness(nv);
         brightDragRef.current = { x, v: nv };
       };
