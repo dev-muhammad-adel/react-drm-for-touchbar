@@ -62,11 +62,11 @@ export function App({ width, height, keyboard }: { width: number; height: number
             home="splitted"
             toggles={[{ key: DOCK.shortcut.key, layer: 'dock', longMs: DOCK.shortcut.longMs }]}
             layers={[
-              { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'  } },
+              { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'fade' }, entering: { inAnim: 'fade'  } },
               { name: 'dock',              component: DockLayer,               leaving: { outAnim: 'slide-down' }, entering: { inAnim: 'slide-up'   } },
             { name: 'media',             component: MediaScreen,             leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
-            { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
-            { name: 'brightness-slider', component: BrightnessSliderLayer,   leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
+            { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'fade'  }, entering: { inAnim: 'fade'    } },
+            { name: 'brightness-slider', component: BrightnessSliderLayer,   leaving: { outAnim: 'fade'  }, entering: { inAnim: 'fade'  } },
             { name: 'fnkeys',            component: FnKeys,                  leaving: { outAnim: 'fade', duration: 0 }, entering: { inAnim: 'fade', duration: 0 } },
             { name: 'systembar',         component: SystemBar,               leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
           ]}
