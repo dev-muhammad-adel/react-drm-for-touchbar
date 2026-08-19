@@ -285,8 +285,10 @@ export const DOCK = {
 
 export const FN_LAYER = {
   // How the Fn key reaches the F-keys layer:
-  //   'hold'   — momentary: the layer shows only while Fn is held (original).
-  //   'toggle' — long-press Fn to switch to it, long-press again to return.
-  mode:   'toggle' as 'hold' | 'toggle',
-  longMs: 350,   // long-press duration when mode === 'toggle'
+  //   'hold'       — momentary: the layer shows only while Fn is held (original).
+  //   'toggle'     — long-press Fn to switch to it, long-press again to return.
+  //   'double-tap' — double-tap Fn to switch to it, double-tap again to return.
+  mode:     'toggle' as 'hold' | 'toggle' | 'double-tap',
+  longMs:   350,   // long-press duration when mode === 'toggle'
+  doubleMs: 350,   // max gap between taps when mode === 'double-tap'
 };
