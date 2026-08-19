@@ -8,17 +8,24 @@ export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptio
 
 /** A keyboard gesture that toggles a layer on/off (see useKeyGesture). */
 export interface LayerToggle {
-  key:     string | KeyId;
-  layer:   string;
-  longMs?: number;
+  key:       string | KeyId;
+  layer:     string;
+  /** Gesture that triggers the toggle. Default: 'long-press'. */
+  trigger?:  'long-press' | 'double-tap';
+  longMs?:   number;
+  doubleMs?: number;
 }
 
 const FN_LONG_MS = 350; // default hold time for the Fn-layer long-press
 
-/** Subscribes one long-press binding; renders nothing. Kept as a component so
- *  a variable number of bindings each call the hook at a stable position. */
+/** Subscribes one long-press or double-tap binding; renders nothing. Kept as a
+ *  component so a variable number of bindings each call the hook at a stable
+ *  position. */
 function GestureToggle({ binding, onToggle }: { binding: LayerToggle; onToggle: (layer: string) => void }) {
-  useKeyGesture(binding.key, { onLongPress: () => onToggle(binding.layer) }, { longMs: binding.longMs });
+  const handlers = binding.trigger === 'double-tap'
+    ? { onDoublePress: () => onToggle(binding.layer) }
+    : { onLongPress:   () => onToggle(binding.layer) };
+  useKeyGesture(binding.key, handlers, { longMs: binding.longMs, doubleMs: binding.doubleMs });
   return null;
 }
 
@@ -90,25 +97,29 @@ export const LayerHost = forwardRef<LayerHostHandle, {
   keyboard?: KeyboardReader;
   fnKey?:    KeyId;
   fnLayer?:  string;
-  /** How the Fn key reaches its layer: 'hold' (momentary) or 'toggle' (long-press). */
-  fnMode?:   'hold' | 'toggle';
+  /** How the Fn key reaches its layer: 'hold' (momentary), 'toggle' (long-press),
+   *  or 'double-tap'. */
+  fnMode?:   'hold' | 'toggle' | 'double-tap';
   /** Long-press duration for the Fn layer when fnMode === 'toggle'. */
   fnLongMs?: number;
-  /** Long-press toggles: each flips to its layer and back (see useKeyGesture). */
+  /** Max gap between taps for the Fn layer when fnMode === 'double-tap'. */
+  fnDoubleMs?: number;
+  /** Long-press/double-tap toggles: each flips to its layer and back (see useKeyGesture). */
   toggles?:  LayerToggle[];
   /** Layer a toggle returns to when flipped off. Defaults to `initial`/first.
    *  Anchoring every toggle here keeps overlays (Fn, dock) from flipping
    *  directly into each other — toggling one off always lands on home. */
   home?:     string;
-}>(function LayerHost({ layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer, fnMode = 'hold', fnLongMs = FN_LONG_MS, toggles, home }, ref) {
+}>(function LayerHost({ layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer, fnMode = 'hold', fnLongMs = FN_LONG_MS, fnDoubleMs, toggles, home }, ref) {
   const inherited = useContext(KeyboardContext);
   const kb = keyboard ?? inherited ?? null;
 
-  // The Fn layer is either a momentary hold or a long-press toggle.
+  // The Fn layer is either a momentary hold, a long-press toggle, or a double-tap toggle.
   const hold = fnLayer && fnMode === 'hold' ? { key: fnKey, layer: fnLayer } : undefined;
   const allToggles: LayerToggle[] = [
     ...(toggles ?? []),
-    ...(fnLayer && fnMode === 'toggle' ? [{ key: fnKey, layer: fnLayer, longMs: fnLongMs }] : []),
+    ...(fnLayer && fnMode === 'toggle'      ? [{ key: fnKey, layer: fnLayer, longMs: fnLongMs }] : []),
+    ...(fnLayer && fnMode === 'double-tap'  ? [{ key: fnKey, layer: fnLayer, trigger: 'double-tap' as const, doubleMs: fnDoubleMs }] : []),
   ];
 
   return (
