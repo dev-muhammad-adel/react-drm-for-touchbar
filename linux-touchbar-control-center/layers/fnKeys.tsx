@@ -2,7 +2,7 @@ import React, { useContext } from 'react';
 import { Box, Text, Button, KEY, DisplaySizeContext } from 'react-drm';
 import { BackButton } from '@/components/BackButton';
 import { keys } from '@/lib/services/keyInjector';
-import { ESC_KEY } from '@/lib/utils/configLoader';
+import { ESC_KEY, FN_KEYS } from '@/lib/utils/configLoader';
 
 const KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'] as const;
 
@@ -49,6 +49,18 @@ export function FnKeys({ width, height }: { width: number; height: number }) {
           onClick={() => keys.pressF((i + 1) as 1|2|3|4|5|6|7|8|9|10|11|12)}
         >
           <Text  fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>{key}</Text>
+        </Button>
+      ))}
+
+      {FN_KEYS.extra.map(k => (
+        <Button
+          key={k.label}
+          color="#444444"
+          activeColor="#555555"
+          style={keyStyle}
+          onClick={() => keys.pressKey(k.key)}
+        >
+          <Text  fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>{k.label}</Text>
         </Button>
       ))}
 

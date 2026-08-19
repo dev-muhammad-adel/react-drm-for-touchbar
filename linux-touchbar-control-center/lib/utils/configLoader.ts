@@ -41,5 +41,6 @@ export const VSCODE_KEY_OVERRIDES = mod.VSCODE_KEY_OVERRIDES;
 export const vscodeKeysFor = mod.vscodeKeysFor;
 export const DOCK = mod.DOCK;
 export const FN_LAYER = mod.FN_LAYER;
+export const FN_KEYS = mod.FN_KEYS;
 
-export type { BrowserKeymap, VsCodeKeymap, DockApp } from '@/config.blueprint';
+export type { BrowserKeymap, VsCodeKeymap, DockApp, FnKeyExtra } from '@/config.blueprint';

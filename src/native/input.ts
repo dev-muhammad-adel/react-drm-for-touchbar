@@ -61,6 +61,8 @@ export const KEY = {
   F5:             63,
   F10:            68,
   F11:            87,
+  DELETE:        111,
+  PRINT:          99, // Print Screen / SysRq
   // Letters used in browser/editor combos
   KEY_B:          48,
   KEY_COMMA:      51,

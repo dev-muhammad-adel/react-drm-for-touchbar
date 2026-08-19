@@ -68,7 +68,7 @@ test('as const and as Type casts are preserved after editing', () => {
     const before = readConfig(configPath);
     writeConfig(configPath, { FN_LAYER: { ...(before.FN_LAYER as object), longMs: 500 } });
     const text = fs.readFileSync(configPath, 'utf8');
-    assert.match(text, /mode:\s*'toggle' as 'hold' \| 'toggle'/);
+    assert.match(text, /mode:\s*'double-tap' as 'hold' \| 'toggle' \| 'double-tap'/);
     assert.match(text, /DISPLAY = \{[\s\S]*?\} as const;/); // untouched section keeps its cast
   });
 });

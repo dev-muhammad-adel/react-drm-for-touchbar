@@ -292,3 +292,17 @@ export const FN_LAYER = {
   longMs:   350,   // long-press duration when mode === 'toggle'
   doubleMs: 350,   // max gap between taps when mode === 'double-tap'
 };
+
+export interface FnKeyExtra {
+  label: string;
+  key:   number; // raw evdev keycode — see KEY in react-drm
+}
+
+export const FN_KEYS = {
+  // Extra keys shown after F1–F12 in the Fn-key layer. Add/remove/reorder here;
+  // each fires keys.pressKey(key) — see linux-touchbar-control-center/layers/fnKeys.tsx.
+  extra: [
+    { label: 'prt', key: KEY.PRINT },
+    { label: 'del',    key: KEY.DELETE },
+  ] as FnKeyExtra[],
+};

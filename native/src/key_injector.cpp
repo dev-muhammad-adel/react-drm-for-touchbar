@@ -35,6 +35,8 @@ static const int EXTRA_KEYS[] = {
   14,              // KEY_BACKSPACE
   41,              // KEY_GRAVE
   51,              // KEY_COMMA
+  99,              // KEY_SYSRQ (Print Screen)
+  111,             // KEY_DELETE
   // Digits 1-0
    2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
   // Letters A-Z (linux keycodes)

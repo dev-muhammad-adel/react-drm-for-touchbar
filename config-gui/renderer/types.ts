@@ -4,7 +4,7 @@ export type SectionName =
   | 'SCREENSHOT' | 'DOLPHIN' | 'KONSOLE' | 'SYSTEMBAR' | 'CAVA'
   | 'DEFAULT_BROWSER_KEYS' | 'BROWSER_KEY_OVERRIDES'
   | 'DEFAULT_VSCODE_KEYS' | 'VSCODE_KEY_OVERRIDES'
-  | 'DOCK' | 'FN_LAYER';
+  | 'DOCK' | 'FN_LAYER' | 'FN_KEYS';
 export type ConfigData = Partial<Record<SectionName, JsonValue>>;
 
 export interface ConfigApi {
