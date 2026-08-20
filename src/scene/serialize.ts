@@ -440,6 +440,22 @@ const _strings: string[] = [];
 const _buffers: Buffer[]  = [];
 const _strIdx = new Map<string, number>();
 
+// Yoga layout keeps fractional coordinates (setPointScaleFactor(0), see
+// layout-yoga.ts) so animated/spring-driven positions stay smooth. But Cairo
+// anti-aliases each fill independently, so two adjacent shapes whose shared
+// edge lands on a fractional pixel each blend that edge on their own —
+// nothing forces their blends to agree, so a gap between siblings can read
+// as a pixel wider or narrower than a neighboring gap even though the layout
+// math is identical. Snapping each shape's own edges (not just its origin)
+// to the pixel grid at encode time keeps every fill crisp and keeps gaps
+// between siblings exactly their designed integer width, regardless of the
+// AMOLED anti-burn-in shift applied on top.
+function snapSpan(pos: number, size: number, shift: number): [number, number] {
+  const p0 = Math.round(pos + shift);
+  const p1 = Math.round(pos + shift + size);
+  return [p0, p1 - p0];
+}
+
 /**
  * Encode DrawCommand[] into a compact BinaryFrame.
  * shiftX / shiftY are applied to the x/y fields of positional commands in-place,
@@ -485,37 +501,49 @@ export function toBinaryBuffer(cmds: DrawCommand[], shiftX = 0, shiftY = 0): Bin
         data[base+1] = c.cx + shiftX; data[base+2] = c.cy + shiftY;
         data[base+3] = c.rotate;
         break;
-      case 'clip_push':
+      case 'clip_push': {
+        const [x, w] = snapSpan(c.x, c.w, shiftX);
+        const [y, h] = snapSpan(c.y, c.h, shiftY);
         data[base]   = CMD_TYPE.CLIP_PUSH;
-        data[base+1] = c.x + shiftX; data[base+2] = c.y + shiftY;
-        data[base+3] = c.w;          data[base+4] = c.h;
+        data[base+1] = x; data[base+2] = y;
+        data[base+3] = w; data[base+4] = h;
         data[base+5] = c.tl; data[base+6] = c.tr; data[base+7] = c.br; data[base+8] = c.bl;
         break;
-      case 'fill_rect':
+      }
+      case 'fill_rect': {
+        const [x, w] = snapSpan(c.x, c.w, shiftX);
+        const [y, h] = snapSpan(c.y, c.h, shiftY);
         data[base]    = CMD_TYPE.FILL_RECT;
-        data[base+1]  = c.x + shiftX; data[base+2] = c.y + shiftY;
-        data[base+3]  = c.w;          data[base+4] = c.h;
+        data[base+1]  = x; data[base+2] = y;
+        data[base+3]  = w; data[base+4] = h;
         data[base+5]  = c.r; data[base+6] = c.g; data[base+7] = c.b; data[base+8] = c.a;
         data[base+9]  = c.tl; data[base+10] = c.tr; data[base+11] = c.br; data[base+12] = c.bl;
         break;
-      case 'stroke_rect':
+      }
+      case 'stroke_rect': {
+        const [x, w] = snapSpan(c.x, c.w, shiftX);
+        const [y, h] = snapSpan(c.y, c.h, shiftY);
         data[base]    = CMD_TYPE.STROKE_RECT;
-        data[base+1]  = c.x + shiftX; data[base+2] = c.y + shiftY;
-        data[base+3]  = c.w;          data[base+4] = c.h;
+        data[base+1]  = x; data[base+2] = y;
+        data[base+3]  = w; data[base+4] = h;
         data[base+5]  = c.r; data[base+6] = c.g; data[base+7] = c.b; data[base+8] = c.a;
         data[base+9]  = c.tl; data[base+10] = c.tr; data[base+11] = c.br; data[base+12] = c.bl;
         data[base+13] = c.lineWidth;
         data[base+17] = intern(c.borderStyle);
         break;
-      case 'shadow':
+      }
+      case 'shadow': {
+        const [x, w] = snapSpan(c.x, c.w, shiftX);
+        const [y, h] = snapSpan(c.y, c.h, shiftY);
         data[base]    = CMD_TYPE.SHADOW;
-        data[base+1]  = c.x + shiftX; data[base+2] = c.y + shiftY;
-        data[base+3]  = c.w;          data[base+4] = c.h;
+        data[base+1]  = x; data[base+2] = y;
+        data[base+3]  = w; data[base+4] = h;
         data[base+5]  = c.tl; data[base+6] = c.tr; data[base+7] = c.br; data[base+8] = c.bl;
         data[base+9]  = c.r;  data[base+10] = c.g; data[base+11] = c.b; data[base+12] = c.a;
         data[base+13] = c.dx; data[base+14] = c.dy; data[base+15] = c.blur;
         data[base+16] = c.inset ? 1 : 0;
         break;
+      }
       case 'text':
         data[base]    = CMD_TYPE.TEXT;
         data[base+1]  = c.x + shiftX;     data[base+2]  = c.y + shiftY;
@@ -528,21 +556,27 @@ export function toBinaryBuffer(cmds: DrawCommand[], shiftX = 0, shiftY = 0): Bin
         data[base+18] = intern(c.text);
         data[base+19] = intern(c.align);
         break;
-      case 'draw_svg':
+      case 'draw_svg': {
+        const [x, w] = snapSpan(c.x, c.w, shiftX);
+        const [y, h] = snapSpan(c.y, c.h, shiftY);
         data[base]   = CMD_TYPE.DRAW_SVG;
-        data[base+1] = c.x + shiftX; data[base+2] = c.y + shiftY;
-        data[base+3] = c.w;          data[base+4] = c.h;
+        data[base+1] = x; data[base+2] = y;
+        data[base+3] = w; data[base+4] = h;
         data[base+17] = intern(c.src);
         break;
-      case 'draw_image':
+      }
+      case 'draw_image': {
+        const [x, w] = snapSpan(c.x, c.w, shiftX);
+        const [y, h] = snapSpan(c.y, c.h, shiftY);
         data[base]   = CMD_TYPE.DRAW_IMAGE;
-        data[base+1] = c.x + shiftX; data[base+2] = c.y + shiftY;
-        data[base+3] = c.w;          data[base+4] = c.h;
+        data[base+1] = x; data[base+2] = y;
+        data[base+3] = w; data[base+4] = h;
         data[base+5] = c.sw;         data[base+6] = c.sh;
         data[base+7] = c.tl; data[base+8] = c.tr; data[base+9] = c.br; data[base+10] = c.bl;
         data[base+20] = buffers.length;
         buffers.push(c.data);
         break;
+      }
     }
   }
 

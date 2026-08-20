@@ -85,12 +85,12 @@ interface RightBtn {
 }
 
 const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
-  { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 40 ,color:"#444444" , activeColor:"#555555"},
-  { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
-  { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
-  { key: 'linux',      icon: <CiWavePulse1        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
-  { key: 'playpause',  icon: <BsWindowDock    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
-  // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#444444" , activeColor:"#555555"},
+  { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#979797" stroke="none" />, width: 40 ,color:"#373737" , activeColor:"#474747"},
+  { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
+  { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
+  { key: 'linux',      icon: <CiWavePulse1        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
+  { key: 'playpause',  icon: <BsWindowDock    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
+  // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
 ];
 
 const EQ_BAR_W = 4;
@@ -254,8 +254,8 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     return base;
   }, [ showMedia, isMediaMprisListPinned, activeClass, mediaPlaying]);
 
-  // Right panel width depends on the visible buttons + 2px gaps.
-  const rightW = mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 2;
+  // Right panel width depends on the visible buttons + 3px gaps.
+  const rightW = mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 3;
   const leftW = width - rightW - 20;
 
   const leftTargetRef = useRef<SplittedLeftLayerName | null>(null);
@@ -291,14 +291,14 @@ export function SplittedLayer({ width, height }: { width: number; height: number
       </Box>
 
         <Box
-        style={{ flexDirection: 'row' ,gap:2}}
+        style={{ flexDirection: 'row' ,gap:3,width: rightW,backgroundColor: '#272727'  , borderRadius:10}}
       >
         {mediaBtns.map((btn, idx) => (
           <Button
             key={btn.key}
             width={btn.width}
                color={ btn.color}
-          activeColor={ btn.activeColor}
+            activeColor={ btn.activeColor}
             onClick={btn.onClick}
             onLongPress={btn.onLongPress}
             onTouchStart={btn.onTouchStart}
