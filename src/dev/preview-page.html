@@ -14,8 +14,6 @@
     color: #9a9a9e;
   }
   canvas {
-    width: min(90vw, 1600px);
-    height: auto;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
     background: #000;
@@ -59,6 +57,20 @@
     ws.addEventListener('message', onFrame);
   }
 
+  // CSS can't scale a pixelated canvas by a fractional factor without some
+  // source columns/rows replicating to a different pixel count than their
+  // neighbors — a 3px gap in the real framebuffer can end up rendering as
+  // 2px in one place and 4px in another. Snapping to the largest integer
+  // scale that fits the viewport keeps every source pixel mapped to exactly
+  // the same number of display pixels, so spacing stays true to the data.
+  function applyIntegerScale() {
+    const budget = Math.min(window.innerWidth * 0.9, 1600);
+    const scale = Math.max(1, Math.floor(budget / canvas.width));
+    canvas.style.width  = `${canvas.width * scale}px`;
+    canvas.style.height = `${canvas.height * scale}px`;
+  }
+  window.addEventListener('resize', applyIntegerScale);
+
   function onFrame(ev) {
     if (!(ev.data instanceof ArrayBuffer) || ev.data.byteLength < HEADER_BYTES) return;
     const view = new DataView(ev.data);
@@ -72,6 +84,7 @@
       canvas.width = width;
       canvas.height = height;
       status.textContent = `connected — ${width}×${height}`;
+      applyIntegerScale();
     }
 
     const src = new Uint8Array(ev.data, HEADER_BYTES);
@@ -114,5 +127,6 @@
   canvas.addEventListener('touchmove',  (e) => { e.preventDefault(); const t = e.changedTouches[0]; sendTouch('touchmove',  t.clientX, t.clientY); }, { passive: false });
   canvas.addEventListener('touchend',   (e) => { e.preventDefault(); const t = e.changedTouches[0]; sendTouch('touchend',   t.clientX, t.clientY); }, { passive: false });
 
+  applyIntegerScale();
   connect();
 </script>

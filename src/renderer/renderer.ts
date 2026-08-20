@@ -533,9 +533,16 @@ export function render(
   };
 
   // ── Pixel shift ───────────────────────────────────────────────────────────
+  // Same formula/movement as originally shipped — sweepPhase advances by a
+  // fixed step each tick, X linear, Y sinusoidal, pause at each endpoint.
+  // Only the tick interval changed: 60s instead of 200ms. This is anti-burn-in
+  // drift, not animation, so sub-minute timing has no perceptible effect, and
+  // a real (rounded) position change happens at most every several seconds
+  // anyway — a 60s poll just means the CPU wakes for it once a minute instead
+  // of five times a second.
   const MAX_X_SHIFT    = 11;
   const MAX_Y_SHIFT    = 2;
-  const SWEEP_STEP_MS  = 50;
+  const SWEEP_STEP_MS  = 60000;
   const SWEEP_PAUSE_MS = 1000;
   const randPhaseY     = Math.random() * Math.PI * 2;
   const psMs           = (options.pixelShiftSecs ?? 300) * 1000; // one-direction sweep duration
@@ -543,8 +550,12 @@ export function render(
   let sweepPhase   = 0.5;   // 0 = leftmost (−MAX_X), 1 = rightmost (+MAX_X)
   let sweepDir     = 1;
   let sweepPauseMs = 0;
-  let shiftX       = 0;
-  let shiftY       = 0;
+  // Seeded from the true value at sweepPhase, not (0,0) — with a 60s tick,
+  // waiting for the first interval fire to self-correct would leave the
+  // wrong Y offset on screen for up to a minute after every app start
+  // (X is always exactly 0 here regardless; only Y depends on randPhaseY).
+  let shiftX = Math.round((sweepPhase * 2 - 1) * MAX_X_SHIFT);
+  let shiftY = Math.round(Math.sin(sweepPhase * Math.PI * 4 + randPhaseY) * MAX_Y_SHIFT);
 
   function updateSweep(): boolean {
     if (sweepPauseMs > 0) {
@@ -569,13 +580,27 @@ export function render(
     return true;
   }
 
-  const shiftTimer = psMs > 0
-    ? setInterval(() => {
-        if (!updateSweep()) return;
-        renderCurrent();           // update display first
-        registry.setShift(shiftX, shiftY); // then sync touch coords
-      }, SWEEP_STEP_MS)
-    : null;
+  let shiftTimer: ReturnType<typeof setInterval> | null = null;
+
+  function startShiftTimer(): void {
+    if (psMs <= 0 || shiftTimer) return;
+    shiftTimer = setInterval(() => {
+      // Nothing is on screen to protect while off/suspended — belt-and-
+      // suspenders check; the timer is also fully stopped/started around
+      // these transitions below, so this shouldn't normally trigger.
+      if (suspended || state === 'off') return;
+      if (!updateSweep()) return;
+      renderCurrent();                   // update display first
+      registry.setShift(shiftX, shiftY); // then sync touch coords
+    }, SWEEP_STEP_MS);
+  }
+
+  function stopShiftTimer(): void {
+    if (shiftTimer) { clearInterval(shiftTimer); shiftTimer = null; }
+  }
+
+  registry.setShift(shiftX, shiftY); // keep touch hit-testing in sync with the seeded value above
+  startShiftTimer(); // no-op if pixelShiftSecs is 0
 
   // ── Screen-saver state ────────────────────────────────────────────────────
   type SsState = 'active' | 'dim' | 'off';
@@ -584,6 +609,7 @@ export function render(
   let lastCmds: DrawCommand[] = [];
   let dimTimer:  ReturnType<typeof setTimeout> | null = null;
   let offTimer:  ReturnType<typeof setTimeout> | null = null;
+  let lastTimerArmAt = 0;
 
   // Blit deduplication: skip display.render() when the frame is byte-identical
   // to what's already on screen (same commands + same pixel-shift). Makes idle
@@ -746,6 +772,14 @@ export function render(
   }
 
   function startIdleTimers(): void {
+    // Throttle re-arming: wake() calls this on every touch/pointer event,
+    // including every touchmove of a fast drag — resetting the same
+    // multi-second timer dozens of times a second changes nothing observable.
+    // Skip re-arming if one is already ticking from within the last second;
+    // it can fire up to ~1s earlier than a fresh dimMs would, imperceptible
+    // at these timescales.
+    if (dimTimer && performance.now() - lastTimerArmAt < 1000) return;
+    lastTimerArmAt = performance.now();
     clearTimers();
     if (dimMs <= 0) return;
 
@@ -760,6 +794,7 @@ export function render(
         state = 'off';
         backlight.off();
         display.render([{ cmd: 'clear', r: 0, g: 0, b: 0 }]);
+        stopShiftTimer(); // no screen to protect — stop the sweep timer, not just its renders
       }, offMs);
     }, dimMs);
   }
@@ -771,7 +806,10 @@ export function render(
     state = 'active';
     clearTimers();
     if (wasOff || wasInactive) backlight.on(adaptive, activeLevel);
-    if (wasOff) renderCurrent(true); // screen was cleared to black — force a repaint past the dedup cache
+    if (wasOff) {
+      renderCurrent(true); // screen was cleared to black — force a repaint past the dedup cache
+      startShiftTimer();   // idempotent — no-op if suspend() already restarted it via resume()
+    }
     startIdleTimers();
   }
 
@@ -890,6 +928,7 @@ export function render(
     suspended = true;
     if (pendingFlush) { clearTimeout(pendingFlush); pendingFlush = null; }
     clearTimers();
+    stopShiftTimer(); // no screen to protect — stop the sweep timer, not just its renders
     stopLid();
     stopPointer();
     stopTouch(); // drop the touch fd too — don't let it go stale across the teardown
@@ -906,6 +945,7 @@ export function render(
     backlight.reopen(); // re-resolve sysfs paths after device re-enumeration
     suspended = false;
     state = 'active';
+    startShiftTimer(); // idempotent — no-op if already running
     stopLid = watchLid(onLid);
     stopPointer = dimMs > 0 ? watchPointer(wake) : () => {};
     if (ownKeyboardWatch) stopKeyboard = watchKeyboard(wake);
@@ -923,7 +963,7 @@ export function render(
       reconciler.updateContainer(null, root, null, null);
       if (pendingFlush) { clearTimeout(pendingFlush); pendingFlush = null; }
       clearTimers();
-      if (shiftTimer) clearInterval(shiftTimer);
+      stopShiftTimer();
       stopLid();
       stopPointer();
       stopKeyboard();

@@ -332,8 +332,14 @@ class PreviewPanel:
             True, 8, width, height, stride,
         )
         if (width, height) != (self.target_width, self.target_height):
+            # NEAREST at a non-integer scale (target_width is derived from the
+            # monitor's own width, never an exact multiple of the 2008px
+            # native resolution) replicates/drops source columns unevenly —
+            # a uniform gap between buttons can render 2px wide in one place
+            # and 4px in another. BILINEAR spreads that rounding error evenly
+            # instead of concentrating it into visible hard jumps.
             pixbuf = pixbuf.scale_simple(
-                self.target_width, self.target_height, GdkPixbuf.InterpType.NEAREST,
+                self.target_width, self.target_height, GdkPixbuf.InterpType.BILINEAR,
             )
         self.image.set_from_pixbuf(pixbuf)
 
