@@ -1,5 +1,8 @@
 import React from 'react';
 import { Box, Text, Button } from 'react-drm';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import {
   MdArrowBack, MdArrowForward, MdArrowUpward, MdHome,
   MdVisibility, MdVerticalSplit, MdImage,
@@ -15,7 +18,7 @@ const DEL_CLR  = '#f87171';
 const BTN_W  = 56;
 const CHIP_W = 140;
 
-export function DolphinPanel({ width, height }: { width: number; height: number }) {
+export default function DolphinPanel({ width, height }: { width: number; height: number }) {
   const { connected, state, places, trigger, openDir } = useDolphin();
 
   const ICON_SZ = Math.round(height * 0.55);

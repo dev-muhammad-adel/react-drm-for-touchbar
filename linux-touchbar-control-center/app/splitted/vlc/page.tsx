@@ -1,4 +1,7 @@
 import React, { useRef, useContext, useState } from 'react';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import { Box, Text, Button, LayoutContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
 import { MdPlayArrow, MdPause } from 'react-icons/md';
@@ -14,7 +17,7 @@ function hms(us: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
-export function VlcPanel({ width, height }: { width: number; height: number }) {
+export default function VlcPanel({ width, height }: { width: number; height: number }) {
   const { status, positionUs, lengthUs, playPause, seek } = useVlc();
   const [dragUs, setDragUs] = useState<number | null>(null);
   const shownUs = dragUs ?? positionUs;

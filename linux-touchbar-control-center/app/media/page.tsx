@@ -12,9 +12,19 @@ import {
 } from 'react-icons/md';
 import { BackButton } from '@/components/BackButton';
 import { keys } from '@/lib/services/keyInjector';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
-const KBD_ILLUM_DOWN_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_down.svg');
-const KBD_ILLUM_UP_ICON = path.join(__dirname, '..', 'assets', 'kbd_illum_up.svg');
+export const layerConfig: LayerConfig = {
+  leaving:  { outAnim: 'slide-right' },
+  entering: { inAnim:  'slide-left' },
+};
+
+// app/media/page.tsx sits two levels under its own root in both trees
+// (linux-touchbar-control-center/app/media in dev, dist/app/media once
+// built, with assets/ copied alongside dist/ at build time) — same relative
+// depth either way, so one formula covers both instead of a dev/built branch.
+const KBD_ILLUM_DOWN_ICON = path.join(__dirname, '..', '..', 'assets', 'kbd_illum_down.svg');
+const KBD_ILLUM_UP_ICON   = path.join(__dirname, '..', '..', 'assets', 'kbd_illum_up.svg');
 
 // ── Actions ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +62,7 @@ function run(action: Action) {
 const BTN_SIZE  = 60;
 const ICON_SIZE = 30;
 
-export function MediaScreen({ width, height }: { width: number; height: number }) {
+export default function MediaScreen({ width, height }: { width: number; height: number }) {
   return (
     <Box style={{ flex: 1,gap: 30 }}>
 

@@ -1,4 +1,7 @@
   import React from 'react';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import { Box, Button, Text } from 'react-drm';
 import {
   MdAdd, MdClose, MdChevronLeft, MdChevronRight,
@@ -13,7 +16,7 @@ const DIM    = '#64748b';
 const CHIP_W   = 110;
 const CHIP_GAP = 4;
 
-export function KonsolePanel({ width, height }: { width: number; height: number }) {
+export default function KonsolePanel({ width, height }: { width: number; height: number }) {
   const {
     connected, tabCount, activeTabIdx, status, suggestions,
     newTab, closeTab, nextTab, prevTab, sendSuggestion,

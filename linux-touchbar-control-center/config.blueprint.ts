@@ -246,13 +246,20 @@ export type DockApp = {
  * the dock falls back to the react-icons `icon` glyph.
  */
 export const DOCK = {
-  iconSize:  50,    // px — icon glyph size
-  slot:      65,    // px — square tap target per app
-  gap:       14,    // px — space between icons
+  iconSize:  48,    // px — icon glyph size
+  slot:      54,    // px — square tap target per app
+  gap:       2,    // px — space between icons
   lift:      10,    // px — how far an icon rises while pressed (Plank bounce)
+  icons: {
+    // App icon theme resolution (used by the dock, and anything else that
+    // calls appIconSource). By default the theme is auto-detected from
+    // kdeglobals/GTK settings — set `theme` to force a specific one instead
+    // (e.g. 'Papirus').
+    theme: "WhiteSur" as string | null,
+  },
   panel: {
-    color:  'rgba(20, 22, 30, 0.78)', // translucent dock background
-    radius: 20,
+    color:  '#373737', // translucent dock background
+    radius: 8,
     padX:   20,     // horizontal padding inside the panel
     padY:   4,      // vertical padding inside the panel
   },
@@ -264,20 +271,25 @@ export const DOCK = {
     { id: 'files',    label: 'Files',    iconName: 'org.kde.dolphin',        icon: FaFolder,         color: '#7dd3fc', command: 'dolphin',        matchClass: ['dolphin'] },
     { id: 'terminal', label: 'Terminal', iconName: 'org.kde.konsole',        icon: FaTerminal,       color: '#cccccc', command: 'konsole',        matchClass: ['konsole'] },
     { id: 'firefox',  label: 'Firefox',  iconName: 'firefox',                icon: FaFirefoxBrowser, color: '#ff9d5c', command: 'firefox',        matchClass: ['firefox'] },
-    { id: 'code',     label: 'Code',     iconName: 'visual-studio-code',     icon: FaCode,           color: '#60a5fa', command: 'code',           matchClass: ['code', 'vscodium'] },
+    { id: 'code',     label: 'Code',     iconName: 'vscode',                 icon: FaCode,           color: '#60a5fa', command: 'code',           matchClass: ['code', 'vscodium'] },
     { id: 'music',    label: 'Music',    iconName: 'vlc',                    icon: FaMusic,          color: '#c084fc', command: 'vlc',            matchClass: ['vlc'] },
     { id: 'github',   label: 'GitHub',   iconName: 'github',                 icon: FaGithub,         color: '#cccccc', command: 'xdg-open',       args: ['https://github.com'] },
     { id: 'settings', label: 'Settings', iconName: 'systemsettings',         icon: FaGear,           color: '#94a3b8', command: 'systemsettings', matchClass: ['systemsettings'] },
   ] as DockApp[],
 
-  // Keyboard gesture that toggles the dock layer on/off. Long-press the key to
-  // show the dock; long-press again to return to the previous layer.
+  // Keyboard gesture that toggles the dock layer on/off — same shape as
+  // FN_LAYER below:
+  //   'hold'       — momentary: the dock shows only while the key is held.
+  //   'toggle'     — long-press the key to show the dock, long-press again to return.
+  //   'double-tap' — double-tap the key to show the dock, double-tap again to return.
   //
   // 'ralt' = Right Option/Alt on the MacBook keyboard. Swap to any KEY
   // name from react-drm (e.g. 'rmeta', 'rctrl', 'menu') if you prefer.
   shortcut: {
-    key:    'ralt' as KeyId,
-    longMs: 900,   // hold time that counts as a long-press
+    key:      'ralt' as KeyId,
+    mode:     'double-tap' as 'hold' | 'toggle' | 'double-tap',
+    longMs:   900,   // hold/long-press duration when mode === 'toggle'
+    doubleMs: 350,   // max gap between taps when mode === 'double-tap'
   },
 };
 

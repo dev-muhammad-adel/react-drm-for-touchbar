@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import { Box, Button, Text } from 'react-drm';
 import {
   MdChevronLeft, MdChevronRight, MdZoomIn, MdZoomOut,
@@ -15,7 +18,7 @@ const BTN_W = 100;
 const ICON_SZ = 30;
 const TRASH_CONFIRM_MS = 3000; // same window BrowserPanel uses for its close-tab confirm
 
-export function GwenviewPanel({ width, height }: { width: number; height: number }) {
+export default function GwenviewPanel({ width, height }: { width: number; height: number }) {
   const {
     filename, prev, next, zoomIn, zoomOut, rotateLeft, rotateRight, slideshow, trash,
   } = useGwenview();

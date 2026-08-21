@@ -1,5 +1,8 @@
 import React from 'react';
 import { Box, Button } from 'react-drm';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import { MdUndo, MdRedo, MdSearch, MdKeyboardCommandKey } from 'react-icons/md';
 import {
   VscDebugStart, VscDebugStop, VscDebugStepOver, VscDebugStepInto, VscDebugStepOut, VscGear,
@@ -28,7 +31,7 @@ const GROUPS = {
 const START_CLR = { color: '#22c55e33', activeColor: '#22c55e66' };
 const STOP_CLR  = { color: '#f8717133', activeColor: '#f8717166' };
 
-export function VsCodePanel({ width, height }: { width: number; height: number }) {
+export default function VsCodePanel({ width, height }: { width: number; height: number }) {
   const { class: windowClass } = useActiveWindow();
   const {
     run, stop, stepOver, stepInto, stepOut, undo, redo, find, commandPalette, settings,
