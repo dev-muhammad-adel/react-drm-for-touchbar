@@ -18,8 +18,8 @@ const ICON_SZ = 30;
 // Start/Stop keep their own semantic green/red (not decorative — the same
 // green=go/red=stop convention every IDE's debug toolbar uses); STOP_CLR
 // matches the danger color BrowserPanel already uses for its close button.
-const BTN_BG        = '#444444';
-const BTN_ACTIVE_BG = '#555555';
+const BTN_BG        = '#373737';
+const BTN_ACTIVE_BG = '#474747';
 const GROUPS = {
   run:      { color: BTN_BG, activeColor: BTN_ACTIVE_BG },
   edit:     { color: BTN_BG, activeColor: BTN_ACTIVE_BG },

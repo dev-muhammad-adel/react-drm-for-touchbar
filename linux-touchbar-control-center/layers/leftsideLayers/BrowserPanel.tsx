@@ -10,8 +10,8 @@ import { useBrowserKeys } from '@/lib/hooks/useBrowserKeys';
 const DIM       = '#cccccc';
 const CLOSE_CLR = '#f87171';
 const CLOSE_CONFIRM_MS = 3000;
-const BTN_BG = '#444444';
-const BTN_ACTIVE_BG = '#555555';
+const BTN_BG = '#373737';
+const BTN_ACTIVE_BG = '#474747';
 const GROUP_GAP = 12;
 const BTN_W = 130;
 
