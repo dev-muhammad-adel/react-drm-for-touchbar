@@ -60,7 +60,7 @@ ipcMain.handle('config:read', (): { data?: ConfigData; error?: string; repoFound
   if (!repoFound) return { repoFound: false };
   try {
     ensureConfigExists(currentPaths);
-    return { data: readConfig(currentPaths.configPath), repoFound: true };
+    return { data: readConfig(currentPaths.configPath, currentPaths.blueprintPath), repoFound: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e), repoFound: true };
   }

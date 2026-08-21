@@ -87,10 +87,9 @@ function nodeToValue(node: Node): JsonValue | undefined {
   return undefined;
 }
 
-/** Reads every editable section into a plain-data snapshot for the renderer. */
-export function readConfig(configPath: string): ConfigData {
+function readSections(filePath: string): ConfigData {
   const project = new Project();
-  const sf = project.addSourceFileAtPath(configPath);
+  const sf = project.addSourceFileAtPath(filePath);
   const result: ConfigData = {};
   for (const name of SECTION_NAMES) {
     const init = sf.getVariableDeclaration(name)?.getInitializer();
@@ -101,6 +100,39 @@ export function readConfig(configPath: string): ConfigData {
       attachDockIconGlyphs(init, v as Record<string, JsonValue>);
     }
     result[name] = v;
+  }
+  return result;
+}
+
+/** Recursively fills in anything `overrides` is missing from `defaults` —
+ *  plain objects merge key-by-key, anything else (scalar, array, or a key
+ *  overrides doesn't have at all) takes overrides's value when present. */
+function withDefaults(defaults: JsonValue, overrides: JsonValue | undefined): JsonValue {
+  if (overrides === undefined) return defaults;
+  if (isPlainObject(defaults) && isPlainObject(overrides)) {
+    const merged: Record<string, JsonValue> = { ...overrides };
+    for (const key of Object.keys(defaults)) {
+      merged[key] = withDefaults(defaults[key], overrides[key]);
+    }
+    return merged;
+  }
+  return overrides;
+}
+
+/**
+ * Reads every editable section into a plain-data snapshot for the renderer,
+ * filling in anything the user's config.ts is missing from config.blueprint.ts
+ * — a field the blueprint gained after this config.ts was seeded (or last
+ * edited) would otherwise just be silently absent from the form, with no way
+ * to even see or set it until the user manually adds it themselves.
+ */
+export function readConfig(configPath: string, blueprintPath: string): ConfigData {
+  const userConfig = readSections(configPath);
+  const blueprint = readSections(blueprintPath);
+  const result: ConfigData = { ...userConfig };
+  for (const name of SECTION_NAMES) {
+    if (blueprint[name] === undefined) continue;
+    result[name] = withDefaults(blueprint[name], userConfig[name]);
   }
   return result;
 }
