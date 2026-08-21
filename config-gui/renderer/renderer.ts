@@ -6,6 +6,7 @@ let domCodeToKeyName: Record<string, string> = {};
 let keyNames: Record<string, number> = {};
 let codeToKeyName: Record<number, string> = {};
 let desktopAppsCache: DesktopAppEntry[] | null = null;
+let iconThemesCache: string[] | null = null;
 let dirty = false;
 
 interface NavGroup {
@@ -68,6 +69,7 @@ const UNION_FIELDS: Record<string, string[]> = {
   'ESC_KEY.onLayers': ['all', 'fn'],
   'ACTIVE_WINDOW.backend': ['auto', 'hyprland', 'niri', 'gnome', 'plasma', 'xorg'],
   'FN_LAYER.mode': ['hold', 'toggle', 'double-tap'],
+  'DOCK.shortcut.mode': ['hold', 'toggle', 'double-tap'],
 };
 
 function isPlainObject(v: JsonValue): v is Record<string, JsonValue> {
@@ -136,6 +138,13 @@ async function renderDockPreview(container: HTMLElement, dock: Record<string, Js
   const radiusPx = typeof panel.radius === 'number' ? panel.radius : 20;
   container.style.borderRadius = `${Math.min(16, radiusPx / 3)}px`;
   container.style.gap = `${(gap / 2008) * 100}%`;
+
+  // Apply whatever theme is currently picked (saved or not) before resolving
+  // any icon — resolveIcon's main-process side otherwise has no idea a theme
+  // was ever chosen, see icon:setTheme's own comment in main.ts.
+  const icons = isPlainObject(dock.icons) ? dock.icons : {};
+  const theme = typeof icons.theme === 'string' ? icons.theme : null;
+  await window.configApi.setIconTheme(theme);
 
   const resolved = await Promise.all(apps.map(async (a, i) => {
     const iconName = typeof a.iconName === 'string' ? a.iconName : undefined;
@@ -486,6 +495,8 @@ function renderDock(container: HTMLElement, dock: Record<string, JsonValue>): vo
   dockPreviewEl = preview;
   void renderDockPreview(preview, dock);
 
+  renderIconThemeField(container, dock);
+
   const scalarKeys = ['iconSize', 'slot', 'gap', 'lift', 'panel', 'indicator', 'shortcut'];
   const scalarPart: Record<string, JsonValue> = {};
   for (const k of scalarKeys) if (dock[k] !== undefined) scalarPart[k] = dock[k];
@@ -530,6 +541,63 @@ function renderDock(container: HTMLElement, dock: Record<string, JsonValue>): vo
     });
   });
   fieldset.appendChild(addBtn);
+}
+
+const AUTO_THEME = ''; // <select> value standing in for DOCK.icons.theme === null
+
+/** DOCK.icons.theme picks which installed icon theme dock/app icons resolve
+ *  from (null = auto-detect from kdeglobals/GTK settings, see appIcon.ts) —
+ *  a select over actually-installed themes instead of free text, same
+ *  reasoning as the app picker: offer what's really there, not what the
+ *  user has to know to type. */
+function renderIconThemeField(container: HTMLElement, dock: Record<string, JsonValue>): void {
+  const fieldset = document.createElement('fieldset');
+  const legend = document.createElement('legend');
+  legend.textContent = 'Icons';
+  fieldset.appendChild(legend);
+  container.appendChild(fieldset);
+
+  const row = document.createElement('div');
+  row.className = 'field-row';
+  const label = document.createElement('label');
+  label.textContent = 'Theme';
+  row.appendChild(label);
+  const select = document.createElement('select');
+  row.appendChild(select);
+  fieldset.appendChild(row);
+
+  const icons = dock.icons as Record<string, JsonValue> | undefined;
+  const current = (icons?.theme as string | null | undefined) ?? null;
+
+  function populate(themes: string[]): void {
+    select.innerHTML = '';
+    // Keep a currently-set theme selectable even if it's no longer installed
+    // (theme removed, or set on a different machine) — never silently swap
+    // the user's choice out from under them just for opening the dropdown.
+    const options = current !== null && !themes.includes(current)
+      ? [AUTO_THEME, current, ...themes]
+      : [AUTO_THEME, ...themes];
+    for (const value of options) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value === AUTO_THEME ? 'Auto-detect' : value;
+      opt.selected = value === AUTO_THEME ? current === null : value === current;
+      select.appendChild(opt);
+    }
+  }
+
+  populate(iconThemesCache ?? []);
+  if (!iconThemesCache) {
+    void window.configApi.listIconThemes().then(themes => {
+      iconThemesCache = themes;
+      populate(themes);
+    });
+  }
+
+  select.addEventListener('change', () => {
+    setPath(['DOCK', 'icons', 'theme'], select.value === AUTO_THEME ? null : select.value);
+    markDirty();
+  });
 }
 
 function renderAppCard(
