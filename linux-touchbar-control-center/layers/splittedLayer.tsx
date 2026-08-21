@@ -242,8 +242,8 @@ export function SplittedLayer({ width, height }: { width: number; height: number
         key: 'media',
         icon: <EqualizerIcon playing={mediaPlaying} />,
         width: 120,
-        color: isMediaMprisListPinned ? '#333' : '#444444',
-        activeColor: isMediaMprisListPinned ? '#444' : '#555555',
+        color: isMediaMprisListPinned ? '#262626' : '#373737',
+        activeColor: isMediaMprisListPinned ? '#363636' : '#474747',
         // Just toggle the pin — the navigation effect below reacts to the
         // change and drives the left panel (no manual go() here, which would
         // fire the fade twice).

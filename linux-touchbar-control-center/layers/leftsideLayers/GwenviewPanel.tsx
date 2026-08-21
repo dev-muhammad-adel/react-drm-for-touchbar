@@ -8,8 +8,8 @@ import { useGwenview } from '@/lib/hooks/useGwenview';
 
 const DIM = '#cccccc';
 const TRASH_CLR = '#f87171'; // matches BrowserPanel's close-button danger color
-const BTN_BG = '#444444';
-const BTN_ACTIVE_BG = '#555555';
+const BTN_BG = '#373737';
+const BTN_ACTIVE_BG = '#474747';
 const GROUP_GAP = 12;
 const BTN_W = 100;
 const ICON_SZ = 30;
