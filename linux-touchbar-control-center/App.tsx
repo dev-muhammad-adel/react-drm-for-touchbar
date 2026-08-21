@@ -1,90 +1,22 @@
 import React from 'react';
-import { Box } from 'react-drm';
+import { KeyboardContext } from 'react-drm';
 import type { KeyboardReader } from 'react-drm';
-import { LayerHost } from './layers';
+import { RouteBranch } from '@/lib/routes/RouteBranch';
 
-import { ESC_KEY, DOCK, FN_LAYER } from './lib/utils/configLoader';
-import { EscKey } from './components/EscKey';
-import { SafeArea } from './components/SafeArea';
-import { BootScreen } from './components/BootScreen';
-import { SplittedLayer } from './layers/splittedLayer';
-import { MediaScreen } from './layers/mediaScreen';
-import { FnKeys } from './layers/fnKeys';
-import { SystemBar } from './layers/systemBar';
-import { AudioSliderLayer } from './layers/audioSlider';
-import { BrightnessSliderLayer } from './layers/brightnessSlider';
-import { GamesLayer } from './layers/gamesLayer';
-import { DockLayer } from './layers/dock';
-import { DinoLayer } from './layers/dino';
-import { PongLayer } from './layers/pong';
-import { useBootSequence } from '@/lib/hooks/useBootSequence';
-import { usePomodoroEngine } from '@/lib/hooks/usePomodoro';
-import { Provider } from 'jotai';
-
-
-function GotaiProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      {children}
-    </>
-  );
-}
-
-
+// Root of the app/ file-based route tree (react-drm's renderHot mounts this
+// component directly — see index.tsx). app/layout.tsx owns everything that
+// used to live here: boot sequence, SafeArea, the Esc-key inset.
+//
+// KeyboardContext is provided here, above everything, so any component can
+// read it via useContext regardless of where in the tree it sits — notably
+// app/layout.tsx's useLayerToggle calls, which listen for keys *before*
+// they render the nested LayerHost that would otherwise be the nearest
+// provider (context only flows to descendants, so a component can't read a
+// provider it renders itself).
 export function App({ width, height, keyboard }: { width: number; height: number; keyboard: KeyboardReader }) {
-
-  const { booted, opacity } = useBootSequence();
-
-  usePomodoroEngine();
-
-  if (!booted) {
-    return <BootScreen width={width} height={height} opacity={opacity} />;
-  }
-
-  // Wide Touch Bars (no physical Esc key) report a wider panel — show a fixed
-  // Esc at the far left and inset the layer area by its width. Only in 'all'
-  // mode; 'fn' mode renders Esc inside the Fn-key layer instead.
-  const showEsc = width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
-
-
   return (
-    <GotaiProvider>
-    <SafeArea width={width} height={height}>
-      {(w, h) => {
-        const layerW = showEsc ? w - ESC_KEY.width - ESC_KEY.gap : w;
-        const layerHost = (
-          <LayerHost
-            keyboard={keyboard}
-            fnLayer="fnkeys"
-            fnMode={FN_LAYER.mode}
-            fnLongMs={FN_LAYER.longMs}
-            fnDoubleMs={FN_LAYER.doubleMs}
-            home="splitted"
-            toggles={[{ key: DOCK.shortcut.key, layer: 'dock', longMs: DOCK.shortcut.longMs }]}
-            layers={[
-              { name: 'splitted',          component: SplittedLayer,          leaving: { outAnim: 'fade' }, entering: { inAnim: 'fade'  } },
-              { name: 'dock',              component: DockLayer,               leaving: { outAnim: 'slide-down' }, entering: { inAnim: 'slide-up'   } },
-            { name: 'media',             component: MediaScreen,             leaving: { outAnim: 'slide-right' }, entering: { inAnim: 'slide-left'   } },
-            { name: 'audio-slider',      component: AudioSliderLayer,        leaving: { outAnim: 'fade'  }, entering: { inAnim: 'fade'    } },
-            { name: 'brightness-slider', component: BrightnessSliderLayer,   leaving: { outAnim: 'fade'  }, entering: { inAnim: 'fade'  } },
-            { name: 'fnkeys',            component: FnKeys,                  leaving: { outAnim: 'fade', duration: 0 }, entering: { inAnim: 'fade', duration: 0 } },
-            { name: 'systembar',         component: SystemBar,               leaving: { outAnim: 'slide-down'  }, entering: { inAnim: 'slide-up'     } },
-          ]}
-            width={layerW}
-            height={h}
-          />
-        );
-
-        if (!showEsc) return layerHost;
-
-        return (
-          <Box style={{ width: w, height: h, alignItems: 'stretch', gap: ESC_KEY.gap }}>
-            <EscKey width={ESC_KEY.width} height={h} />
-            {layerHost}
-          </Box>
-        );
-      }}
-    </SafeArea>
-    </GotaiProvider>
+    <KeyboardContext.Provider value={keyboard}>
+      <RouteBranch segments={[]} width={width} height={height} />
+    </KeyboardContext.Provider>
   );
 }

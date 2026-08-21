@@ -3,9 +3,15 @@ import { Box, Text, Button } from 'react-drm';
 import { MdBrightness4, MdBrightness6, MdBrightness7, MdKeyboard } from 'react-icons/md';
 import { BackButton } from '@/components/BackButton';
 import { SliderTrack } from '@/components/SliderTrack';
-import { useLayers } from './index';
+import { useLayers } from '@/layers';
 import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, KEYBOARD_DEVICE } from '@/lib/hooks/useBrightness';
 import { applyBrightness } from '@/lib/services/brightness';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = {
+  leaving:  { outAnim: 'fade' },
+  entering: { inAnim:  'fade' },
+};
 
 const AUTO_HIDE_MS = 5000;
 const TRACK_W = 700;
@@ -68,7 +74,7 @@ function BrightnessControl({
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function BrightnessSliderLayer({ width, height }: { width: number; height: number }) {
+export default function BrightnessSliderLayer({ width, height }: { width: number; height: number }) {
   const { go } = useLayers();
   const { brightness: displayBrightness, setBrightness: updateDisplay, syncBrightness } = useDisplayBrightnessControl();
   const [keyboardBrightness, setKeyboardBrightness] = useState(() => readBrightness(KEYBOARD_DEVICE));

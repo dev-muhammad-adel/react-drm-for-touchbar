@@ -1,36 +1,30 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Box, Button, KEY, animated, useSpringValue } from 'react-drm';
+import { Box, Button, animated, useSpringValue } from 'react-drm';
 import { useAtom, useSetAtom } from 'jotai';
-import { FaChevronLeft, FaLinux } from 'react-icons/fa6';
-import { MdPlayArrow, MdVolumeUp, MdWbSunny, MdSearch, MdMusicNote } from 'react-icons/md';
-import { LayerHost, useLayers } from '.';
-import type { Layer, LayerHostHandle } from '.';
+import { FaChevronLeft } from 'react-icons/fa6';
+import { MdVolumeUp, MdWbSunny } from 'react-icons/md';
+import { CiWavePulse1 } from 'react-icons/ci';
+import { BsWindowDock } from 'react-icons/bs';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
 import { mediaMprisListPinnedAtom } from '@/store/mediaMprisList';
 import { useVolumeControl, readVolume, clampVolume } from '@/lib/hooks/useVolume';
 import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, TRACK_W as BRIGHTNESS_TRACK_W, clamp01 } from '@/lib/hooks/useBrightness';
 import { audioTrackAnchorAtom, ANCHOR_TRACK_W } from '@/store/audioTrackAnchor';
-import { ActiveWindowPanel } from './leftsideLayers/ActiveWindowPanel';
-import { BrowserPanel } from './leftsideLayers/BrowserPanel';
-import { KonsolePanel } from './leftsideLayers/KonsolePanel';
-import { VlcPanel } from './leftsideLayers/VlcPanel';
-import { DolphinPanel } from './leftsideLayers/DolphinPanel';
-import { VsCodePanel } from './leftsideLayers/VsCodePanel';
-import { GwenviewPanel } from './leftsideLayers/GwenviewPanel';
-import { MediaMprisList } from './leftsideLayers/MediaMprisList';
-import { keys } from '@/lib/services/keyInjector';
-import { CiWavePulse1 } from 'react-icons/ci';
-import { LuDock } from 'react-icons/lu';
-import { BsWindowDock } from 'react-icons/bs';
+import type { LayerConfig, LayoutChildren } from '@/lib/routes/loadRoutes';
+import { DEFAULT_CHILD_NAME } from '@/lib/routes/loadRoutes';
+import { go } from '@/lib/routes/router-registry';
 
+// How splitted itself transitions within the root layer host.
+export const layerConfig: LayerConfig = {
+  leaving:  { outAnim: 'fade' },
+  entering: { inAnim:  'fade' },
+};
 
-// ── Media control ─────────────────────────────────────────────────────────────
+// Its own children's default (app/splitted/page.tsx, named DEFAULT_CHILD_NAME)
+// picks itself automatically — no layoutConfig needed here anymore.
 
-
-const ICON_SIZE = 32;
-
-type SplittedLeftLayerName = 'window' | 'browser' | 'konsole' | 'vlc' | 'dolphin' | 'vscode' | 'gwenview' | 'mediaMprisList';
+type SplittedLeftLayerName = typeof DEFAULT_CHILD_NAME | 'browser' | 'konsole' | 'vlc' | 'dolphin' | 'vscode' | 'gwenview' | 'mediaMprisList';
 
 const BROWSER_CLASSES = [
   'firefox', 'firefox-esr',
@@ -57,19 +51,12 @@ function resolveLeftSideLayerByClass(activeClass: string): SplittedLeftLayerName
   if (cls.includes('dolphin')) return 'dolphin';
   if (cls.includes('gwenview')) return 'gwenview';
   if (cls && CODE_CLASSES.some(c => cls.includes(c))) return 'vscode';
-  return 'window';
+  return DEFAULT_CHILD_NAME;
 }
 
-const SPLITTED_LEFT_LAYERS: Layer[] = [
-  { name: 'window',  component: ActiveWindowPanel, animation: 'fade' },
-  { name: 'browser', component: BrowserPanel,      animation: 'fade' },
-  { name: 'konsole', component: KonsolePanel,      animation: 'fade' },
-  { name: 'vlc',     component: VlcPanel,          animation: 'fade' },
-  { name: 'dolphin', component: DolphinPanel,      animation: 'fade' },
-  { name: 'vscode',  component: VsCodePanel,       animation: 'fade' },
-  { name: 'gwenview', component: GwenviewPanel,    animation: 'fade' },
-  { name: 'mediaMprisList', component: MediaMprisList, animation: 'fade' },
-];
+// ── Media control ─────────────────────────────────────────────────────────────
+
+const ICON_SIZE = 32;
 
 interface RightBtn {
   key: string;
@@ -90,7 +77,6 @@ const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
   { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
   { key: 'linux',      icon: <CiWavePulse1        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
   { key: 'playpause',  icon: <BsWindowDock    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
-  // { key: 'search',     icon: <MdSearch       style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
 ];
 
 const EQ_BAR_W = 4;
@@ -126,9 +112,12 @@ function EqualizerIcon({ playing }: { playing: boolean }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function SplittedLayer({ width, height }: { width: number; height: number }) {
-  const { go } = useLayers(); // outer context — navigates top-level layers
-  const leftRef = useRef<LayerHostHandle>(null);
+export default function SplittedLayout({ width, height, children, path }: {
+  width:    number;
+  height:   number;
+  children: LayoutChildren; // renders app/splitted/*/page.tsx's active child
+  path:     string;         // 'splitted' — for addressing its own children
+}) {
   const { class: activeClass } = useActiveWindow();
   const { show: showMedia, loading: mediaLoading, players } = useMediaPlayers();
   const [isMediaMprisListPinned, setIsMediaMprisListPinned] = useAtom(mediaMprisListPinnedAtom);
@@ -268,8 +257,11 @@ export function SplittedLayer({ width, height }: { width: number; height: number
     // window changes, and two windows of the same kind resolve to one layer.
     if (target === leftTargetRef.current) return;
     leftTargetRef.current = target;
-    leftRef.current?.go(target, 'fade');
-  }, [activeClass, isMediaMprisListPinned]);
+    // go() queues this until the target actually mounts if it hasn't yet
+    // (e.g. this very first run, before splitted's own nested host has
+    // registered itself) — no need to wait for it here ourselves.
+    go(`${path}/${target}`, 'fade');
+  }, [activeClass, isMediaMprisListPinned, path]);
 
   useEffect(() => {
     if (mediaLoading) return;
@@ -281,13 +273,7 @@ export function SplittedLayer({ width, height }: { width: number; height: number
   return (
     <Box style={{ justifyContent: 'space-between', flex: 1, gap: 20 }}>
       <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 ,flex:1  }}>
-         <LayerHost
-          ref={leftRef}
-          width={leftW}
-          height={height}
-          initial="window"
-          layers={SPLITTED_LEFT_LAYERS}
-        /> 
+        {children(leftW, height)}
       </Box>
 
         <Box

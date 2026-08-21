@@ -3,6 +3,12 @@ import { Box, Text, Button, KEY, DisplaySizeContext } from 'react-drm';
 import { BackButton } from '@/components/BackButton';
 import { keys } from '@/lib/services/keyInjector';
 import { ESC_KEY, FN_KEYS } from '@/lib/utils/configLoader';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = {
+  leaving:  { outAnim: 'fade', duration: 0 },
+  entering: { inAnim:  'fade', duration: 0 },
+};
 
 const KEYS = ['F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'] as const;
 
@@ -16,7 +22,7 @@ const keyStyle = {
   borderBottomRightRadius: 10,
 } as const;
 
-export function FnKeys({ width, height }: { width: number; height: number }) {
+export default function FnKeys({ width, height }: { width: number; height: number }) {
   // On wide displays without a physical Esc key, 'fn' mode adds Esc as the
   // first key in this row (sized like the F-keys). Uses the auto-detected
   // display width so the threshold matches App's 'all'-mode check.

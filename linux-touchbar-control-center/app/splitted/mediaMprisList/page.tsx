@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef, useContext } from 'react';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import { Box, Text, Button, Svg, LayoutContext, animated, useSpringValue } from 'react-drm';
 import type { BoxNode } from 'react-drm';
 import {
@@ -200,7 +203,7 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   );
 }
 
-export function MediaMprisList({ width, height }: { width: number; height: number }) {
+export default function MediaMprisList({ width, height }: { width: number; height: number }) {
   const { players } = useMediaPlayers();
 
   // Track the selected player by its service id (stable across list changes).

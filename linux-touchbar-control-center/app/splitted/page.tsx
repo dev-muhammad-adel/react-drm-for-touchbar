@@ -1,8 +1,11 @@
 import React from 'react';
 import { Box, Text, Button, Gif } from 'react-drm';
-import { useLayers } from '..';
+import { useLayers } from '@/layers';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import path from 'path';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 
 // const APP_ROOT = process.cwd();
 // const BOOT_GIF_PATH = path.join(APP_ROOT, 'public', 'wildcat2.gif');
@@ -40,7 +43,7 @@ function accentColor(cls: string): string {
   return ACCENT[cls.toLowerCase()] ?? '#38bdf8';
 }
 
-export function ActiveWindowPanel({ width, height }: { width: number; height: number }) {
+export default function ActiveWindowPanel({ width, height }: { width: number; height: number }) {
   const { next } = useLayers();
   const { title, class: cls } = useActiveWindow();
   const color = accentColor(cls);

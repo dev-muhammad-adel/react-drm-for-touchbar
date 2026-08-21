@@ -11,8 +11,14 @@ import type { BoxNode } from 'react-drm';
 import { MdArrowDownward, MdArrowUpward, MdCancel, MdDeveloperBoard, MdDeviceHub, MdMemory, MdReplay, MdRouter, MdThermostat, MdWhatshot, MdWifi } from 'react-icons/md';
 import type { IconType } from 'react-icons';
 import { CAVA, SYSTEMBAR } from '@/lib/utils/configLoader';
-import { useLayers } from './index';
+import { useLayers } from '@/layers';
 import { BackButton } from '@/components/BackButton';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = {
+  leaving:  { outAnim: 'slide-down' },
+  entering: { inAnim:  'slide-up' },
+};
 
 // ── Colors ────────────────────────────────────────────────────────────────────
 const BG      = '#0d1117';
@@ -637,7 +643,7 @@ interface State {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export function SystemBar({ width, height }: { width: number; height: number }) {
+export default function SystemBar({ width, height }: { width: number; height: number }) {
   const { go } = useLayers();
 
   const [s, setS] = useState<State>({

@@ -9,7 +9,7 @@
  * is rethrown rather than silently falling back, so broken edits fail loudly.
  */
 
-import { createLogger } from 'react-drm';
+import { createLogger, setIconTheme } from 'react-drm';
 
 const log = createLogger('config');
 
@@ -42,5 +42,11 @@ export const vscodeKeysFor = mod.vscodeKeysFor;
 export const DOCK = mod.DOCK;
 export const FN_LAYER = mod.FN_LAYER;
 export const FN_KEYS = mod.FN_KEYS;
+
+// Must run before any appIconSource() call anywhere in the app (dock.tsx's
+// module-level ICON_SRC included) — setIconTheme() also clears the lookup
+// cache, so even a call this early is safe regardless of what else has
+// already imported this module.
+setIconTheme(DOCK.icons.theme);
 
 export type { BrowserKeymap, VsCodeKeymap, DockApp, FnKeyExtra } from '@/config.blueprint';

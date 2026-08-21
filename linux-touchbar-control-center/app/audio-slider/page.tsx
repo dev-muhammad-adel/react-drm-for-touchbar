@@ -5,11 +5,17 @@ import { useAtomValue } from 'jotai';
 import { MdVolumeOff, MdVolumeDown, MdVolumeUp } from 'react-icons/md';
 import { BackButton } from '@/components/BackButton';
 import { SliderTrack } from '@/components/SliderTrack';
-import { useLayers } from './index';
+import { useLayers } from '@/layers';
 import { createLogger } from 'react-drm';
 import { useVolumeControl, readVolume, TRACK_W, clampVolume } from '@/lib/hooks/useVolume';
 import { PW_ENV } from '@/lib/services/volume';
 import { audioTrackAnchorAtom, ANCHOR_TRACK_W } from '@/store/audioTrackAnchor';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = {
+  leaving:  { outAnim: 'fade' },
+  entering: { inAnim:  'fade' },
+};
 
 const log = createLogger('audioSlider');
 
@@ -19,7 +25,7 @@ function Sep() {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function AudioSliderLayer({ width, height }: { width: number; height: number }) {
+export default function AudioSliderLayer({ width, height }: { width: number; height: number }) {
   const { go } = useLayers();
   const { vol, setVolume, syncVolume } = useVolumeControl();
   const anchor = useAtomValue(audioTrackAnchorAtom);

@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { LayerConfig } from '@/lib/routes/loadRoutes';
+
+export const layerConfig: LayerConfig = { animation: 'fade' };
 import { Box, Button, Text } from 'react-drm';
 import {
   MdArrowBack, MdArrowForward, MdRefresh, MdHome,
@@ -15,7 +18,7 @@ const BTN_ACTIVE_BG = '#474747';
 const GROUP_GAP = 12;
 const BTN_W = 130;
 
-export function BrowserPanel({ width, height }: { width: number; height: number }) {
+export default function BrowserPanel({ width, height }: { width: number; height: number }) {
   const { class: windowClass } = useActiveWindow();
   const { back, forward, reload, home, newTab, closeTab, prevTab, nextTab } = useBrowserKeys(windowClass);
   const [confirmClose, setConfirmClose] = useState(false);

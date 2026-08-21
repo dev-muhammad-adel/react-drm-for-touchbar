@@ -1,33 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Box, KeyboardContext, useKeyPressed, useTouchLock, animated, useTransition, easings } from 'react-drm';
-import type { Style, KeyboardReader, KeyId, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions, SpringValue } from 'react-drm';
+import React, { createContext, useContext, useState, useRef, useMemo, useImperativeHandle, forwardRef } from 'react';
+import { Box, KeyboardContext, useTouchLock, animated, useTransition, easings } from 'react-drm';
+import type { Style, KeyboardReader, LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions, SpringValue } from 'react-drm';
 import { LAYER_TRANSITION } from '@/lib/utils/configLoader';
-import { useKeyGesture } from '@/lib/hooks/useKeyGesture';
 
 export type { LayerAnimation, Layer, FromLayerSwitch, ToLayerSwitch, SwitchOptions };
-
-/** A keyboard gesture that toggles a layer on/off (see useKeyGesture). */
-export interface LayerToggle {
-  key:       string | KeyId;
-  layer:     string;
-  /** Gesture that triggers the toggle. Default: 'long-press'. */
-  trigger?:  'long-press' | 'double-tap';
-  longMs?:   number;
-  doubleMs?: number;
-}
-
-const FN_LONG_MS = 350; // default hold time for the Fn-layer long-press
-
-/** Subscribes one long-press or double-tap binding; renders nothing. Kept as a
- *  component so a variable number of bindings each call the hook at a stable
- *  position. */
-function GestureToggle({ binding, onToggle }: { binding: LayerToggle; onToggle: (layer: string) => void }) {
-  const handlers = binding.trigger === 'double-tap'
-    ? { onDoublePress: () => onToggle(binding.layer) }
-    : { onLongPress:   () => onToggle(binding.layer) };
-  useKeyGesture(binding.key, handlers, { longMs: binding.longMs, doubleMs: binding.doubleMs });
-  return null;
-}
 
 // Backward-compat: accept a plain LayerAnimation string (applies to both sides).
 function resolveOpts(raw?: LayerAnimation | SwitchOptions): SwitchOptions {
@@ -95,43 +71,13 @@ export const LayerHost = forwardRef<LayerHostHandle, {
   width:     number;
   height:    number;
   keyboard?: KeyboardReader;
-  fnKey?:    KeyId;
-  fnLayer?:  string;
-  /** How the Fn key reaches its layer: 'hold' (momentary), 'toggle' (long-press),
-   *  or 'double-tap'. */
-  fnMode?:   'hold' | 'toggle' | 'double-tap';
-  /** Long-press duration for the Fn layer when fnMode === 'toggle'. */
-  fnLongMs?: number;
-  /** Max gap between taps for the Fn layer when fnMode === 'double-tap'. */
-  fnDoubleMs?: number;
-  /** Long-press/double-tap toggles: each flips to its layer and back (see useKeyGesture). */
-  toggles?:  LayerToggle[];
-  /** Layer a toggle returns to when flipped off. Defaults to `initial`/first.
-   *  Anchoring every toggle here keeps overlays (Fn, dock) from flipping
-   *  directly into each other — toggling one off always lands on home. */
-  home?:     string;
-}>(function LayerHost({ layers, initial, width, height, keyboard, fnKey = 'fn', fnLayer, fnMode = 'hold', fnLongMs = FN_LONG_MS, fnDoubleMs, toggles, home }, ref) {
+}>(function LayerHost({ layers, initial, width, height, keyboard }, ref) {
   const inherited = useContext(KeyboardContext);
   const kb = keyboard ?? inherited ?? null;
 
-  // The Fn layer is either a momentary hold, a long-press toggle, or a double-tap toggle.
-  const hold = fnLayer && fnMode === 'hold' ? { key: fnKey, layer: fnLayer } : undefined;
-  const allToggles: LayerToggle[] = [
-    ...(toggles ?? []),
-    ...(fnLayer && fnMode === 'toggle'      ? [{ key: fnKey, layer: fnLayer, longMs: fnLongMs }] : []),
-    ...(fnLayer && fnMode === 'double-tap'  ? [{ key: fnKey, layer: fnLayer, trigger: 'double-tap' as const, doubleMs: fnDoubleMs }] : []),
-  ];
-
   return (
     <KeyboardContext.Provider value={kb}>
-      <LayerHostInner
-        ref={ref}
-        layers={layers} initial={initial}
-        width={width} height={height}
-        toggles={allToggles}
-        hold={hold}
-        home={home}
-      />
+      <LayerHostInner ref={ref} layers={layers} initial={initial} width={width} height={height} />
     </KeyboardContext.Provider>
   );
 });
@@ -151,12 +97,8 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
   initial?: string;
   width:    number;
   height:   number;
-  toggles?: LayerToggle[];                 // long-press toggles
-  hold?:    { key: KeyId; layer: string }; // momentary "show while held" binding
-  home?:    string;                        // layer a toggle returns to when flipped off
-}>(function LayerHostInner({ layers, initial, width, height, toggles, hold, home }, ref) {
+}>(function LayerHostInner({ layers, initial, width, height }, ref) {
   const initIdx = initial ? Math.max(0, layers.findIndex(l => l.name === initial)) : 0;
-  const homeIdx = home ? Math.max(0, layers.findIndex(l => l.name === home)) : initIdx;
 
   const [activeIdx, setActiveIdx] = useState(initIdx);
   const { lock, unlock } = useTouchLock();
@@ -171,13 +113,6 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
   });
   // Which anim/phase each mounted layer is currently running (keyed by name).
   const phaseRef = useRef(new Map<string, { anim: LayerAnimation; phase: 'enter' | 'leave' }>());
-
-  // Momentary hold binding (e.g. Fn): show its layer while held, restore on
-  // release. `?? 0` keeps the hook order stable when no hold binding is set
-  // (keycode 0 never fires).
-  const holdHeld = useKeyPressed(hold?.key ?? 0);
-  const holdIdx  = hold ? layers.findIndex(l => l.name === hold.layer) : -1;
-  const beforeHoldIdx = useRef(-1);
 
   function switchTo(nextIdx: number, opts: SwitchOptions = {}) {
     const curIdx = activeIdxRef.current;
@@ -228,59 +163,28 @@ const LayerHostInner = forwardRef<LayerHostHandle, {
     },
   });
 
-  const ctx: LayerCtx = {
+  // Stable identity unless layers/activeIdx actually change — go/next/prev
+  // still read activeIdxRef (always live) rather than activeIdx directly, so
+  // reusing an older-render's closure here is safe as long as `layers`
+  // matches, which the dep array guarantees. Without this memo, ctx gets a
+  // new identity on every render (this component re-renders on any prop
+  // change, not just navigation), which matters to consumers like
+  // RouteBranch that compare identity to know whether anything really
+  // changed (see its ref callback).
+  const ctx: LayerCtx = useMemo(() => ({
     current: layers[activeIdx]?.name ?? '',
     go:   (name, raw) => { const i = layers.findIndex(l => l.name === name); if (i >= 0) switchTo(i, resolveOpts(raw)); },
     next: (raw) => switchTo((activeIdxRef.current + 1) % layers.length, resolveOpts(raw)),
     prev: (raw) => switchTo((activeIdxRef.current - 1 + layers.length) % layers.length, resolveOpts(raw)),
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [layers, activeIdx]);
 
-  useImperativeHandle(ref, () => ctx);
-
-  useEffect(() => {
-    if (holdIdx < 0) return;
-    if (holdHeld) {
-      beforeHoldIdx.current = activeIdxRef.current;
-      switchTo(holdIdx, { fromLayerSwitch: { outAnim: 'fade', duration: 5 }, toLayerSwitch: { inAnim: 'fade', duration: 100, showAfter: 0 } });
-    } else {
-      const returnTo = beforeHoldIdx.current >= 0 ? beforeHoldIdx.current : activeIdxRef.current;
-      switchTo(returnTo, { fromLayerSwitch: { outAnim: 'fade', duration: 5 }, toLayerSwitch: { inAnim: 'fade', duration: 100, showAfter: 0 } });
-    }
-  }, [holdHeld]);
-
-  // Set of toggle-layer names — the overlays (Fn, dock). An overlay must never
-  // record another overlay as its "previous", or toggling off would flip Fn↔dock.
-  const overlayNames = new Set((toggles ?? []).map(t => t.layer));
-
-  // Long-press toggle: flip to a layer, and on the next long-press flip back to
-  // whatever was active when we entered it (tracked per target layer). When we
-  // enter from another overlay, fall back to `home` so toggling off lands there
-  // instead of bouncing straight into the other overlay.
-  const beforeToggle = useRef<Map<string, number>>(new Map());
-  function toggleLayer(name: string) {
-    const idx = layers.findIndex(l => l.name === name);
-    if (idx < 0) return;
-    const cur = activeIdxRef.current;
-    if (cur === idx) {
-      const back = beforeToggle.current.get(name);
-      beforeToggle.current.delete(name);
-      if (back !== undefined && layers[back]) ctx.go(layers[back].name);
-    } else {
-      const curName = layers[cur]?.name;
-      const fromOverlay = curName !== undefined && overlayNames.has(curName);
-      beforeToggle.current.set(name, fromOverlay ? homeIdx : cur);
-      ctx.go(name);
-    }
-  }
+  useImperativeHandle(ref, () => ctx, [ctx]);
 
   const overlayBase: Style = { position: 'absolute', left: 0, top: 0, width, height };
 
   return (
     <Ctx.Provider value={ctx}>
-      {/* Long-press gesture subscriptions (one hook each, stable order). */}
-      {(toggles ?? []).map(t => (
-        <GestureToggle key={`${String(t.key)}:${t.layer}`} binding={t} onToggle={toggleLayer} />
-      ))}
       {/* Clip layers to the host box so slide transitions stay inside the
           layer column — without this they bleed past the left edge (e.g. over
           the wide-display Esc button that insets this host). */}
