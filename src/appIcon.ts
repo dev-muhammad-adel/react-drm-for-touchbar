@@ -40,9 +40,23 @@ function iniValue(file: string, section: string, key: string): string | null {
   return null;
 }
 
-/** The user's configured icon theme (KDE first, then GTK), else hicolor. */
+let themeOverride: string | null = null;
+
+/**
+ * Force icon lookups to prefer this theme instead of auto-detecting from
+ * kdeglobals/GTK settings — e.g. wire an app-level config's `theme` field
+ * through here at startup. Pass null to go back to auto-detection. Clears
+ * the resolution cache, so it takes effect immediately even if some icons
+ * were already looked up under the previous theme.
+ */
+export function setIconTheme(theme: string | null): void {
+  themeOverride = theme;
+  cache.clear();
+}
+
+/** The forced theme if set, else the user's configured one (KDE first, then GTK), else hicolor. */
 function currentTheme(): string {
-  return (
+  return themeOverride ?? (
     iniValue(join(HOME, '.config/kdeglobals'), 'Icons', 'Theme') ??
     iniValue(join(HOME, '.config/gtk-4.0/settings.ini'), 'Settings', 'gtk-icon-theme-name') ??
     iniValue(join(HOME, '.config/gtk-3.0/settings.ini'), 'Settings', 'gtk-icon-theme-name') ??
@@ -50,7 +64,12 @@ function currentTheme(): string {
   );
 }
 
-const THEME_CHAIN = Array.from(new Set([currentTheme(), 'breeze', 'Papirus', 'Adwaita', 'hicolor']));
+// A function, not a frozen constant — so a setIconTheme() call after module
+// load (unavoidable: it depends on app config, which loads after this
+// library) is picked up by the next lookup regardless of import order.
+function themeChain(): string[] {
+  return Array.from(new Set([currentTheme(), 'breeze', 'Papirus', 'Adwaita', 'hicolor']));
+}
 
 // Common raster sizes, in preference order (closest-to-TARGET-ish first).
 const SIZES = [64, 48, 96, 128, 32, 256, 512, 24, 22, 16];
@@ -65,10 +84,15 @@ function candidates(base: string, theme: string, name: string): string[] {
   const dir = join(base, theme);
   const out: string[] = [];
   out.push(join(dir, 'scalable/apps', `${name}.svg`)); // most themes (Adwaita, Papirus, hicolor)
+  out.push(join(dir, 'apps/scalable', `${name}.svg`)); // WhiteSur and other GNOME-family themes: apps/scalable/
   for (const s of SIZES) out.push(join(dir, 'apps', String(s), `${name}.svg`)); // Breeze: apps/<size>/
   for (const s of SIZES) out.push(join(dir, `${s}x${s}`, 'apps', `${name}.svg`)); // sized svg
   for (const s of SIZES) out.push(join(dir, `${s}x${s}`, 'apps', `${name}.png`)); // sized raster
   out.push(join(dir, 'scalable/apps', `${name}-symbolic.svg`));
+  out.push(join(dir, 'apps/scalable', `${name}-symbolic.svg`));
+  // Sized symbolic — some themes (Breeze, WhiteSur) only ship a symbolic
+  // variant at small sizes, no plain non-symbolic file at any size.
+  for (const s of SIZES) out.push(join(dir, 'apps', String(s), `${name}-symbolic.svg`));
   return out;
 }
 
@@ -83,7 +107,7 @@ function findIcon(name: string): string | null {
     if ((isAbsolute(name) || name.includes('/')) && existsSync(name)) return name;
 
     // Probe standard layouts: preferred theme first, then fallbacks.
-    for (const theme of THEME_CHAIN) {
+    for (const theme of themeChain()) {
       for (const base of ICON_BASES) {
         for (const p of candidates(base, theme, name)) {
           if (existsSync(p)) return p;
