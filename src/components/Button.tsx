@@ -12,24 +12,13 @@ import { ScrollOffsetContext } from '../scene/scroll-context';
 import type { Style } from '../scene/style';
 import type { BoxNode } from '../scene/types';
 
-export interface ButtonProps {
+export interface ButtonGestureOptions {
   x?: number;
   y?: number;
   width?: number;
   height?: number;
-  color?: string;
-  activeColor?: string;
-  borderColor?: string;
-  activeBorderColor?: string;
-  borderWidth?: number;
-  opacity?: number;
-  activeOpacity?: number;
-  borderRadius?: number;
   /** Extra pixels to expand the tap hit area on each side. */
   hitSlop?: number;
-  style?: Style;
-  activeStyle?: Style;
-  children?: React.ReactNode;
   onClick?:      () => void;
   /** Fires once the button has been held for `longPressDelay`. Suppresses the onClick that would otherwise fire on release. */
   onLongPress?:  () => void;
@@ -41,31 +30,17 @@ export interface ButtonProps {
   onTouchCancel?: () => void;
 }
 
-export function Button({
-  x,
-  y,
-  width,
-  height,
-  color = '#2a2a3e',
-  activeColor = '#4a90d9',
-  borderColor,
-  activeBorderColor,
-  borderWidth,
-  opacity,
-  activeOpacity,
-  borderRadius,
-  hitSlop,
-  style,
-  activeStyle,
-  onClick,
-  onLongPress,
-  longPressDelay = 500,
-  onTouchStart,
-  onTouchMove,
-  onTouchEnd,
-  onTouchCancel,
-  children,
-}: ButtonProps): React.ReactElement {
+/**
+ * Registers a button's touch/press gesture (tap, long-press, the pressed
+ * visual's short entry/exit delay) against the shared touch registry.
+ * Extracted so both `Button` and `motion.Button` can share this — only the
+ * rendering (plain color swap vs. spring-animated) differs between them.
+ */
+export function useButtonGesture({
+  x, y, width, height, hitSlop,
+  onClick, onLongPress, longPressDelay = 500,
+  onTouchStart, onTouchMove, onTouchEnd, onTouchCancel,
+}: ButtonGestureOptions): { active: boolean; nodeRef: React.MutableRefObject<BoxNode | null> } {
   const [active, setActive] = useState(false);
   const registry   = useContext(TouchRegistryContext);
   const layoutCtx  = useContext(LayoutContext);
@@ -135,6 +110,69 @@ export function Button({
       },
     });
     return () => registry.unregisterGesture(key);
+  });
+
+  return { active, nodeRef };
+}
+
+export interface ButtonProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color?: string;
+  activeColor?: string;
+  borderColor?: string;
+  activeBorderColor?: string;
+  borderWidth?: number;
+  opacity?: number;
+  activeOpacity?: number;
+  borderRadius?: number;
+  /** Extra pixels to expand the tap hit area on each side. */
+  hitSlop?: number;
+  style?: Style;
+  activeStyle?: Style;
+  children?: React.ReactNode;
+  onClick?:      () => void;
+  /** Fires once the button has been held for `longPressDelay`. Suppresses the onClick that would otherwise fire on release. */
+  onLongPress?:  () => void;
+  /** Hold duration in ms before onLongPress fires. Default: 500. */
+  longPressDelay?: number;
+  onTouchStart?: (x: number, y: number) => void;
+  onTouchMove?:  (x: number, y: number) => void;
+  onTouchEnd?:   (x: number, y: number) => void;
+  onTouchCancel?: () => void;
+}
+
+export function Button({
+  x,
+  y,
+  width,
+  height,
+  color = '#2a2a3e',
+  activeColor = '#4a90d9',
+  borderColor,
+  activeBorderColor,
+  borderWidth,
+  opacity,
+  activeOpacity,
+  borderRadius,
+  hitSlop,
+  style,
+  activeStyle,
+  onClick,
+  onLongPress,
+  longPressDelay = 500,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd,
+  onTouchCancel,
+  children,
+}: ButtonProps): React.ReactElement {
+  const { active, nodeRef } = useButtonGesture({
+    x, y, width, height, hitSlop,
+    onClick, onLongPress, longPressDelay,
+    onTouchStart, onTouchMove, onTouchEnd, onTouchCancel,
   });
 
   const baseStyle = active && activeStyle ? activeStyle : style;
