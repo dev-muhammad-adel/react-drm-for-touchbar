@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "npm run build && electron .",
     "build": "rm -rf dist && tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && mkdir -p dist/renderer && cp renderer/index.html renderer/renderer.css dist/renderer/",
-    "start": "electron .",
+    "start": "npm run build && electron .",
     "test": "tsx --test main/*.test.ts"
   },
   "dependencies": {
