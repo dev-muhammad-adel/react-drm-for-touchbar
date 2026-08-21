@@ -22,7 +22,7 @@ function withFixture(run: (configPath: string) => void): void {
 test('true no-op read+write produces a byte-identical file', () => {
   withFixture(configPath => {
     const before = fs.readFileSync(configPath, 'utf8');
-    const all = readConfig(configPath);
+    const all = readConfig(configPath, BLUEPRINT);
     writeConfig(configPath, all);
     const after = fs.readFileSync(configPath, 'utf8');
     assert.equal(after, before);
@@ -31,10 +31,10 @@ test('true no-op read+write produces a byte-identical file', () => {
 
 test('editing one DISPLAY field leaves siblings and comments untouched', () => {
   withFixture(configPath => {
-    const before = readConfig(configPath);
+    const before = readConfig(configPath, BLUEPRINT);
     const display = before.DISPLAY as Record<string, unknown>;
     writeConfig(configPath, { DISPLAY: { ...display, dimSecs: 999 } });
-    const after = readConfig(configPath);
+    const after = readConfig(configPath, BLUEPRINT);
     assert.equal((after.DISPLAY as Record<string, unknown>).dimSecs, 999);
     assert.equal((after.DISPLAY as Record<string, unknown>).offSecs, display.offSecs);
     const text = fs.readFileSync(configPath, 'utf8');
@@ -44,11 +44,11 @@ test('editing one DISPLAY field leaves siblings and comments untouched', () => {
 
 test('SCREENSHOT.dir (a computed template literal) survives editing SCREENSHOT.keys', () => {
   withFixture(configPath => {
-    const before = readConfig(configPath);
+    const before = readConfig(configPath, BLUEPRINT);
     writeConfig(configPath, { SCREENSHOT: { keys: ['ctrl', 'alt', 'x'] } });
     const text = fs.readFileSync(configPath, 'utf8');
     assert.match(text, /dir:\s*`\$\{picturesDir\}\/touchbar`/);
-    const after = readConfig(configPath);
+    const after = readConfig(configPath, BLUEPRINT);
     assert.deepEqual((after.SCREENSHOT as Record<string, unknown>).keys, ['ctrl', 'alt', 'x']);
   });
 });
@@ -58,14 +58,14 @@ test('keycode arrays round-trip through named KEY constants, not raw numbers', (
     writeConfig(configPath, { DEFAULT_BROWSER_KEYS: { reload: [56, 19] } }); // LEFTALT, KEY_R
     const text = fs.readFileSync(configPath, 'utf8');
     assert.match(text, /reload:\s*\[KEY\.LEFTALT, KEY\.KEY_R\]/);
-    const after = readConfig(configPath);
+    const after = readConfig(configPath, BLUEPRINT);
     assert.deepEqual((after.DEFAULT_BROWSER_KEYS as Record<string, unknown>).reload, [56, 19]);
   });
 });
 
 test('as const and as Type casts are preserved after editing', () => {
   withFixture(configPath => {
-    const before = readConfig(configPath);
+    const before = readConfig(configPath, BLUEPRINT);
     writeConfig(configPath, { FN_LAYER: { ...(before.FN_LAYER as object), longMs: 500 } });
     const text = fs.readFileSync(configPath, 'utf8');
     const mode = (before.FN_LAYER as Record<string, unknown>).mode as string;
@@ -76,7 +76,7 @@ test('as const and as Type casts are preserved after editing', () => {
 
 test('DOCK.apps: existing app patched by id keeps unedited fields and formatting', () => {
   withFixture(configPath => {
-    const before = readConfig(configPath);
+    const before = readConfig(configPath, BLUEPRINT);
     const apps = (before.DOCK as Record<string, JsonValue>).apps as Record<string, JsonValue>[];
     writeConfig(configPath, {
       DOCK: { ...(before.DOCK as object), apps: [{ ...apps[0], iconGlyph: 'FaFolderOpen' }] },
@@ -85,7 +85,7 @@ test('DOCK.apps: existing app patched by id keeps unedited fields and formatting
     assert.match(text, /id: 'files'/); // original quoting preserved — wasn't touched
     assert.match(text, /icon: FaFolderOpen/);
     assert.match(text, /\] as DockApp\[\]/); // array cast preserved
-    const after = readConfig(configPath);
+    const after = readConfig(configPath, BLUEPRINT);
     const afterApps = (after.DOCK as Record<string, JsonValue>).apps as Record<string, JsonValue>[];
     assert.equal(afterApps.length, 1);
     assert.equal(afterApps[0].iconGlyph, 'FaFolderOpen');
@@ -94,7 +94,7 @@ test('DOCK.apps: existing app patched by id keeps unedited fields and formatting
 
 test('DOCK.apps: adding a new icon adds the react-icons import, without duplicating existing ones', () => {
   withFixture(configPath => {
-    const before = readConfig(configPath);
+    const before = readConfig(configPath, BLUEPRINT);
     const apps = (before.DOCK as Record<string, JsonValue>).apps as Record<string, JsonValue>[];
     writeConfig(configPath, {
       DOCK: {
@@ -109,6 +109,47 @@ test('DOCK.apps: adding a new icon adds the react-icons import, without duplicat
   });
 });
 
+test('a field missing from config.ts (blueprint gained it later) falls back to the blueprint value', () => {
+  withFixture(configPath => {
+    // Simulate an older config.ts predating DOCK.shortcut.mode/doubleMs.
+    const text = fs.readFileSync(configPath, 'utf8');
+    const stripped = text.replace(
+      /shortcut:\s*\{[\s\S]*?\},\n\};/,
+      "shortcut: {\n    key: 'ralt' as KeyId,\n  },\n};",
+    );
+    assert.notEqual(stripped, text); // sanity: the replace actually matched something
+    fs.writeFileSync(configPath, stripped);
+
+    const config = readConfig(configPath, BLUEPRINT);
+    const shortcut = (config.DOCK as Record<string, JsonValue>).shortcut as Record<string, JsonValue>;
+    assert.equal(shortcut.key, 'ralt');    // present in config.ts — user's own value wins
+    assert.equal(shortcut.mode, 'double-tap'); // missing from config.ts — blueprint's default fills in
+    assert.equal(shortcut.doubleMs, 350);
+  });
+});
+
+test('saving without touching a blueprint-filled-in field writes it into config.ts', () => {
+  withFixture(configPath => {
+    const text = fs.readFileSync(configPath, 'utf8');
+    fs.writeFileSync(configPath, text.replace(
+      /shortcut:\s*\{[\s\S]*?\},\n\};/,
+      "shortcut: {\n    key: 'ralt' as KeyId,\n  },\n};",
+    ));
+
+    const config = readConfig(configPath, BLUEPRINT);
+    writeConfig(configPath, { DOCK: config.DOCK as JsonValue });
+
+    const after = readConfig(configPath, BLUEPRINT);
+    const shortcut = (after.DOCK as Record<string, JsonValue>).shortcut as Record<string, JsonValue>;
+    assert.equal(shortcut.mode, 'double-tap');
+    const savedText = fs.readFileSync(configPath, 'utf8');
+    // New properties are written via JSON.stringify (double quotes), unlike
+    // the blueprint's own hand-written single-quote style — quote style isn't
+    // what this test is checking, just that the field actually landed in the file.
+    assert.match(savedText, /mode:\s*"double-tap"/); // materialized into the file, not just the in-memory snapshot
+  });
+});
+
 test('a dist/config.js sync failure does not mask a successful config.ts save', () => {
   withFixture(configPath => {
     const distDir = path.join(path.dirname(configPath), 'dist');
@@ -118,7 +159,7 @@ test('a dist/config.js sync failure does not mask a successful config.ts save', 
 
     assert.doesNotThrow(() => writeConfig(configPath, { DISPLAY: { dimSecs: 333 } }));
 
-    const after = readConfig(configPath);
+    const after = readConfig(configPath, BLUEPRINT);
     assert.equal((after.DISPLAY as Record<string, unknown>).dimSecs, 333);
   });
 });
