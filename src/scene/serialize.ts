@@ -249,6 +249,17 @@ function resolveCornerRadii(s: import('./style').Style | undefined): [number, nu
   ];
 }
 
+/** Same edge resolution yoga uses for layout (layout-yoga.ts applyCommonStyle) — kept in
+ *  sync so the paint-time clip rect matches the content box yoga actually laid children into. */
+function resolvePadding(s: import('./style').Style | undefined): [number, number, number, number] {
+  return [
+    s?.paddingTop    ?? s?.paddingVertical   ?? s?.padding ?? 0,
+    s?.paddingRight  ?? s?.paddingHorizontal ?? s?.padding ?? 0,
+    s?.paddingBottom ?? s?.paddingVertical   ?? s?.padding ?? 0,
+    s?.paddingLeft   ?? s?.paddingHorizontal ?? s?.padding ?? 0,
+  ];
+}
+
 function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<SceneNode, LayoutBox>, parentLb?: LayoutBox, offsetX = 0): void {
   if (node.type === 'box') {
     const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: node.width ?? 0, h: node.height ?? 0 };
@@ -303,7 +314,19 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
     if (shadowCmd && shadowCmd.inset) cmds.push(shadowCmd); // over bg, under children
 
     const clip = node.style?.overflow === 'hidden' || node.style?.overflow === 'scroll';
-    if (clip) cmds.push({ cmd: 'clip_push', x: lb.x, y: lb.y, w: lb.w, h: lb.h, tl, tr, br, bl });
+    if (clip) {
+      // Clip at the padded content box, not the full border box — padding is
+      // otherwise invisible against an oversized child, since a child bigger
+      // than the content area just spills into the padding strip (which sits
+      // inside the box's own edge and so was never itself a clip boundary).
+      const [pt, pr, pb, pl] = resolvePadding(node.style);
+      cmds.push({
+        cmd: 'clip_push',
+        x: lb.x + pl, y: lb.y + pt,
+        w: Math.max(0, lb.w - pl - pr), h: Math.max(0, lb.h - pt - pb),
+        tl, tr, br, bl,
+      });
+    }
 
     const isAbsolute = (n: SceneNode) =>
       n.style?.position === 'absolute' || n.x !== undefined || n.y !== undefined;
