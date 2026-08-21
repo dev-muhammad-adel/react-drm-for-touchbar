@@ -40,7 +40,7 @@ export function ensureConfigExists(paths: ConfigPaths): void {
   fs.copyFileSync(paths.blueprintPath, paths.configPath);
 }
 
-export type JsonValue = number | string | boolean | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue = number | string | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export type ConfigData = Partial<Record<SectionName, JsonValue>>;
 
 /**
@@ -78,6 +78,7 @@ function nodeToValue(node: Node): JsonValue | undefined {
   if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) return node.getLiteralText();
   if (node.getKind() === SyntaxKind.TrueKeyword) return true;
   if (node.getKind() === SyntaxKind.FalseKeyword) return false;
+  if (node.getKind() === SyntaxKind.NullKeyword) return null;
   if (Node.isIdentifier(node) && node.getText() === 'Infinity') return Number.POSITIVE_INFINITY;
   if (Node.isPropertyAccessExpression(node)) {
     const m = /^KEY\.([A-Za-z0-9_]+)$/.exec(node.getText());
@@ -144,6 +145,7 @@ function deepEqual(a: JsonValue | undefined, b: JsonValue | undefined): boolean 
 }
 
 function valueToLiteralText(value: JsonValue): string {
+  if (value === null) return 'null';
   if (typeof value === 'number') return value === Infinity ? 'Infinity' : String(value);
   if (typeof value === 'boolean') return String(value);
   if (typeof value === 'string') return JSON.stringify(value);

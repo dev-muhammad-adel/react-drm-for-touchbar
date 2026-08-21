@@ -7,7 +7,9 @@ contextBridge.exposeInMainWorld('configApi', {
   locate: () => ipcRenderer.invoke('config:locate'),
   meta: () => ipcRenderer.invoke('config:meta'),
   resolveIcon: (name: string) => ipcRenderer.invoke('icon:resolve', name),
+  setIconTheme: (theme: string | null) => ipcRenderer.invoke('icon:setTheme', theme),
   listApps: () => ipcRenderer.invoke('apps:list'),
+  listIconThemes: () => ipcRenderer.invoke('icon:themes'),
 });
 
 contextBridge.exposeInMainWorld('windowApi', {

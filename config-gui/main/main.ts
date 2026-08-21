@@ -6,10 +6,11 @@ import {
 } from './configEngine';
 import type { ConfigData, ConfigPaths } from './configEngine';
 import { pathToFileURL } from 'node:url';
-import { KEY, appIconSource } from 'react-drm';
+import { KEY, appIconSource, setIconTheme } from 'react-drm';
 import { ICON_CHOICES } from './iconList';
 import { DOM_CODE_TO_KEY_NAME } from './keyNames';
 import { listDesktopApps } from './desktopApps';
+import { listIconThemes } from './iconThemes';
 
 let currentPaths: ConfigPaths = defaultConfigPaths(process.env.REACT_DRM_REPO_DIR);
 
@@ -92,7 +93,18 @@ ipcMain.handle('icon:resolve', (_event, name: string): string | null => {
   return file ? pathToFileURL(file).toString() : null;
 });
 
+// Lets the live Dock preview reflect whatever icon theme is currently picked
+// in the (possibly unsaved) form, not just whatever was auto-detected at app
+// startup — appIconSource resolves against this module-level override until
+// it's changed again, same mechanism the real touchbar app uses in
+// configLoader.ts, just driven live from the renderer instead of once at boot.
+ipcMain.handle('icon:setTheme', (_event, theme: string | null) => {
+  setIconTheme(theme);
+});
+
 ipcMain.handle('apps:list', () => listDesktopApps());
+
+ipcMain.handle('icon:themes', () => listIconThemes());
 
 ipcMain.handle('config:meta', () => ({
   iconChoices: ICON_CHOICES,

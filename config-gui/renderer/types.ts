@@ -1,4 +1,4 @@
-export type JsonValue = number | string | boolean | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue = number | string | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export type SectionName =
   | 'DISPLAY' | 'ESC_KEY' | 'SLEEP' | 'LAYER_TRANSITION' | 'ACTIVE_WINDOW'
   | 'SCREENSHOT' | 'DOLPHIN' | 'KONSOLE' | 'SYSTEMBAR' | 'CAVA'
@@ -18,7 +18,9 @@ export interface ConfigApi {
     keyNames: Record<string, number>;
   }>;
   resolveIcon: (name: string) => Promise<string | null>;
+  setIconTheme: (theme: string | null) => Promise<void>;
   listApps: () => Promise<DesktopAppEntry[]>;
+  listIconThemes: () => Promise<string[]>;
 }
 
 export interface DesktopAppEntry {
