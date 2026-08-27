@@ -351,7 +351,7 @@ function watchLid(onLid: (closed: boolean) => void): () => void {
 // the panel off and wake from off reliably restores it.
 
 const TB_BACKLIGHT_NAMES  = ['display-pipe', 'appletb_backlight'];
-const DISP_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
+export const DISPLAY_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
 
 // After resume the appletb_backlight HID interface re-binds late; re-apply and
 // verify the level on this cadence until the panel confirms it (or the window
@@ -385,7 +385,7 @@ class Backlight {
     this.tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
     this.tbFile  = this.tbDir ? `${this.tbDir}/brightness` : null;
     this.tbMax   = this.tbDir ? readInt(`${this.tbDir}/max_brightness`) : 0;
-    const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
+    const dispDir = findBacklightDir(DISPLAY_BACKLIGHT_NAMES);
     this.dispFile = dispDir ? `${dispDir}/brightness` : null;
     this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
   }
@@ -457,7 +457,7 @@ class Backlight {
   reopen(): void {
     this.resolveTb();
 
-    const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
+    const dispDir = findBacklightDir(DISPLAY_BACKLIGHT_NAMES);
     this.dispFile = dispDir ? `${dispDir}/brightness` : null;
     this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
 

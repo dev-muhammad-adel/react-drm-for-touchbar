@@ -1,4 +1,5 @@
 export { render } from './renderer/renderer';
+export { DISPLAY_BACKLIGHT_NAMES } from './renderer/renderer';
 export type { RenderResult } from './renderer/renderer';
 export { Box } from './components/Box';
 export { Text } from './components/Text';
