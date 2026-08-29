@@ -20,6 +20,8 @@ interface NativeTouchReader {
 }
 
 interface NativeKeyInjector {
+  keyDown(keycode: number): void;
+  keyUp(keycode: number): void;
   pressKey(keycode: number): void;
   pressCombo(keycodes: number[]): void;
 }
@@ -264,6 +266,14 @@ export class KeyInjector {
 
   pressIndex(idx: number): void {
     this.handle.pressKey(FKEY_CODES[idx]);
+  }
+
+  keyDown(code: number): void {
+    this.handle.keyDown(code);
+  }
+
+  keyUp(code: number): void {
+    this.handle.keyUp(code);
   }
 
   pressKey(code: number): void {

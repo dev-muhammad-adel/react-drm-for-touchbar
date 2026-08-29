@@ -46,6 +46,8 @@ static const int EXTRA_KEYS[] = {
 
 Napi::Object KeyInjector::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(env, "KeyInjector", {
+    InstanceMethod("keyDown",    &KeyInjector::KeyDown),
+    InstanceMethod("keyUp",      &KeyInjector::KeyUp),
     InstanceMethod("pressKey",   &KeyInjector::PressKey),
     InstanceMethod("pressCombo", &KeyInjector::PressCombo),
   });
@@ -99,11 +101,34 @@ void KeyInjector::SendEvent(uint16_t type, uint16_t code, int32_t value) {
   write(fd_, &ev, sizeof(ev));
 }
 
+void KeyInjector::SendKeyState(int keycode, int value) {
+  SendEvent(EV_KEY, keycode, value);
+  SendEvent(EV_SYN, SYN_REPORT, 0);
+}
+
 void KeyInjector::SendKey(int keycode) {
-  SendEvent(EV_KEY, keycode, 1);
-  SendEvent(EV_SYN, SYN_REPORT, 0);
-  SendEvent(EV_KEY, keycode, 0);
-  SendEvent(EV_SYN, SYN_REPORT, 0);
+  SendKeyState(keycode, 1);
+  SendKeyState(keycode, 0);
+}
+
+Napi::Value KeyInjector::KeyDown(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "keyDown(keycode: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (fd_ >= 0) SendKeyState(info[0].As<Napi::Number>().Int32Value(), 1);
+  return env.Undefined();
+}
+
+Napi::Value KeyInjector::KeyUp(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "keyUp(keycode: number)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  if (fd_ >= 0) SendKeyState(info[0].As<Napi::Number>().Int32Value(), 0);
+  return env.Undefined();
 }
 
 Napi::Value KeyInjector::PressKey(const Napi::CallbackInfo& info) {
