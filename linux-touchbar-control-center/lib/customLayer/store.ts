@@ -209,14 +209,28 @@ export class CustomLayerStore {
   }
 }
 
-let instance: CustomLayerStore | null = null;
+// The CustomLayerStore keeps real state (widget list + drag ghost) that must
+// survive hot-reload: dev hot-reload evicts modules from require.cache and
+// re-evaluates them, which would reset a module-scoped singleton to null while
+// the bridge server started in main() keeps running against the old instance.
+// Stashing it on globalThis (with a Symbol key, immune to module re-eval) makes
+// every re-evaluated copy of this module share the one live store.
+const STORE_GLOBAL_KEY = Symbol.for('react-drm.customLayerStore');
+
+type GlobalWithStore = { [STORE_GLOBAL_KEY]: CustomLayerStore } & typeof globalThis;
+
+function readInstance(): CustomLayerStore | null {
+  return (globalThis as GlobalWithStore)[STORE_GLOBAL_KEY] ?? null;
+}
 
 export function initCustomLayerStore(barWidth: number, barHeight: number, leftInset: number = 0): CustomLayerStore {
-  instance = new CustomLayerStore(barWidth, barHeight, leftInset);
-  return instance;
+  const store = new CustomLayerStore(barWidth, barHeight, leftInset);
+  (globalThis as GlobalWithStore)[STORE_GLOBAL_KEY] = store;
+  return store;
 }
 
 export function getCustomLayerStore(): CustomLayerStore {
-  if (!instance) throw new Error('CustomLayerStore not initialized — call initCustomLayerStore() first');
-  return instance;
+  const store = readInstance();
+  if (!store) throw new Error('CustomLayerStore not initialized — call initCustomLayerStore() first');
+  return store;
 }
