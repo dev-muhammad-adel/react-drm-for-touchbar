@@ -394,8 +394,13 @@ const SETTLE_WINDOW_MS   = 20_000;
 function findBacklightDir(candidates: string[]): string | null {
   try {
     const base = '/sys/class/backlight';
-    const name = fs.readdirSync(base).find(n => candidates.some(c => n.includes(c)));
-    return name ? `${base}/${name}` : null;
+    const names = fs.readdirSync(base);
+    for (const candidate of candidates) {
+      const name = names.find(n => n === candidate)
+        ?? names.find(n => n.includes(candidate));
+      if (name) return `${base}/${name}`;
+    }
+    return null;
   } catch { return null; }
 }
 
