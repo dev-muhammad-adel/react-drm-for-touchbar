@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from 'react-drm';
-import { ESC_KEY, DOCK, FN_LAYER } from '@/lib/utils/configLoader';
+import { ESC_KEY, DOCK, FN_LAYER, CUSTOM_LAYER } from '@/lib/utils/configLoader';
 import { EscKey } from '@/components/EscKey';
 import { SafeArea } from '@/components/SafeArea';
 import { BootScreen } from '@/components/BootScreen';
@@ -15,7 +15,7 @@ import type { LayoutChildren } from '@/lib/routes/loadRoutes';
 // Overlays toggled by a global hardware shortcut, not by navigating there —
 // listed once so each binding's home fallback (below) knows not to flip
 // straight into the other one.
-const OVERLAYS = ['dock', 'fnkeys'];
+const OVERLAYS = ['dock', 'fnkeys', 'custom-layer'];
 
 export default function RootLayout({ width, height, children }: {
   width:    number;
@@ -29,6 +29,10 @@ export default function RootLayout({ width, height, children }: {
   });
   useLayerToggle('fn', 'fnkeys', {
     mode: FN_LAYER.mode, longMs: FN_LAYER.longMs, doubleMs: FN_LAYER.doubleMs,
+    home: 'splitted', overlays: OVERLAYS,
+  });
+  useLayerToggle(CUSTOM_LAYER.shortcut.key, 'custom-layer', {
+    mode: CUSTOM_LAYER.shortcut.mode, longMs: CUSTOM_LAYER.shortcut.longMs, doubleMs: CUSTOM_LAYER.shortcut.doubleMs,
     home: 'splitted', overlays: OVERLAYS,
   });
 

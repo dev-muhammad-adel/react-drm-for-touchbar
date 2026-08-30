@@ -61,3 +61,13 @@ export { motion } from './motion';
 export type { MotionValues, MotionBoxProps, MotionButtonProps, MotionTransition, MotionTransitionProp } from './motion';
 export { SPRING } from './motion-presets';
 export type { SpringPreset } from './motion-presets';
+export type { CustomWidget, CustomWidgetType, CustomLayerConfig } from './custom-layer/types';
+export {
+  CUSTOM_WIDGET_LABELS, CUSTOM_WIDGET_WIDTHS, CUSTOM_LAYER_DEFAULT_WIDTH, CUSTOM_LAYER_DEFAULT_HEIGHT,
+  CUSTOM_WIDGET_MIN_WIDTH, CUSTOM_WIDGET_MAX_WIDTH, CUSTOM_WIDGET_RESIZE_STEP,
+} from './custom-layer/types';
+export { CUSTOM_LAYER_GRID_SIZE, snapToGrid } from './custom-layer/layout';
+export type {
+  CustomLayerClientMessage, CustomLayerServerMessage, CustomLayerDragGhost,
+} from './custom-layer/types';
+export { customLayerSocketPath, encodeMessage, createMessageReader } from './custom-layer/socket';

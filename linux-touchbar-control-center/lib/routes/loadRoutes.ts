@@ -62,15 +62,17 @@ const LAYOUT_RE = /^layout\.(tsx|ts|jsx|js)$/;
  *  actual name since navigation here is always go(name), never a URL. */
 export const DEFAULT_CHILD_NAME = 'index';
 
-// Plain absolute paths, not file:// URLs: this project compiles to CommonJS,
-// and tsc transpiles `await import(x)` for a CJS target into
-// `Promise.resolve(x).then(() => require(x))` — so at runtime this is really
-// `require()`, which doesn't understand file:// URL strings (only tsx's own
-// dev-time loader hooks tolerated that). Plain paths work for both: require()
-// natively, and Node's real dynamic import() (e.g. under tsx) accepts an
-// absolute path specifier directly too.
+// Load page/layout route modules through CommonJS `require()` rather than
+// dynamic `import()`. This is what keeps dev hot-reload (lib/dev hot-reload
+// walks `require.cache`) able to evict a changed route module: a real dynamic
+// `import()` registers cache entries invisible to the `require.cache`
+// invalidation walk, so edited route files would never re-evaluate. (Under the
+// CJS build tsc's transpiling of `await import(x)` → `require(x)` happened to
+// save it, but dev and dist should behave the same.) Plain absolute paths work
+// for both require() natively and Node's dynamic import() under tsx.
 async function loadPage(dir: string, file: string, label: string): Promise<{ component: React.ComponentType<any>; config: LayerConfig }> {
-  const mod = await import(path.join(dir, file));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require(path.join(dir, file));
   if (typeof mod.default !== 'function') throw new Error(`${label} has no default export`);
   return { component: mod.default, config: mod.layerConfig ?? {} };
 }
@@ -106,7 +108,8 @@ export async function loadRouteChildren(...segments: string[]): Promise<RouteChi
       // here). Its layerConfig here sets how *it* transitions within this
       // parent — separate from that sibling page.tsx's own layerConfig,
       // which is about how *it* transitions within the branch's own host.
-      const mod = await import(path.join(routeDir, layoutFile));
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require(path.join(routeDir, layoutFile));
       return { name: entry.name, isBranch: true, component: null, config: mod.layerConfig ?? {} };
     }
 
@@ -124,7 +127,8 @@ export async function loadLayout(...segments: string[]): Promise<LoadedLayout | 
   const layoutFile = readdirSync(dir).find(f => LAYOUT_RE.test(f));
   if (!layoutFile) return null;
 
-  const mod = await import(path.join(dir, layoutFile));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require(path.join(dir, layoutFile));
   if (typeof mod.default !== 'function') {
     throw new Error(`app/${[...segments, layoutFile].join('/')} has no default export`);
   }

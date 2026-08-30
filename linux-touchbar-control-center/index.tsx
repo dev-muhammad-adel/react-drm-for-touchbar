@@ -1,9 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { KeyboardReader, PreviewDisplay, createDisplay, renderHot, resolveKeyCode, startPreviewServer } from 'react-drm';
-import { DISPLAY, SCREENSHOT, SLEEP } from './lib/utils/configLoader';
+import { DISPLAY, SCREENSHOT, SLEEP, ESC_KEY } from './lib/utils/configLoader';
 import { attachTouchBar, ensureTouchBarAttached, watchSleep } from '@/lib/services/suspend';
 import { createLogger } from 'react-drm';
+import { startCustomLayer } from '@/lib/customLayer';
 
 const log = createLogger('react-drm');
 
@@ -23,6 +24,16 @@ async function main() {
 
   const keyboard = new KeyboardReader();
   const display  = createDisplay(process.argv[2]);
+
+  // Custom Layer prototype: owns its own widget list + config-gui bridge,
+  // entirely separate from config.ts/config.blueprint.ts. Started
+  // unconditionally (not preview-only) since config-gui needs a live target
+  // to drag onto in normal operation, not just during dev preview.
+  // Layer width accounts for the EscKey on wide Touch Bars (same logic as
+  // app/layout.tsx's root layout).
+  const showEsc = display.width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
+  const layerWidth = showEsc ? display.width - ESC_KEY.width - ESC_KEY.gap : display.width;
+  const customLayer = startCustomLayer(layerWidth, display.height);
 
   // Save what the touchbar currently shows as a PNG when all combo keys are
   // held. Fires once per press — re-arms only after a combo key is released.
@@ -78,6 +89,7 @@ async function main() {
   }
 
   function shutdown() {
+    try { customLayer.stop(); } catch {}
     try { result.unmount(); } catch {}
     process.kill(process.pid, 'SIGKILL');
   }

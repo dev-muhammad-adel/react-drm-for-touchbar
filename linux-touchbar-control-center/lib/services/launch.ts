@@ -14,8 +14,7 @@ const log = createLogger('dock');
  * (XDG_RUNTIME_DIR, the user D-Bus bus, and the Wayland/X display) so the app
  * can reach the compositor. Run directly otherwise.
  */
-export function launchApp(app: DockApp): void {
-  const { command, args = [] } = app;
+export function launch(command: string, args: string[] = []): void {
   const uid      = typeof process.getuid === 'function' ? process.getuid() : 1000;
   const sudoUser = process.env.SUDO_USER;
   const sudoUid  = process.env.SUDO_UID;
@@ -42,6 +41,11 @@ export function launchApp(app: DockApp): void {
 
   child.on('error', err => log.error('launch failed:', command, err.message));
   child.unref();
+}
+
+/** Same as {@link launch}, shaped for the dock's config-driven app entries. */
+export function launchApp(app: DockApp): void {
+  launch(app.command, app.args ?? []);
 }
 
 /** Find the user's Wayland socket name (e.g. `wayland-1`) under their runtime dir. */

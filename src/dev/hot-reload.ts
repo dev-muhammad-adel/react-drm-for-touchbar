@@ -87,6 +87,14 @@ export function renderHot(
     watch?: boolean;
   },
 ): RenderResult {
+  // A monotonically increasing key on the root forces React to *remount* the
+  // whole tree on each reload instead of reconciling in place. Reconciliation
+  // would preserve component state, so any hook that caches derived tree data
+  // (e.g. useAppRoutes/useAppLayout for the file-based router) would keep
+  // returning stale module references and edits to route pages/layouts would
+  // never show up. Bumping the key resets that state so the fresh `require()`
+  // results actually get re-discovered and rendered. Dev-only behavior.
+  let reloadSeq = 0;
   function load(): React.ReactNode {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const mod = require(appModulePath) as Record<string, unknown>;
@@ -94,10 +102,11 @@ export function renderHot(
     if (typeof App !== 'function') {
       throw new Error(`[renderHot] ${appModulePath} must export App or a default component`);
     }
-    return React.createElement(App, { width: display.width, height: display.height, ...options?.appProps });
+    return React.createElement(App, { key: reloadSeq, width: display.width, height: display.height, ...options?.appProps });
   }
 
   const initialEl = load();
+  reloadSeq++;
   const result = render(initialEl, display, options);
   let lastGood: React.ReactNode = initialEl;
 
@@ -124,6 +133,7 @@ export function renderHot(
     }
     try {
       result.update(el);
+      reloadSeq++;
       lastGood = el;
       process.stdout.write('\r[hot-reload] reloaded\n');
     } catch (err) {
