@@ -29,7 +29,7 @@ function seedT2linuxAssets(): void {
   if (MODE !== 'install') return;
   const rulesSrc = path.join(REPO_ROOT, 'system', '99-react-drm-t2linux.rules');
   const rulesDst = path.join(REPO_ROOT, 'system', '99-react-drm.rules');
-  const envSrc = path.join(REPO_ROOT, 'env.example.t2linux');
+  const envSrc = path.join(REPO_ROOT, '.env.example.t2linux');
   const envDst = path.join(REPO_ROOT, '.env');
   try {
     if (fs.existsSync(rulesSrc) && !fs.existsSync(rulesDst)) {

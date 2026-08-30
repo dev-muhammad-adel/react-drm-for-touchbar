@@ -715,7 +715,7 @@ seed_user_config() {
 # via EnvironmentFile (see system/react-drm.service). Never overwrite an
 # existing .env — the app treats it as user-editable config.
 seed_distro_env() {
-  local example="$REPO_ROOT/env.example.t2linux"
+  local example="$REPO_ROOT/.env.example.t2linux"
   local live="$REPO_ROOT/.env"
   if [[ -e "$live" ]]; then
     info "Keeping existing $live"

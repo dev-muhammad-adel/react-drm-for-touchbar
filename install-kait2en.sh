@@ -31,8 +31,8 @@ fi
 if [[ -e "$SCRIPT_DIR/.env" ]]; then
 	printf 'react-drm: keeping existing %s\n' "$SCRIPT_DIR/.env"
 else
-	printf 'react-drm: seeding %s from env.example.kait2en\n' "$SCRIPT_DIR/.env"
-	cp "$SCRIPT_DIR/env.example.kait2en" "$SCRIPT_DIR/.env"
+	printf 'react-drm: seeding %s from .env.example.kait2en\n' "$SCRIPT_DIR/.env"
+	cp "$SCRIPT_DIR/.env.example.kait2en" "$SCRIPT_DIR/.env"
 fi
 
 # 99-react-drm.rules is generated (gitignored): copy the KaiT2en rules file

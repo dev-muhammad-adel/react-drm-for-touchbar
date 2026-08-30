@@ -7,7 +7,7 @@
  *
  * These values are read from env at startup, defaulting to the upstream
  * (t2linux) names when a variable is unset. Each distro sources its own env
- * file — env.example.t2linux or env.example.kait2en — so a build runs with a
+ * file — .env.example.t2linux or .env.example.kait2en — so a build runs with a
  * single, coherent set of names (never a union across distros).
  *
  * List-valued variables are comma-separated strings.
