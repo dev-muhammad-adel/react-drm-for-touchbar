@@ -1,3 +1,4 @@
+import './native/env';
 export { render } from './renderer/renderer';
 export type { RenderResult } from './renderer/renderer';
 export { Box } from './components/Box';
