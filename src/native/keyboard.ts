@@ -9,6 +9,7 @@ interface KeyboardAddon {
   findKeyboardDevices: () => string[];
   findPointerDevices:  () => string[];
   findLidDevice:       () => string;
+  readLidClosed:       (devicePath: string) => boolean;
 }
 
 function loadNative(): KeyboardAddon {
@@ -63,6 +64,7 @@ export function resolveKeyCode(key: KeyId): number {
 export function findKeyboardDevices(): string[] { return loadNative().findKeyboardDevices(); }
 export function findPointerDevices(): string[]  { return loadNative().findPointerDevices(); }
 export function findLidDevice(): string         { return loadNative().findLidDevice(); }
+export function readLidClosed(path: string): boolean { return loadNative().readLidClosed(path); }
 
 // Delay between reconnect attempts. After an apple-bce resume the keyboard node
 // can take a few seconds to re-enumerate, so retry on the same 3s cadence as the

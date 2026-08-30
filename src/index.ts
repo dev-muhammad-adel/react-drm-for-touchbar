@@ -17,6 +17,11 @@ export type { ScrollRowProps } from './components/ScrollRow';
 export { DrmDisplay, usbReset, createDisplay } from './native/binding';
 export type { Display, DamageRect, BarsOpts } from './native/binding';
 export { PreviewDisplay } from './native/preview-display';
+export {
+  TB_BACKLIGHT_NAMES, DISPLAY_BACKLIGHT_NAMES, DISP_BACKLIGHT_NAMES,
+  TOUCHBAR_DRM_DRIVERS, TOUCHBAR_USB_VENDOR_ID, TOUCHBAR_USB_PRODUCT_ID,
+  TOUCHBAR_USB_BRIDGE,
+} from './native/hardware';
 export { TouchReader, KeyInjector, FKEY_CODES, KEY } from './native/input';
 export type { GestureOptions, TouchReaderOptions } from './native/input';
 export { KeyboardReader, KEY_NAMES, resolveKeyCode } from './native/keyboard';

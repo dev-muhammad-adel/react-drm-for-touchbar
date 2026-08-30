@@ -21,6 +21,10 @@ pnpm-debug.log*
 # git pull.
 linux-touchbar-control-center/config.ts
 
+# Generated at install time by the distro installers — each copies its own
+# 99-react-drm-<distro>.rules into this canonical name.
+system/99-react-drm.rules
+
 # Test/coverage output
 coverage/
 

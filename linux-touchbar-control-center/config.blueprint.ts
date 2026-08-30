@@ -19,7 +19,7 @@ export const DISPLAY = {
   offSecs:          60,   
   pixelShiftSecs:   300,  
   activeBrightness: 2,
-  flushFps:         30,
+  flushFps:         60,
   partialFlush:     false, // true = not ready yet
 } as const;
 
@@ -39,7 +39,7 @@ export const ESC_KEY: {
   // Where the Esc key shows on wide displays:
   //   'all' — a fixed Esc button at the far left of every layer
   //   'fn'  — Esc shows only in the Fn-key layer, sized like the F-keys
-  onLayers: 'fn',
+  onLayers: 'all',
   // Only used by 'all' mode (the fixed left button); 'fn' mode sizes Esc
   // like the surrounding F-keys.
   width:    110,  // px reserved on the left for the Esc button
@@ -300,7 +300,7 @@ export const FN_LAYER = {
   //   'hold'       — momentary: the layer shows only while Fn is held (original).
   //   'toggle'     — long-press Fn to switch to it, long-press again to return.
   //   'double-tap' — double-tap Fn to switch to it, double-tap again to return.
-  mode:     'toggle' as 'hold' | 'toggle' | 'double-tap',
+  mode:     'double-tap' as 'hold' | 'toggle' | 'double-tap',
   longMs:   350,   // long-press duration when mode === 'toggle'
   doubleMs: 350,   // max gap between taps when mode === 'double-tap'
 };

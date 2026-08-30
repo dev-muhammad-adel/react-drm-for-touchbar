@@ -13,3 +13,6 @@ Napi::Value FindPointerDevices(const Napi::CallbackInfo& info);
 
 // Returns /dev/input/eventN of the lid switch device, or throws if not found.
 Napi::Value FindLidDevice(const Napi::CallbackInfo& info);
+
+// Reads the current SW_LID state from an evdev device.
+Napi::Value ReadLidClosed(const Napi::CallbackInfo& info);
