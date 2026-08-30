@@ -323,7 +323,7 @@ export const FN_KEYS = {
 
 export const CUSTOM_LAYER = {
   // Show a Custom Layer button in the control center's right panel.
-  showButton: true,
+  showButton: false,
   // Keyboard gesture that toggles the custom-layer overlay — same shape as
   // FN_LAYER / DOCK.shortcut:
   //   'hold'       — momentary: the layer shows only while the key is held.
