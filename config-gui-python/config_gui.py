@@ -99,19 +99,11 @@ except Exception:
 
 # ── Static tables ────────────────────────────────────────────────────────────
 
-KEY = {
-    'MUTE': 113, 'VOLUMEDOWN': 114, 'VOLUMEUP': 115, 'NEXTSONG': 163,
-    'PLAYPAUSE': 164, 'PREVIOUSSONG': 165, 'LEFTMETA': 125, 'SEARCH': 217,
-    'BRIGHTNESSDOWN': 224, 'BRIGHTNESSUP': 225, 'KBDILLUMDOWN': 229,
-    'KBDILLUMUP': 230, 'LEFTCTRL': 29, 'LEFTALT': 56, 'LEFTSHIFT': 42,
-    'TAB': 15, 'LEFT': 105, 'RIGHT': 106, 'UP': 103, 'DOWN': 108,
-    'HOME': 102, 'ENTER': 28, 'ESC': 1, 'BACKSPACE': 14, 'PAGEUP': 104,
-    'PAGEDOWN': 109, 'GRAVE': 41, 'F5': 63, 'F10': 68, 'F11': 87,
-    'DELETE': 111, 'PRINT': 99, 'KEY_B': 48, 'KEY_COMMA': 51, 'KEY_F': 33,
-    'KEY_H': 35, 'KEY_P': 25, 'KEY_R': 19, 'KEY_S': 31, 'KEY_T': 20,
-    'KEY_W': 17, 'KEY_Z': 44,
-}
-CODE_TO_KEY_NAME = {c: n for n, c in KEY.items()}
+import keymap
+KEY = keymap.KEY
+CODE_TO_KEY_NAME = keymap.CODE_TO_KEY_NAME
+KEY_GROUPS = keymap.KEY_GROUPS
+KEY_DISPLAY = keymap.key_display
 
 SECTION_NAMES = [
     'DISPLAY', 'ESC_KEY', 'SLEEP', 'LAYER_TRANSITION', 'ACTIVE_WINDOW',
@@ -244,7 +236,12 @@ def default_repo_dir() -> str:
     env = os.environ.get('REACT_DRM_REPO_DIR')
     if env:
         return env
-    return os.path.join(home(), 'react-drm', 'linux-touchbar-control-center')
+    # The script lives at <repo-root>/config-gui-python/config_gui.py — the
+    # control center is its sibling <repo-root>/linux-touchbar-control-center.
+    # Default to that (the repo this GUI ships with) rather than a hardcoded
+    # ~/react-drm, so a second clone doesn't get edited by accident.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(repo_root, 'linux-touchbar-control-center')
 
 
 class ConfigPaths:
@@ -751,6 +748,63 @@ def deep_eq(a, b):
     return a == b and type(a) == type(b)
 
 
+def _array_close(src, start, end):
+    """Byte offset of the top-level ']' that closes the '[' at `start`."""
+    depth = 0
+    for i in range(start, end):
+        c = src[i]
+        if c == '[':
+            depth += 1
+        elif c == ']':
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def patch_array(src, prop, new_value, patches):
+    """Element-level patch for an array of object literals (e.g. FN_KEYS.extra).
+
+    Rebuilds the array while reusing each UNCHANGED element's source span
+    verbatim (so KEY.PRINT, quoting and quirks survive) and rendering only the
+    changed/new elements. Produces the same result as patch_dock_apps but for
+    any object-literal array.
+    """
+    elements = prop.elements or []
+    new_list = new_value if isinstance(new_value, list) else []
+
+    def render_elem(e):
+        return _render_dict(e) if isinstance(e, dict) else render(e)
+
+    # Reuse source for unchanged elements, render the changed/new ones.
+    parts = []
+    any_change = False
+    for i, nv in enumerate(new_list):
+        el = elements[i] if i < len(elements) else None
+        old = el.to_plain() if el is not None else None
+        if old is not None and deep_eq(old, nv):
+            parts.append(src[el.start:el.end])
+        else:
+            any_change = True
+            parts.append(render_elem(nv))
+
+    # If nothing changed and lengths match, leave the source untouched.
+    if not any_change and len(elements) == len(new_list):
+        return
+
+    text = '[\n    ' + ',\n    '.join(parts) + ',\n  ]' + (
+        (f' as {_cast_no_spaces(prop.cast)}') if prop.cast else '')
+    patches.append(Patch(prop.vstart, prop.vend, text))
+
+
+def _cast_no_spaces(cast):
+    return re.sub(r'\s*\[\s*\]', '[]', cast)
+
+
+def _render_dict(d):
+    return '{ ' + ', '.join(f'{safe_key(k)}: {render(x)}' for k, x in d.items()) + ' }'
+
+
 def patch_object(src, node, new_value, patches, special=()):
     inserts = []
     for key, value in new_value.items():
@@ -762,6 +816,13 @@ def patch_object(src, node, new_value, patches, special=()):
                 patch_object(src, prop.child, value, patches)
                 continue
             if deep_eq(prop.value, value):
+                continue
+            if (isinstance(value, list) and prop.elements
+                    and all(isinstance(el, dict) for el in value
+                            if el is not None)):
+                # Object-literal array: patch at element level to preserve
+                # unchanged elements (e.g. KEY.X constants) verbatim.
+                patch_array(src, prop, value, patches)
                 continue
             text = render(value)
             if prop.cast:
@@ -1422,6 +1483,7 @@ window { background: transparent; }
 .logo-chip label { color:#ffffff; font-weight:800; font-size:11px; }
 .app-title { color:#f4f4f2; font-weight:700; font-size:13px; }
 .status { border-radius:11px; padding:2px 11px; font-size:11px; color:#b8b8b8; }
+.repo-path { color:#8f8f8d; font-family:monospace; font-size:10px; }
 .status.ok { background:rgba(120,190,120,.14); color:#8fd48f; }
 .status.err { background:rgba(255,110,110,.16); color:#ff8a8a; }
 button.primary { background: linear-gradient(180deg,#4FB7F7,#1B7FD0); color:#ffffff;
@@ -1461,6 +1523,12 @@ entry.field:focus { border-color:#2A9BF4; background:rgba(0,0,0,0.45); }
 .key-capture { background:rgba(0,0,0,0.30); border:1px solid rgba(255,255,255,0.10);
   border-radius:4px; padding:4px 12px; font-family:monospace; font-size:11px; color:#f4f4f2; }
 .key-capture.listening { background:rgba(42,155,244,.16); border-color:#2A9BF4; color:#6CC4FF; }
+.key-opt { padding:5px 12px; border-bottom:1px solid rgba(255,255,255,0.05); }
+.key-opt label { font-size:12px; color:#f0f0ee; }
+.key-opt label.dim { color:#8f8f8d; font-size:10px; font-weight:700; }
+.key-opt:hover { background:rgba(255,255,255,0.08); }
+.key-opt:selected { background:rgba(42,155,244,0.22); }
+.key-opt:selected label { color:#cfeaff; }
 .nav-item { background:transparent; border:none; border-radius:4px; padding:8px 15px; }
 .nav-item label { color:#d2d2d0; font-size:9.5px; font-weight:700; }
 .nav-item:hover { background:rgba(255,255,255,0.09); }
@@ -1570,6 +1638,46 @@ def set_icon_theme_for_preview(theme):
     set_icon_theme(theme)
 
 
+def _probe_ext_blur_safe():
+    """Probe ext-background-effect-v1 in a child process.
+
+    The ctypes probe touches raw libwayland-client pointers and can
+    segfault on some compositor/GTK combinations.  Running it in a
+    child process isolates the crash so the main GUI survives.
+    Returns (wayland_blur_or_None, bool).
+    """
+    import multiprocessing as _mp
+
+    def _child(queue):
+        try:
+            blur = _WaylandBlur()
+            ok = blur.probe_available()
+            queue.put((ok, True))
+        except Exception:
+            queue.put((False, True))
+
+    q = _mp.Queue()
+    p = _mp.Process(target=_child, args=(q,), daemon=True)
+    p.start()
+    p.join(timeout=3)
+    if p.is_alive():
+        p.terminate()
+        p.join(timeout=1)
+        return None, False
+    try:
+        ok, _done = q.get_nowait()
+    except Exception:
+        ok = False
+    if ok:
+        try:
+            blur = _WaylandBlur()
+            if blur.probe_available():
+                return blur, True
+        except Exception:
+            pass
+    return None, False
+
+
 # ── Main application window ──────────────────────────────────────────────────
 
 
@@ -1603,16 +1711,19 @@ class ConfigGUI:
 
         # Compositor capabilities that decide the rendering path. All probing
         # is guarded so a plain X11 or GNOME-50 session stays on a working path.
+        #
+        # On niri the ctypes ext-background-effect-v1 probe is redundant
+        # (ensure_compositor_blur() already writes the layer-rule config) and
+        # its raw libwayland-client calls can segfault, killing the process.
+        # We skip the ctypes probe when NIRI_SOCKET is set. For other
+        # compositors the probe is run inside a subprocess so a segfault there
+        # cannot kill the main process.
         ext_blur = False
         if (_CT is not None and os.environ.get('WAYLAND_DISPLAY')
+                and not os.environ.get('NIRI_SOCKET')
                 and not os.environ.get('GDK_BACKEND')
                 and not os.environ.get('CONFIG_GUI_DESKTOP')):
-            try:
-                self._wl_blur = _WaylandBlur()
-                ext_blur = self._wl_blur.probe_available()
-            except Exception:
-                self._wl_blur = None
-                ext_blur = False
+            self._wl_blur, ext_blur = _probe_ext_blur_safe()
         self.compositor_blur = ensure_compositor_blur() or ext_blur
         self._panel_w = None
         self._panel_h = None
@@ -1728,6 +1839,7 @@ class ConfigGUI:
         first_btn = self.nav_buttons.get(first)
         if first_btn:
             first_btn.grab_focus()
+        self._update_repo_label()
 
     def _monitor_geometry(self):
         disp = Gdk.Display.get_default()
@@ -1801,6 +1913,16 @@ class ConfigGUI:
         self.status_lbl.get_style_context().add_class('status')
         hb.pack_start(self.status_lbl, False, False, 0)
 
+        self.repo_lbl = Gtk.Label(label='')
+        self.repo_lbl.get_style_context().add_class('repo-path')
+        self.repo_lbl.set_halign(Gtk.Align.END)
+        hb.pack_start(self.repo_lbl, False, False, 0)
+
+        self.repo_btn = Gtk.Button(label='Select repo folder…')
+        self.repo_btn.get_style_context().add_class('ghost')
+        self.repo_btn.connect('clicked', self._on_select_repo)
+        hb.pack_start(self.repo_btn, False, False, 0)
+
         self.restart_btn = Gtk.Button(label='Restart service')
         self.restart_btn.get_style_context().add_class('ghost')
         self.restart_btn.set_visible(False)
@@ -1817,6 +1939,50 @@ class ConfigGUI:
         close.connect('clicked', lambda *_: self.win.close())
         hb.pack_start(close, False, False, 0)
         return hb
+
+    # ── repo selection ──
+    def _on_select_repo(self, btn):
+        """Pick the linux-touchbar-control-center folder to read/write."""
+        dialog = Gtk.FileChooserDialog(
+            title='Select the linux-touchbar-control-center folder',
+            transient_for=self.win,
+            action=Gtk.FileChooserAction.SELECT_FOLDER)
+        dialog.add_buttons(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+                           Gtk.STOCK_OPEN, Gtk.ResponseType.ACCEPT)
+        dialog.set_select_multiple(False)
+        cur = self.paths.repo_dir
+        if os.path.isdir(cur):
+            dialog.set_current_folder(cur)
+        try:
+            resp = dialog.run()
+        finally:
+            dialog.destroy()
+        if resp != Gtk.ResponseType.ACCEPT:
+            return
+        folder = dialog.get_filename()
+        if folder:
+            self._switch_repo(folder)
+
+    def _switch_repo(self, repo_dir):
+        try:
+            paths = ConfigPaths(repo_dir)
+            if not os.path.exists(paths.blueprint_path):
+                self.set_status(f'No config.blueprint.ts in {repo_dir}', 'err')
+                return
+            ensure_config_exists(paths)
+            self.paths = paths
+            self.state = read_config(self.paths.config_path, self.paths.blueprint_path)
+            self.themes = list_icon_themes()
+            self.dirty = False
+            self._update_repo_label()
+            self.set_status('Switched repo folder', 'ok')
+            self.switch_section(self.current or next(
+                (s for s in SECTION_NAMES if s in self.state), 'DISPLAY'))
+        except Exception as e:
+            self.set_status(f'Could not load repo: {e}', 'err')
+
+    def _update_repo_label(self):
+        self.repo_lbl.set_text(self.paths.repo_dir)
 
     # ── content / nav ──
     def _build_content(self):
@@ -2232,6 +2398,87 @@ class ConfigGUI:
         if parent:
             parent.remove(card)
 
+    def _fnkey_key_combo(self, current_code, idx):
+        """A fixed-height key selector for an Fn-key's injected keycode.
+
+        A combo-like button whose popup is a scrollable list bounded to a fixed
+        height (via ScrolledWindow.set_max_content_height) so the dropdown never
+        spans the whole panel/screen for the full key table. Group headers render
+        as non-selectable separators; an '(unknown)' row covers unset codes."""
+        FIXED_H = 460
+        btn = Gtk.Button(label='(unset key)')
+        btn.get_style_context().add_class('key-capture')
+        btn.set_size_request(230, -1)
+        if current_code:
+            btn.set_label(KEY_DISPLAY(current_code))
+
+        pop = Gtk.Popover()
+        pop.get_style_context().add_class('bubble')
+        pop.set_relative_to(btn)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_min_content_width(260)
+        sc.set_min_content_height(FIXED_H)
+        sc.set_max_content_width(260)
+        sc.set_max_content_height(FIXED_H)
+        sc.set_size_request(-1, FIXED_H)
+        rows_ll = Gtk.ListBox()
+        rows_ll.set_selection_mode(Gtk.SelectionMode.NONE)
+        sc.add(rows_ll)
+
+        rows = []  # (code or None, label, is_header)
+        if not current_code or current_code not in CODE_TO_KEY_NAME:
+            rows.append((None, '(unset key)', False))
+        for title, items in KEY_GROUPS:
+            rows.append((None, '— ' + title + ' —', True))
+            for disp, name in items:
+                rows.append((KEY[name], disp, False))
+
+        chosen_widget = None
+        for code, label, is_header in rows:
+            r = Gtk.ListBoxRow()
+            r.get_style_context().add_class('key-opt')
+            lblw = Gtk.Label(label=label, xalign=0)
+            lbctx = lblw.get_style_context()
+            if is_header:
+                r.set_selectable(False)
+                r.set_activatable(False)
+                lbctx.add_class('dim')
+            else:
+                r.set_selectable(True)
+                r.set_activatable(True)
+                r._code = code
+                if code == current_code:
+                    chosen_widget = r
+            r.add(lblw)
+            rows_ll.add(r)
+
+        def on_select(_ll, row):
+            code = getattr(row, '_code', None)
+            if code is not None:
+                btn.set_label(KEY_DISPLAY(code))
+                self._fnkey_set_key(idx, code)
+            pop.popdown()
+
+        rows_ll.connect('row-activated', on_select)
+        pop.add(sc)
+        sc.show_all()
+
+        btn.connect('clicked', lambda *_: pop.popup())
+        # Reveal/scroll to the currently selected key when the popover opens.
+        def on_shown(_p):
+            if chosen_widget is not None:
+                rows_ll.select_row(chosen_widget)
+                chosen_widget.grab_focus()
+        pop.connect('map', on_shown)
+        return btn
+
+    def _fnkey_set_key(self, idx, code):
+        extra = self.state.get('FN_KEYS', {}).get('extra', [])
+        if 0 <= idx < len(extra):
+            extra[idx]['key'] = code
+            self.mark_dirty()
+
     def _build_fnkeys(self, container):
         extra = self.state.setdefault('FN_KEYS', {}).setdefault('extra', [])
 
@@ -2244,12 +2491,10 @@ class ConfigGUI:
             le = Gtk.Entry()
             le.set_text(scalar(entry.get('label')))
             le.set_placeholder_text('label')
-            le.set_size_request(140, -1)
+            le.set_size_request(120, -1)
             le.connect('changed', lambda en, idx=i: self._fnkey_label(idx, en))
             row.pack_start(le, False, False, 0)
-            row.pack_end(self._key_capture_button(
-                combo_display([entry.get('key', 0)]), 'FN_KEYS.extra', i),
-                False, False, 0)
+            row.pack_start(self._fnkey_key_combo(entry.get('key', 0), i), False, False, 0)
             rm = Gtk.Button(label='Remove')
             rm.get_style_context().add_class('danger')
             rm.connect('clicked', lambda b, idx=i: self._fnkey_remove(idx))

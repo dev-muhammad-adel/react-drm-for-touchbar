@@ -5,44 +5,10 @@
 #include <linux/uinput.h>
 #include <vector>
 
-static constexpr int FKEY_FIRST = 59;  // KEY_F1
-static constexpr int FKEY_LAST  = 88;  // KEY_F12 (88)
-
-// Media / system keys to also register
-static const int EXTRA_KEYS[] = {
-  113, 114, 115,   // KEY_MUTE, KEY_VOLUMEDOWN, KEY_VOLUMEUP
-  163, 164, 165,   // KEY_NEXTSONG, KEY_PLAYPAUSE, KEY_PREVIOUSSONG
-  125,             // KEY_LEFTMETA (super/app-grid)
-  217,             // KEY_SEARCH
-  224, 225,        // KEY_BRIGHTNESSDOWN, KEY_BRIGHTNESSUP
-  229, 230,        // KEY_KBDILLUMDOWN, KEY_KBDILLUMUP
-  248,             // KEY_MICMUTE
-  // Modifier keys
-  29, 97,          // KEY_LEFTCTRL, KEY_RIGHTCTRL
-  56, 100,         // KEY_LEFTALT, KEY_RIGHTALT
-  42, 54,          // KEY_LEFTSHIFT, KEY_RIGHTSHIFT
-  // Common keys for browser combos
-  15,              // KEY_TAB
-  17, 19, 20,      // KEY_W, KEY_R, KEY_T
-  // Navigation keys
-  102,                // KEY_HOME
-  103, 105, 106, 108, // KEY_UP, KEY_LEFT, KEY_RIGHT, KEY_DOWN
-  104, 109,           // KEY_PAGEUP, KEY_PAGEDOWN
-  // Extra useful keys
-  28,              // KEY_ENTER
-   1,              // KEY_ESC
-  57,              // KEY_SPACE
-  14,              // KEY_BACKSPACE
-  41,              // KEY_GRAVE
-  51,              // KEY_COMMA
-  99,              // KEY_SYSRQ (Print Screen)
-  111,             // KEY_DELETE
-  // Digits 1-0
-   2,  3,  4,  5,  6,  7,  8,  9, 10, 11,
-  // Letters A-Z (linux keycodes)
-  30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38, 50, 49,
-  24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44,
-};
+// Highest defined Linux key code (KEY_MAX in input-event-codes.h).
+#ifndef KEY_MAX
+#define KEY_MAX 0x2ff
+#endif
 
 Napi::Object KeyInjector::Init(Napi::Env env, Napi::Object exports) {
   Napi::Function func = DefineClass(env, "KeyInjector", {
@@ -66,9 +32,11 @@ KeyInjector::KeyInjector(const Napi::CallbackInfo& info)
 
   ioctl(fd_, UI_SET_EVBIT, EV_KEY);
   ioctl(fd_, UI_SET_EVBIT, EV_SYN);
-  for (int k = FKEY_FIRST; k <= FKEY_LAST; ++k)
-    ioctl(fd_, UI_SET_KEYBIT, k);
-  for (int k : EXTRA_KEYS)
+  // Register EVERY Linux key code so any key chosen in the config is actually
+  // injected. uinput only emits events for keys whose UI_SET_KEYBIT was set at
+  // setup, so a fixed whitelist silently dropped everything else ("react-drm
+  // doesn't support that key"). KEY_MAX (0x2ff) is the last defined constant.
+  for (int k = 1; k <= KEY_MAX; ++k)
     ioctl(fd_, UI_SET_KEYBIT, k);
 
   struct uinput_setup usetup{};

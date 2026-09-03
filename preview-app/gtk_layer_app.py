@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
-Standalone panel window for the react-drm browser preview, docked to the
-bottom of the screen with reserved space via the Wayland layer-shell
-protocol — the same mechanism waybar itself uses. Requires a layer-shell
-compositor (niri, Sway, Hyprland, River, ...); does not apply to GNOME/KDE
-or X11-only setups.
+Standalone panel window for the react-drm browser preview. On a Wayland
+compositor with layer-shell (niri, Sway, Hyprland, River, ...) it docks to the
+bottom of the screen with reserved space via the wayland layer-shell protocol —
+the same mechanism waybar uses. Where layer-shell is unavailable (GNOME/KDE
+Wayland, X11) it falls back to an X11 dock window pinned to the bottom edge
+(DOCK hint, always-on-top, no taskbar entry, no focus steal) instead of
+failing.
 
 This connects directly to src/dev/preview-server.ts's WebSocket endpoint —
 the exact same wire protocol preview-page.html speaks — and paints the
@@ -29,6 +31,7 @@ import math
 import os
 import socket
 import struct
+import sys
 from urllib.parse import urlparse
 
 import gi
@@ -239,6 +242,11 @@ def monitor_width() -> int:
     return monitor.get_geometry().width
 
 
+def monitor_height() -> int:
+    monitor = Gdk.Display.get_default().get_monitor(0)
+    return monitor.get_geometry().height
+
+
 def rounded_rect_path(cr, x: float, y: float, w: float, h: float, r: float) -> None:
     cr.new_sub_path()
     cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
@@ -268,15 +276,27 @@ class PreviewPanel:
         Gtk.StyleContext.add_provider_for_screen(
             self.window.get_screen(), css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
-        GtkLayerShell.init_for_window(self.window)
-        GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
-        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.BOTTOM, True)
-        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.LEFT, True)
-        GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.RIGHT, True)
-        GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.LEFT, SIDE_MARGIN_PX)
-        GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.RIGHT, SIDE_MARGIN_PX)
-        # Reserves real screen space — other windows won't overlap this strip.
-        GtkLayerShell.set_exclusive_zone(self.window, self.target_height)
+        # Wayland layer-shell path (niri, Sway, Hyprland, River, ...). On
+        # compositors that don't support layer-shell (GNOME/KDE Wayland, plain
+        # X11) we fall back to an X11 window pinned to the bottom edge instead
+        # of aborting — see _x11_fallback().
+        try:
+            if not GtkLayerShell.is_supported():
+                raise RuntimeError('Layer Shell not supported')
+            GtkLayerShell.init_for_window(self.window)
+            GtkLayerShell.set_layer(self.window, GtkLayerShell.Layer.TOP)
+            GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.BOTTOM, True)
+            GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.LEFT, True)
+            GtkLayerShell.set_anchor(self.window, GtkLayerShell.Edge.RIGHT, True)
+            GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.LEFT, SIDE_MARGIN_PX)
+            GtkLayerShell.set_margin(self.window, GtkLayerShell.Edge.RIGHT, SIDE_MARGIN_PX)
+            # Reserves real screen space — other windows won't overlap this strip.
+            GtkLayerShell.set_exclusive_zone(self.window, self.target_height)
+            self.layer_ok = True
+        except Exception as e:
+            print('layer-shell unavailable, using X11 fallback:', e)
+            self.layer_ok = False
+            self._x11_fallback()
         self.window.set_default_size(self.target_width, self.target_height)
 
         self.image = Gtk.Image()
@@ -381,6 +401,43 @@ class PreviewPanel:
 
     def show(self) -> None:
         self.window.show_all()
+
+    def _x11_fallback(self) -> None:
+        """Dock the preview to the bottom of the screen without layer-shell.
+
+        force the X11 backend (where move()/keep_above are honoured), mark the
+        window as a DOCK so it doesn't grab focus, keep it always on top, hide
+        it from the taskbar/pager, and pin it flush to the bottom edge."""
+        # On a Wayland session without layer-shell, move()/keep_above only work
+        # through XWayland — restart under GDK_BACKEND=x11 so they take effect.
+        if os.environ.get('WAYLAND_DISPLAY') and not os.environ.get('GDK_BACKEND'):
+            os.environ['GDK_BACKEND'] = 'x11'
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        try:
+            w = self.window
+            w.set_type_hint(Gdk.WindowTypeHint.DOCK)
+            w.set_decorated(False)                # no title bar
+            w.set_keep_above(True)                # stays above other windows
+            w.set_skip_taskbar_hint(True)         # no dock/taskbar entry
+            w.set_skip_pager_hint(True)           # not in the workspaces pager
+            w.set_accept_focus(False)             # never steals keyboard focus
+            w.set_focus_on_map(False)
+            mw = monitor_width()
+            mh = monitor_height()
+            self.target_width = mw - 2 * SIDE_MARGIN_PX
+            self.target_height = round(self.target_width / TOUCHBAR_ASPECT)
+            w.set_default_size(self.target_width, self.target_height)
+            w.set_size_request(self.target_width, self.target_height)
+
+            def _reposition(*_a):
+                y = mh - self.target_height
+                w.move(SIDE_MARGIN_PX, y)
+                w.present()
+                return False
+            w.connect('realize', lambda win: GLib.idle_add(_reposition))
+        except Exception as e:
+            print('X11 dock fallback failed:', e)
 
 
 def main() -> None:
