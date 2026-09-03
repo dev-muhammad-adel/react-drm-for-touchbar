@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import * as readline from 'node:readline';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
@@ -19,6 +20,28 @@ const SCRIPT_ARGS = MODE === 'uninstall' ? ['uninstall.sh', 'uninstall', '--gui'
 
 let mainWindow: BrowserWindow | null = null;
 let child: ChildProcessWithoutNullStreams | null = null;
+
+// install-gui is the t2linux (upstream) front-end, so on install it seeds the
+// t2linux profile into the generated assets, exactly as install.sh does: the
+// gitignored 99-react-drm.rules and the repo-root .env. Only fills targets
+// that are absent — an existing .env/rules are user-editable and left alone.
+function seedT2linuxAssets(): void {
+  if (MODE !== 'install') return;
+  const rulesSrc = path.join(REPO_ROOT, 'system', '99-react-drm-t2linux.rules');
+  const rulesDst = path.join(REPO_ROOT, 'system', '99-react-drm.rules');
+  const envSrc = path.join(REPO_ROOT, '.env.example.t2linux');
+  const envDst = path.join(REPO_ROOT, '.env');
+  try {
+    if (fs.existsSync(rulesSrc) && !fs.existsSync(rulesDst)) {
+      fs.copyFileSync(rulesSrc, rulesDst);
+    }
+    if (fs.existsSync(envSrc) && !fs.existsSync(envDst)) {
+      fs.copyFileSync(envSrc, envDst);
+    }
+  } catch {
+    // Non-fatal: install.sh regenerates these during its own analyze/deploy.
+  }
+}
 
 function createWindow(): void {
   const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize;
@@ -88,7 +111,10 @@ ipcMain.on('window:toggleMaximize', () => {
 });
 ipcMain.on('window:close', () => mainWindow?.close());
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  seedT2linuxAssets();
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   child?.kill();

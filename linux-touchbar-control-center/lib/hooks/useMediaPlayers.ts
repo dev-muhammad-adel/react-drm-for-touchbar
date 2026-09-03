@@ -1,19 +1,46 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import dbus, { MessageBus, Variant } from 'dbus-next';
 
-// Spotify and Firefox expose native MPRIS2 services. Chrome itself has no
-// native MPRIS2 service on Linux; on KDE Plasma the
-// `plasma-browser-integration` extension exposes browser media sessions over
-// D-Bus.
+// Modern Chromium builds expose browser media sessions directly. Plasma
+// Browser Integration remains a fallback for browsers without native MPRIS2.
 const PLAYER_CONFIGS = [
   { prefix: 'org.mpris.MediaPlayer2.spotify', name: 'spotify' as const },
   { prefix: 'org.mpris.MediaPlayer2.firefox', name: 'firefox' as const },
+  { prefix: 'org.mpris.MediaPlayer2.brave', name: 'chrome' as const },
+  { prefix: 'org.mpris.MediaPlayer2.chromium', name: 'chrome' as const },
   { prefix: 'org.mpris.MediaPlayer2.plasma-browser-integration', name: 'chrome' as const },
 ];
 
 const OBJ    = '/org/mpris/MediaPlayer2';
 const PLAYER = 'org.mpris.MediaPlayer2.Player';
 const PROPS  = 'org.freedesktop.DBus.Properties';
+
+// dbus-next's getProxyObject() normally introspects the remote object to learn
+// its interfaces before getInterface() can resolve one. Chromium's MPRIS
+// bridge answers Introspect() with an empty <node/> (confirmed via dbus-send)
+// even though it responds to real Properties calls fine — so introspection-based
+// discovery silently never finds PROPS there, and PropertiesChanged never fires.
+// Properties is a fixed, spec-defined interface (identical on every D-Bus
+// service), so passing this hand-written XML skips remote introspection
+// entirely and works regardless of how broken a given player's Introspect() is.
+const PROPS_INTROSPECTION = `<node>
+  <interface name="org.freedesktop.DBus.Properties">
+    <method name="Get">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="property_name" type="s" direction="in"/>
+      <arg name="value" type="v" direction="out"/>
+    </method>
+    <method name="GetAll">
+      <arg name="interface_name" type="s" direction="in"/>
+      <arg name="properties" type="a{sv}" direction="out"/>
+    </method>
+    <signal name="PropertiesChanged">
+      <arg name="interface_name" type="s"/>
+      <arg name="changed_properties" type="a{sv}"/>
+      <arg name="invalidated_properties" type="as"/>
+    </signal>
+  </interface>
+</node>`;
 
 export type PlayerStatus = 'Playing' | 'Paused' | 'Stopped';
 
@@ -81,8 +108,8 @@ export interface UseMediaPlayersResult {
 }
 
 /**
- * Tracks supported MPRIS2 players, including Spotify, Firefox and Chrome via
- * KDE plasma-browser-integration.
+ * Tracks supported MPRIS2 players, including Spotify, Firefox and
+ * Chromium-based browsers.
  * Returns visibility flags and an array of control/status objects.
  */
 export function useMediaPlayers(): UseMediaPlayersResult {
@@ -130,14 +157,18 @@ export function useMediaPlayers(): UseMediaPlayersResult {
 
     services.forEach(service => {
       (async () => {
-        const obj    = await bus.getProxyObject(service, OBJ);
-        if (!alive) return;
-        const props  = obj.getInterface(PROPS);
-        const player = obj.getInterface(PLAYER);
-
         const applyAll = async () => {
           try {
-            const all = await props.GetAll(PLAYER) as Record<string, Variant>;
+            const reply = await bus.call(new dbus.Message({
+              destination: service,
+              path: OBJ,
+              interface: PROPS,
+              member: 'GetAll',
+              signature: 's',
+              body: [PLAYER],
+            }));
+            if (!reply) return;
+            const all = reply.body[0] as Record<string, Variant>;
             if (!alive) return;
             const meta = all.Metadata?.value as Record<string, Variant> | undefined;
             setStates(prev => ({
@@ -151,49 +182,63 @@ export function useMediaPlayers(): UseMediaPlayersResult {
           } catch { /* player closed */ }
         };
 
-        props.on('PropertiesChanged', (iface: string, changed: Record<string, Variant>) => {
-          if (!alive || iface !== PLAYER) return;
-          setStates(prev => {
-            const current = prev[service] ?? IDLE;
-            const next: MediaPlayerState = { ...current };
-            if (changed.PlaybackStatus) next.status = changed.PlaybackStatus.value as PlayerStatus;
-            if (changed.Metadata) {
-              Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
-              next.position = 0; // new track → restart the progress bar
-            }
-            return { ...prev, [service]: next };
-          });
-        });
-
-        // Position is not push-notified: a Seeked signal covers jumps, and a 1s
-        // poll keeps the bar moving during normal playback.
-        player.on('Seeked', (pos: bigint | number) => {
-          if (!alive) return;
-          setStates(prev => prev[service]
-            ? { ...prev, [service]: { ...prev[service], position: Number(pos) } }
-            : prev);
-        });
-
-        const poll = setInterval(async () => {
+        // Position-only refresh, mirroring useVlc.ts's pattern: MPRIS players emit
+        // PropertiesChanged for Metadata/PlaybackStatus, but the spec explicitly
+        // doesn't require it for Position (it changes continuously during
+        // playback, so a signal per tick would be worse than polling). Skipping
+        // the update when the change is below the poll's own resolution avoids
+        // a re-render for a number that only jittered by rounding.
+        const applyPosition = async () => {
           try {
-            const v = await props.Get(PLAYER, 'Position');
-            if (!alive) return;
-            const position = Number((v as Variant)?.value ?? 0);
+            const reply = await bus.call(new dbus.Message({
+              destination: service, path: OBJ, interface: PROPS,
+              member: 'Get', signature: 'ss', body: [PLAYER, 'Position'],
+            }));
+            if (!reply || !alive) return;
+            const pos = Number((reply.body[0] as Variant)?.value ?? 0);
             setStates(prev => {
               const cur = prev[service];
-              if (!cur || cur.position === position) return prev;
-              return { ...prev, [service]: { ...cur, position } };
+              if (!cur || Math.abs(cur.position - pos) < 50_000) return prev;
+              return { ...prev, [service]: { ...cur, position: pos } };
             });
           } catch { /* player closed */ }
-        }, 1000);
+        };
 
-        await applyAll();
+        await applyAll(); // seed full state once
 
-        cleanups.push(() => {
-          clearInterval(poll);
-          props.removeAllListeners('PropertiesChanged');
-          player.removeAllListeners('Seeked');
-        });
+        // Live updates from here: PropertiesChanged replaces the old 1s GetAll
+        // poll for Metadata/PlaybackStatus (near-zero cost when nothing changes,
+        // instead of re-fetching everything every second regardless of state);
+        // Position keeps its own lightweight poll since MPRIS doesn't push it.
+        const obj = await bus.getProxyObject(service, OBJ, PROPS_INTROSPECTION);
+        if (!alive) return;
+        const propsIface = obj.getInterface(PROPS);
+        // PropertiesChanged is (interface, changed_properties, invalidated_properties)
+        // — not every player pushes the new value in `changed`. Some (Chromium's
+        // native MPRIS bridge, unlike KDE's plasma-browser-integration) instead
+        // list the property name in `invalidated`, meaning "this changed, go
+        // re-fetch it yourself" with no value included. Falling back to a full
+        // GetAll for anything invalidated covers both styles.
+        const onChanged = (iface: string, changed: Record<string, Variant>, invalidated: string[]) => {
+          if (!alive || iface !== PLAYER) return;
+          if (invalidated?.some(p => p === 'Metadata' || p === 'PlaybackStatus')) {
+            void applyAll();
+            return;
+          }
+          setStates(prev => {
+            const cur = prev[service] ?? IDLE;
+            const next = { ...cur };
+            if (changed.Metadata) Object.assign(next, readMeta(changed.Metadata.value as Record<string, Variant>));
+            if (changed.PlaybackStatus) next.status = (changed.PlaybackStatus.value as PlayerStatus) ?? 'Stopped';
+            if (changed.Position) next.position = Number(changed.Position.value ?? next.position);
+            return { ...prev, [service]: next };
+          });
+        };
+        propsIface.on('PropertiesChanged', onChanged);
+        cleanups.push(() => propsIface.off('PropertiesChanged', onChanged));
+
+        const poll = setInterval(() => { void applyPosition(); }, 1000);
+        cleanups.push(() => clearInterval(poll));
       })().catch(() => {});
     });
 

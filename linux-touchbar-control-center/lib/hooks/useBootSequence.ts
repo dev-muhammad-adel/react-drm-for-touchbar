@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 
-const FADE_IN  = 200;
-const HOLD     = 6500;
-const FADE_OUT = 200;
+const FADE_IN  = 700;
+const HOLD     = 1000;
+const FADE_OUT = 700;
 const TOTAL    = FADE_IN + HOLD + FADE_OUT;
 
 export function useBootSequence(): { booted: boolean; opacity: number } {

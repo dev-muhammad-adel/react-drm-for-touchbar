@@ -1,3 +1,4 @@
+import './native/env';
 export { render } from './renderer/renderer';
 export type { RenderResult } from './renderer/renderer';
 export { Box } from './components/Box';
@@ -17,6 +18,11 @@ export type { ScrollRowProps } from './components/ScrollRow';
 export { DrmDisplay, usbReset, createDisplay } from './native/binding';
 export type { Display, DamageRect, BarsOpts } from './native/binding';
 export { PreviewDisplay } from './native/preview-display';
+export {
+  TB_BACKLIGHT_NAMES, DISPLAY_BACKLIGHT_NAMES, DISP_BACKLIGHT_NAMES,
+  TOUCHBAR_DRM_DRIVERS, TOUCHBAR_USB_VENDOR_ID, TOUCHBAR_USB_PRODUCT_ID,
+  TOUCHBAR_USB_BRIDGE,
+} from './native/hardware';
 export { TouchReader, KeyInjector, FKEY_CODES, KEY } from './native/input';
 export type { GestureOptions, TouchReaderOptions } from './native/input';
 export { KeyboardReader, KEY_NAMES, resolveKeyCode } from './native/keyboard';
@@ -56,3 +62,13 @@ export { motion } from './motion';
 export type { MotionValues, MotionBoxProps, MotionButtonProps, MotionTransition, MotionTransitionProp } from './motion';
 export { SPRING } from './motion-presets';
 export type { SpringPreset } from './motion-presets';
+export type { CustomWidget, CustomWidgetType, CustomLayerConfig } from './custom-layer/types';
+export {
+  CUSTOM_WIDGET_LABELS, CUSTOM_WIDGET_WIDTHS, CUSTOM_LAYER_DEFAULT_WIDTH, CUSTOM_LAYER_DEFAULT_HEIGHT,
+  CUSTOM_WIDGET_MIN_WIDTH, CUSTOM_WIDGET_MAX_WIDTH, CUSTOM_WIDGET_RESIZE_STEP,
+} from './custom-layer/types';
+export { CUSTOM_LAYER_GRID_SIZE, snapToGrid } from './custom-layer/layout';
+export type {
+  CustomLayerClientMessage, CustomLayerServerMessage, CustomLayerDragGhost,
+} from './custom-layer/types';
+export { customLayerSocketPath, encodeMessage, createMessageReader } from './custom-layer/socket';

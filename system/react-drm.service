@@ -18,11 +18,14 @@ PartOf=graphical-session.target
 
 [Service]
 Environment=NODE_ENV=production
+# Loads the per-distro hardware profile seeded by the installer into
+# <repo-root>/.env (REACT_DRM_* variables). The installer rewrites this path.
+EnvironmentFile=-%h/react-drm/.env
 WorkingDirectory=%h/react-drm/linux-touchbar-control-center
 ExecStart=node %h/react-drm/linux-touchbar-control-center/dist/index.js
 ExecStopPost=-%h/react-drm/system/react-drm-tb-detach
 KillSignal=SIGINT
-SuccessExitStatus=130 137 SIGINT
+SuccessExitStatus=130 137 SIGINT SIGKILL
 TimeoutStartSec=180
 TimeoutStopSec=150
 Restart=on-failure

@@ -1,11 +1,25 @@
 import fs from 'fs';
 import path from 'path';
-import { KeyboardReader, PreviewDisplay, createDisplay, renderHot, resolveKeyCode, startPreviewServer } from 'react-drm';
-import { DISPLAY, SCREENSHOT, SLEEP } from './lib/utils/configLoader';
+import { KeyboardReader, PreviewDisplay, createDisplay, renderHot, resolveKeyCode, startPreviewServer, TB_BACKLIGHT_NAMES, DISPLAY_BACKLIGHT_NAMES, TOUCHBAR_DRM_DRIVERS, TOUCHBAR_USB_VENDOR_ID, TOUCHBAR_USB_PRODUCT_ID, TOUCHBAR_USB_BRIDGE } from 'react-drm';
+import { DISPLAY, SCREENSHOT, SLEEP, ESC_KEY } from './lib/utils/configLoader';
 import { attachTouchBar, ensureTouchBarAttached, watchSleep } from '@/lib/services/suspend';
 import { createLogger } from 'react-drm';
+import { startCustomLayer } from '@/lib/customLayer';
 
 const log = createLogger('react-drm');
+
+// Show what the resolved .env hardware profile produced. Import-block order
+// matters: react-drm loads the repo .env first (src/native/env.ts), so these
+// values are the seeded ones, not just the compiled defaults.
+log.info('hardware profile:',
+  JSON.stringify({
+    TB_BACKLIGHT_NAMES,
+    DISPLAY_BACKLIGHT_NAMES,
+    TOUCHBAR_DRM_DRIVERS,
+    USB: `${TOUCHBAR_USB_VENDOR_ID}:${TOUCHBAR_USB_PRODUCT_ID}`,
+    TOUCHBAR_USB_BRIDGE,
+    BOOT_LOGO: process.env.REACT_DRM_BOOT_LOGO || '(unset)',
+  }, null, 2));
 
 // The app owns the Touch Bar lifecycle in every run mode — manual `npm run
 // dev` and react-drm.service alike: attach at startup, quiesce before system
@@ -23,6 +37,16 @@ async function main() {
 
   const keyboard = new KeyboardReader();
   const display  = createDisplay(process.argv[2]);
+
+  // Custom Layer prototype: owns its own widget list + config-gui bridge,
+  // entirely separate from config.ts/config.blueprint.ts. Started
+  // unconditionally (not preview-only) since config-gui needs a live target
+  // to drag onto in normal operation, not just during dev preview.
+  // Layer width accounts for the EscKey on wide Touch Bars (same logic as
+  // app/layout.tsx's root layout).
+  const showEsc = display.width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
+  const layerWidth = showEsc ? display.width - ESC_KEY.width - ESC_KEY.gap : display.width;
+  const customLayer = startCustomLayer(layerWidth, display.height);
 
   // Save what the touchbar currently shows as a PNG when all combo keys are
   // held. Fires once per press — re-arms only after a combo key is released.
@@ -78,6 +102,7 @@ async function main() {
   }
 
   function shutdown() {
+    try { customLayer.stop(); } catch {}
     try { result.unmount(); } catch {}
     process.kill(process.pid, 'SIGKILL');
   }

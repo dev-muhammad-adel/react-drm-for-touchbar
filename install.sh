@@ -369,6 +369,9 @@ detect_user_groups() {
 check_deploy_files() {
   local file
   [[ -w "$REPO_ROOT" ]] || fail "repository is not writable: $REPO_ROOT"
+  # 99-react-drm.rules is generated (gitignored): this t2linux installer copies
+  # its profile rules file into the canonical name the service steps use.
+  cp -f "$REPO_ROOT/system/99-react-drm-t2linux.rules" "$REPO_ROOT/system/99-react-drm.rules"
   for file in package.json package-lock.json system/99-react-drm.rules system/react-drm.service system/react-drm-tb-detach; do
     [[ -r "$REPO_ROOT/$file" ]] || fail "required deployment file is missing or unreadable: $file"
   done
@@ -707,10 +710,26 @@ seed_user_config() {
   fi
 }
 
+# This installer is the t2linux (upstream) profile. Seed the per-distro
+# hardware profile into the repo-root .env, which the systemd service loads
+# via EnvironmentFile (see system/react-drm.service). Never overwrite an
+# existing .env — the app treats it as user-editable config.
+seed_distro_env() {
+  local example="$REPO_ROOT/.env.example.t2linux"
+  local live="$REPO_ROOT/.env"
+  if [[ -e "$live" ]]; then
+    info "Keeping existing $live"
+    return
+  fi
+  info "Seeding $live from $example"
+  cp "$example" "$live"
+}
+
 build_project() {
   info "Installing npm dependencies"
   (cd "$REPO_ROOT" && npm ci)
   seed_user_config
+  seed_distro_env
   info "Building react-drm and the control center"
   (cd "$REPO_ROOT/linux-touchbar-control-center" && npm run build)
   info "Building the config editor"
@@ -784,18 +803,20 @@ install_udev_rules() {
 }
 
 install_user_service() {
-  local service_dir service_file temporary_file workdir_q start_q detach_q
+  local service_dir service_file temporary_file workdir_q start_q detach_q envfile_q
   service_dir="$HOME/.config/systemd/user"
   service_file="$service_dir/react-drm.service"
   workdir_q=$(systemd_escape_path "$REPO_ROOT/linux-touchbar-control-center")
   start_q=$(systemd_escape_path "$REPO_ROOT/linux-touchbar-control-center/dist/index.js")
   detach_q=$(systemd_escape_path "$REPO_ROOT/system/react-drm-tb-detach")
+  envfile_q=$(systemd_escape_path "$REPO_ROOT/.env")
 
   info "Installing systemd user service"
   install -d -m 0755 "$service_dir"
   temporary_file=$(mktemp --suffix=.service "$service_dir/react-drm-install.XXXXXX")
-  if ! awk -v workdir="$workdir_q" -v start="$start_q" -v detach="$detach_q" '
+  if ! awk -v workdir="$workdir_q" -v start="$start_q" -v detach="$detach_q" -v envfile="$envfile_q" '
     /^WorkingDirectory=/ { print "WorkingDirectory=" workdir; next }
+    /^EnvironmentFile=/ { print "EnvironmentFile=-" envfile; next }
     /^ExecStart=/ { print "ExecStart=node " start; next }
     /^ExecStopPost=/ { print "ExecStopPost=-" detach; next }
     { print }

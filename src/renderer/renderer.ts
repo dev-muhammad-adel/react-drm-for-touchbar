@@ -12,10 +12,11 @@ import { LayoutContext } from '../scene/layout-context';
 import { DisplaySizeContext, NativeDrawContext } from '../scene/display-context';
 import type { NativeDraw } from '../scene/display-context';
 import { TouchReader, getTouchDevicePath } from '../native/input';
-import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice } from '../native/keyboard';
+import { KeyboardReader, findKeyboardDevices, findPointerDevices, findLidDevice, readLidClosed } from '../native/keyboard';
 import type { SceneNode, RootContainer } from '../scene/types';
 import type { LayoutBox } from '../scene/layout';
 import type { Display } from '../native/binding';
+import { TB_BACKLIGHT_NAMES, DISPLAY_BACKLIGHT_NAMES } from '../native/hardware';
 import { createLogger } from '../logger';
 
 const log = createLogger('renderer');
@@ -337,21 +338,52 @@ function watchKeyboard(onActivity: () => void): () => void {
 }
 
 // Lid: EV_SW + SW_LID — value 1 = closed, 0 = open. Single-device, wrapped to the
-// array contract the helper expects.
+// array contract the helper expects. The lid switch (unlike the keyboard) never
+// *fires* an event for the state that exists at startup — it only reports
+// transitions — so the initial lid state is read once via readLidClosed() and
+// pushed as the baseline before changes are watched.
 function watchLid(onLid: (closed: boolean) => void): () => void {
+  let lastState: boolean | undefined;
+  let stateReadWarningShown = false;
+
   return watchEvdev(
     'watchLid',
-    () => { try { const d = findLidDevice(); return d ? [d] : []; } catch { return []; } },
-    (type, code, value) => { if (type === 5 && code === 0) onLid(value === 1); },
+    () => {
+      try {
+        const device = findLidDevice();
+        try {
+          const closed = readLidClosed(device);
+          if (closed !== lastState) {
+            lastState = closed;
+            console.log(`[react-drm] lid is ${closed ? 'closed' : 'open'}`);
+            onLid(closed);
+          }
+        } catch (e) {
+          if (!stateReadWarningShown) {
+            stateReadWarningShown = true;
+            console.warn('[react-drm] could not read initial lid state:', (e as Error).message);
+          }
+        }
+        return [device];
+      } catch {
+        return [];
+      }
+    },
+    (type, code, value) => {
+      if (type !== 5 || code !== 0) return;
+      const closed = value === 1;
+      if (closed === lastState) return;
+      lastState = closed;
+      onLid(closed);
+    },
   );
 }
 
 // ── Backlight control ─────────────────────────────────────────────────────────
 // Controls the Touch Bar backlight via sysfs so the "off" state actually turns
 // the panel off and wake from off reliably restores it.
-
-const TB_BACKLIGHT_NAMES  = ['display-pipe', 'appletb_backlight'];
-const DISP_BACKLIGHT_NAMES = ['apple-panel-bl', 'gmux_backlight', 'intel_backlight', 'acpi_video0'];
+// TB_BACKLIGHT_NAMES / DISPLAY_BACKLIGHT_NAMES come from native/hardware.ts —
+// the per-distro profile (t2linux upstream, or a fork's names via env).
 
 // After resume the appletb_backlight HID interface re-binds late; re-apply and
 // verify the level on this cadence until the panel confirms it (or the window
@@ -362,8 +394,13 @@ const SETTLE_WINDOW_MS   = 20_000;
 function findBacklightDir(candidates: string[]): string | null {
   try {
     const base = '/sys/class/backlight';
-    const name = fs.readdirSync(base).find(n => candidates.some(c => n.includes(c)));
-    return name ? `${base}/${name}` : null;
+    const names = fs.readdirSync(base);
+    for (const candidate of candidates) {
+      const name = names.find(n => n === candidate)
+        ?? names.find(n => n.includes(candidate));
+      if (name) return `${base}/${name}`;
+    }
+    return null;
   } catch { return null; }
 }
 
@@ -385,7 +422,7 @@ class Backlight {
     this.tbDir   = findBacklightDir(TB_BACKLIGHT_NAMES);
     this.tbFile  = this.tbDir ? `${this.tbDir}/brightness` : null;
     this.tbMax   = this.tbDir ? readInt(`${this.tbDir}/max_brightness`) : 0;
-    const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
+    const dispDir = findBacklightDir(DISPLAY_BACKLIGHT_NAMES);
     this.dispFile = dispDir ? `${dispDir}/brightness` : null;
     this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
   }
@@ -457,7 +494,7 @@ class Backlight {
   reopen(): void {
     this.resolveTb();
 
-    const dispDir = findBacklightDir(DISP_BACKLIGHT_NAMES);
+    const dispDir = findBacklightDir(DISPLAY_BACKLIGHT_NAMES);
     this.dispFile = dispDir ? `${dispDir}/brightness` : null;
     this.dispMax  = dispDir ? readInt(`${dispDir}/max_brightness`) : 0;
 
