@@ -1,7 +1,8 @@
-import React, { useContext } from 'react';
-import { Box, Text, Button, KEY, DisplaySizeContext } from 'react-drm';
+import React, { useContext, useMemo } from 'react';
+import { Box, Text, Button, FKEY_CODES, KEY, DisplaySizeContext } from 'react-drm';
 import { BackButton } from '@/components/BackButton';
 import { keys } from '@/lib/services/keyInjector';
+import { createHeldKeyHandlers } from '@/lib/services/heldKey';
 import { ESC_KEY, FN_KEYS } from '@/lib/utils/configLoader';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
@@ -22,6 +23,21 @@ const keyStyle = {
   borderBottomRightRadius: 10,
 } as const;
 
+function HeldKey({ label, keyCode }: { label: string; keyCode: number }) {
+  const handlers = useMemo(() => createHeldKeyHandlers(keys, keyCode), [keyCode]);
+
+  return (
+    <Button
+      color="#373737"
+      activeColor="#474747"
+      style={keyStyle}
+      {...handlers}
+    >
+      <Text fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>{label}</Text>
+    </Button>
+  );
+}
+
 export default function FnKeys({ width, height }: { width: number; height: number }) {
   // On wide displays without a physical Esc key, 'fn' mode adds Esc as the
   // first key in this row (sized like the F-keys). Uses the auto-detected
@@ -35,39 +51,27 @@ export default function FnKeys({ width, height }: { width: number; height: numbe
       {/* <BackButton /> */}
 
       {showEsc && (
-        <Button
+        <HeldKey
           key="esc"
-          color="#373737"
-          activeColor="#474747"
-          style={keyStyle}
-          onClick={() => keys.pressKey(KEY.ESC)}
-        >
-          <Text  fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>esc</Text>
-        </Button>
+          label="esc"
+          keyCode={KEY.ESC}
+        />
       )}
 
       {KEYS.map((key, i) => (
-        <Button
+        <HeldKey
           key={key}
-          color="#373737"
-          activeColor="#474747"
-          style={keyStyle}
-          onClick={() => keys.pressF((i + 1) as 1|2|3|4|5|6|7|8|9|10|11|12)}
-        >
-          <Text  fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>{key}</Text>
-        </Button>
+          label={key}
+          keyCode={FKEY_CODES[i]}
+        />
       ))}
 
       {FN_KEYS.extra.map(k => (
-        <Button
+        <HeldKey
           key={k.label}
-          color="#373737"
-          activeColor="#474747"
-          style={keyStyle}
-          onClick={() => keys.pressKey(k.key)}
-        >
-          <Text  fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>{k.label}</Text>
-        </Button>
+          label={k.label}
+          keyCode={k.key}
+        />
       ))}
 
     </Box>
