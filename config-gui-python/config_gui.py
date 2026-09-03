@@ -23,12 +23,79 @@ import subprocess
 import sys
 from collections import OrderedDict
 
-import gi
+
+def _gtk_dependency_hint():
+    """Return a friendly, distro-aware install hint when GTK/PyGObject is
+    missing. Decodes the package manager from /etc/os-release so it works for
+    any Linux (dnf/apt/pacman/apk/zypper/opensuse) and lists the few system
+    packages the app needs (no hardcoded distro)."""
+    ids = []
+    try:
+        with open('/etc/os-release') as f:
+            for line in f:
+                if line.startswith('ID_LIKE=') or line.startswith('ID='):
+                    val = line.split('=', 1)[1].strip().strip('"').split()
+                    ids.extend(v.lower() for v in val)
+    except OSError:
+        ids = []
+    ids = ' '.join(ids)
+
+    clue = {
+        'fedora rhel centos rocky': ('dnf', 'python3-gobject gtk3 gobject-introspection'),
+        'fedora': ('dnf', 'python3-gobject gtk3 gobject-introspection'),
+        'debian ubuntu': ('apt', 'python3-gi gir1.2-gtk-3.0'),
+        'arch': ('pacman', 'python-gobject gtk3'),
+        'alpine': ('apk', 'py3-gobject3 gtk3'),
+        'opensuse suse': ('zypper', 'python3-gobject gtk3 typelib-1_0-Gtk-3_0'),
+    }
+    for key, (pm, pkgs) in clue.items():
+        if all(k in ids for k in key.split()):
+            return pm, pkgs
+    # Fallback: just name the component, no package-manager guess.
+    return None, 'python3-gobject (PyGObject) and GTK 3'
+
+
+def _require_gtk():
+    global gi
+    try:
+        import gi
+    except Exception:
+        pm, pkgs = _gtk_dependency_hint()
+        sys.stderr.write(
+            "\nTouch Bar Config needs PyGObject + GTK 3, which aren't installed.\n")
+        if pm:
+            sys.stderr.write("Install them with:\n    sudo %s install %s\n" % (pm, pkgs))
+        else:
+            sys.stderr.write(
+                "Install your distro's python3-gobject (PyGObject) and GTK 3 "
+                "packages, then re-run this app.\n")
+        sys.stderr.write("\nSee also: https://pygobject.readthedocs.io\n\n")
+        sys.exit(1)
+
+
+_require_gtk()
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Gdk', '3.0')
-gi.require_version('GtkLayerShell', '0.1')
-from gi.repository import Gdk, GLib, Gtk, GtkLayerShell  # noqa: E402
+try:
+    gi.require_version('GtkLayerShell', '0.1')
+except ValueError:
+    pass
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
+try:
+    from gi.repository import GtkLayerShell  # noqa: E402
+except (ImportError, ValueError):
+    GtkLayerShell = None
+
+# Optionally (best-effort) pull in a ctypes view of the Wayland client library
+# and GTK's Wayland internals for ext-background-effect-v1 blur. All use is
+# guarded; on ordinary X11/GNOME-50 builds this stays inert.
+try:
+    import ctypes as _ctypes
+    import ctypes.util as _ctypes_util
+    _CT = _ctypes
+except Exception:
+    _CT = None
 
 # ── Static tables ────────────────────────────────────────────────────────────
 
@@ -1116,6 +1183,218 @@ def _ini(path, section, key):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Wayland ext-background-effect-v1 (compositor-side background blur)
+#
+# This is the standard cross-compositor blur protocol: GNOME 51 / Mutter 51,
+# KDE Plasma 6.7+, niri 26.04+ and COSMIC all advertise the
+# `ext_background_effect_manager_v1` global. GTK3 doesn't bind it and the
+# system pywayland doesn't build here, so we talk to it through ctypes +
+# libwayland-client directly. Every step is guarded so that on compositors
+# without the global (GNOME 50, X11) this simply reports "no blur" and the
+# panel uses the static frosted CSS instead.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_EXT_EFFECT_MANAGER = 'ext_background_effect_manager_v1'
+_EXT_EFFECT_SURFACE = 'ext_background_effect_surface_v1'
+
+
+class _WLMessage(_CT.Structure):
+    _fields_ = [('name', _CT.c_char_p), ('signature', _CT.c_char_p),
+                ('types', _CT.POINTER(_CT.c_void_p))]
+
+
+class _WLInterface(_CT.Structure):
+    _fields_ = [('name', _CT.c_char_p), ('version', _CT.c_int),
+                ('method_count', _CT.c_int),
+                ('methods', _CT.POINTER(_WLMessage)),
+                ('event_count', _CT.c_int),
+                ('events', _CT.POINTER(_WLMessage))]
+
+
+class _WlArg(_CT.Union):
+    _fields_ = [('i', _CT.c_int32), ('u', _CT.c_uint32), ('f', _CT.c_int32),
+                ('s', _CT.c_char_p), ('o', _CT.c_void_p), ('n', _CT.c_uint32)]
+
+
+class _RegistryListener(_CT.Structure):
+    _fields_ = [('global', _CT.c_void_p), ('global_remove', _CT.c_void_p)]
+
+
+class _WaylandBlur:
+    """Thin ctypes wrapper for ext-background-effect-v1."""
+
+    def __init__(self):
+        self.gdk = None
+        self.wl = None
+        self.wl_display = None
+        self._keep = []
+
+    def _gpointer(self, gobj):
+        import ctypes as c
+        f = c.pythonapi.PyCapsule_GetPointer
+        f.restype = c.c_void_p
+        f.argtypes = [c.py_object, c.c_char_p]
+        return f(gobj.__gpointer__, None)
+
+    def _iface_addr(self, name):
+        return _CT.addressof(_CT.c_void_p.in_dll(self.wl, name))
+
+    def _fake_iface(self, name, version, methods):
+        arr = (_WLMessage * max(1, len(methods)))()
+        for i, (mname, msig) in enumerate(methods):
+            arr[i].name = mname.encode()
+            arr[i].signature = msig.encode()
+            arr[i].types = _CT.POINTER(_CT.c_void_p)()
+        iface = _WLInterface()
+        iface.name = name.encode()
+        iface.version = version
+        iface.method_count = len(methods)
+        iface.methods = _CT.cast(arr, _CT.POINTER(_WLMessage))
+        iface.event_count = 0
+        iface.events = _CT.POINTER(_WLMessage)()
+        self._keep.append((arr, iface))
+        return _CT.addressof(iface)
+
+    def _marshal_ctor(self, proxy, opcode, args, iface_addr, version):
+        return self.wl.wl_proxy_marshal_array_constructor_versioned(
+            _CT.c_void_p(proxy), opcode, args, _CT.c_void_p(iface_addr), version)
+
+    def probe_available(self):
+        """Return True if the compositor advertises ext-background-effect-v1."""
+        try:
+            self._init()
+            return self._ext_global_name() is not None
+        except Exception:
+            return False
+
+    def _init(self):
+        from gi.repository import Gdk, Gtk  # noqa
+        disp = Gdk.Display.get_default()
+        if 'Wayland' not in type(disp).__name__:
+            raise RuntimeError('not Wayland')
+        self.gdk = _CT.CDLL('libgdk-3.so.0')
+        self.wl = _CT.CDLL('libwayland-client.so.0')
+        self.gdk.gdk_wayland_display_get_wl_display.restype = _CT.c_void_p
+        self.gdk.gdk_wayland_display_get_wl_display.argtypes = [_CT.c_void_p]
+        self.gdk.gdk_wayland_display_get_wl_compositor.restype = _CT.c_void_p
+        self.gdk.gdk_wayland_display_get_wl_compositor.argtypes = [_CT.c_void_p]
+        self.gdk.gdk_wayland_window_get_wl_surface.restype = _CT.c_void_p
+        self.gdk.gdk_wayland_window_get_wl_surface.argtypes = [_CT.c_void_p]
+        self.wl.wl_proxy_marshal_array_constructor_versioned.restype = _CT.c_void_p
+        self.wl.wl_proxy_marshal_array_constructor_versioned.argtypes = [
+            _CT.c_void_p, _CT.c_uint32, _CT.POINTER(_WlArg), _CT.c_void_p,
+            _CT.c_uint32]
+        self.wl.wl_proxy_marshal_array.restype = None
+        self.wl.wl_proxy_marshal_array.argtypes = [
+            _CT.c_void_p, _CT.c_uint32, _CT.POINTER(_WlArg)]
+        self.wl.wl_display_roundtrip.restype = _CT.c_int
+        self.wl.wl_display_roundtrip.argtypes = [_CT.c_void_p]
+        self.wl.wl_proxy_add_listener.restype = _CT.c_int
+        self.wl.wl_proxy_add_listener.argtypes = [_CT.c_void_p, _CT.c_void_p, _CT.c_void_p]
+        self.wl.wl_display_flush.restype = _CT.c_int
+        self.wl.wl_display_flush.argtypes = [_CT.c_void_p]
+        self.wl_display = self.gdk.gdk_wayland_display_get_wl_display(
+            self._gpointer(disp))
+        self.gdk_display = disp
+        self._ext_entry = None
+        self._ext_probed = False
+
+    def _ext_global_name(self):
+        if self._ext_probed:
+            return self._ext_entry
+        self._ext_probed = True
+        reg_iface = self._iface_addr('wl_registry_interface')
+        registry = self._marshal_ctor(self.wl_display, 1, (_WlArg * 4)(),
+                                      reg_iface, 1)
+        holder = []
+
+        @_CT.CFUNCTYPE(None, _CT.c_void_p, _CT.c_void_p, _CT.c_uint32,
+                       _CT.c_char_p, _CT.c_uint32)
+        def gc(data, reg, name, interface, version):
+            if interface and interface.decode() == _EXT_EFFECT_MANAGER:
+                holder.append((name, version))
+
+        @_CT.CFUNCTYPE(None, _CT.c_void_p, _CT.c_void_p, _CT.c_uint32)
+        def grc(data, reg, name):
+            pass
+
+        lst = _RegistryListener()
+        setattr(lst, 'global', _CT.cast(gc, _CT.c_void_p))
+        lst.global_remove = _CT.cast(grc, _CT.c_void_p)
+        self.wl.wl_proxy_add_listener(registry, _CT.byref(lst), None)
+        self.wl.wl_display_roundtrip(self.wl_display)
+        self._keep.append((gc, grc, registry))
+        self._ext_entry = holder[0] if holder else None
+        return self._ext_entry
+
+    def apply_to_window(self, gtk_window, width, height):
+        """Bind the manager, attach a blur surface to the window's wl_surface,
+        and set a blur region covering (0,0,width,height). Best-effort."""
+        entry = self._ext_global_name()
+        if entry is None:
+            return False
+        name, version = entry
+        version = min(version, 1)
+        mgr_addr = self._fake_iface(
+            _EXT_EFFECT_MANAGER, 1,
+            [('destroy', ''), ('get_background_effect', 'no')])
+        args = (_WlArg * 4)()
+        args[0].u = name
+        args[1].s = _EXT_EFFECT_MANAGER.encode()
+        args[2].u = version
+        registry = self._get_registry()
+        manager = self._marshal_ctor(registry, 0, args, mgr_addr, version)
+        if not manager:
+            return False
+
+        gwin = gtk_window.get_window()
+        if gwin is None:
+            return False
+        surface = self.gdk.gdk_wayland_window_get_wl_surface(
+            self._gpointer(gwin))
+        if not surface:
+            return False
+
+        surf_addr = self._fake_iface(
+            _EXT_EFFECT_SURFACE, 1,
+            [('destroy', ''), ('set_blur_region', 'o')])
+        a = (_WlArg * 4)()
+        a[0].o = surface
+        eff = self._marshal_ctor(manager, 1, a, surf_addr, 1)
+        if not eff:
+            return False
+
+        compositor = self.gdk.gdk_wayland_display_get_wl_compositor(
+            self._gpointer(self.gdk_display))
+
+        reg_iface = self._iface_addr('wl_region_interface')
+        region = self._marshal_ctor(compositor, 1, (_WlArg * 4)(),
+                                    reg_iface, 1)
+        ra = (_WlArg * 4)()
+        ra[0].i = 0
+        ra[1].i = 0
+        ra[2].i = int(width)
+        ra[3].i = int(height)
+        self.wl.wl_proxy_marshal_array(region, 1, ra)
+        b = (_WlArg * 4)()
+        b[0].o = region
+        self.wl.wl_proxy_marshal_array(eff, 1, b)
+        try:
+            self.wl.wl_display_flush(self.wl_display)
+        except Exception:
+            pass
+        self._keep.append((manager, eff, region))
+        return True
+
+    def _get_registry(self):
+        reg_iface = self._iface_addr('wl_registry_interface')
+        registry = self._marshal_ctor(self.wl_display, 1, (_WlArg * 4)(),
+                                      reg_iface, 1)
+        self._keep.append(registry)
+        return registry
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # GTK UI
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1123,38 +1402,49 @@ CSS = b"""
 /* Old-Unity-launcher look: neutral dark glass, Ubuntu orange accents.
    The toplevel itself must not paint: the theme default is opaque. */
 window { background: transparent; }
-.root { background: linear-gradient(180deg, rgba(44,44,47,0.60) 0%, rgba(19,19,21,0.72) 100%); }
+/* Frosted glass when compositor blur IS supported: keep the panel
+   translucent so real blur (ext-background-effect-v1) shows through. */
+.root {
+  background: linear-gradient(180deg, rgba(44,44,47,0.30) 0%, rgba(16,16,18,0.42) 100%);
+}
+/* No-compositor-blur fallback (GNOME/X11): solid opaque background - no
+   opacity, since there is nothing to blur behind. A faint sheen only. */
+.root.frost {
+  background: linear-gradient(180deg, #2b2b2e 0%, #19191b 100%);
+}
+.frost {
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.00) 55%);
+}
 .topbar { background: rgba(0,0,0,0.18); padding: 8px 12px; }
 .navbar { background: rgba(0,0,0,0.28); padding: 5px 10px; }
-.logo-chip { background: #E95420; border-radius: 3px; padding: 2px 7px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+.logo-chip { background: #2A9BF4; border-radius: 3px; padding: 2px 7px; }
 .logo-chip label { color:#ffffff; font-weight:800; font-size:11px; }
 .app-title { color:#f4f4f2; font-weight:700; font-size:13px; }
 .status { border-radius:11px; padding:2px 11px; font-size:11px; color:#b8b8b8; }
 .status.ok { background:rgba(120,190,120,.14); color:#8fd48f; }
-.status.err { background:rgba(233,84,32,.18); color:#F89B57; }
-button.primary { background: linear-gradient(180deg,#EF7832,#DD4814); color:#ffffff;
-  font-weight:700; border-radius:4px; padding:5px 15px; border:none;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25); }
+.status.err { background:rgba(255,110,110,.16); color:#ff8a8a; }
+button.primary { background: linear-gradient(180deg,#4FB7F7,#1B7FD0); color:#ffffff;
+  font-weight:700; border-radius:4px; padding:5px 15px; border:none; }
 button.primary:disabled { opacity:.45; }
-button.primary:hover { background: linear-gradient(180deg,#F58949,#E95420); }
+button.primary:hover { background: linear-gradient(180deg,#5FC1FF,#2A9BF4); }
 button.ghost { background:rgba(255,255,255,0.04); color:#e8e8e6; border-radius:4px;
   padding:4px 12px; border:1px solid rgba(255,255,255,0.12); font-size:12px; }
 button.ghost:hover { background:rgba(255,255,255,0.10); }
-button.danger { background:transparent; color:#e07a5f; border-radius:4px;
-  padding:2px 10px; font-size:11px; border:1px solid rgba(224,122,95,.3); }
-button.danger:hover { background:rgba(224,122,95,.12); }
+button.danger { background:transparent; color:#ff7a7a; border-radius:4px;
+  padding:2px 10px; font-size:11px; border:1px solid rgba(255,122,122,.35); }
+button.danger:hover { background:rgba(255,110,110,.16); }
 button.win-close { background:rgba(255,255,255,0.06); border:none; border-radius:4px;
   padding:4px 9px; color:#c9c9c9; }
-button.win-close:hover { background:#E95420; color:#fff; }
+button.win-close:hover { background:#2A9BF4; color:#fff; }
 entry.search { background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.10);
   border-radius:4px; padding:5px 10px; color:#f4f4f2; min-width:210px; }
-entry.search:focus { border-color:#E95420; }
+entry.search:focus { border-color:#2A9BF4; }
 .section-title { color:#f4f4f2; font-size:22px; font-weight:800; }
 .section-desc { color:#b0b0ae; font-size:12px; }
-.accent-bar { background:linear-gradient(90deg,#E95420,#F89B57); border-radius:2px;
+.accent-bar { background:linear-gradient(90deg,#2A9BF4,#6CC4FF); border-radius:2px;
   min-height:3px; }
-.group-header { color:#F89B57; font-size:10px; font-weight:800; margin-top:18px;
+.group-header { color:#6CC4FF; font-size:10px; font-weight:800; margin-top:18px;
   margin-bottom:4px; letter-spacing:1px; }
 .field-label { color:#c2c2c0; font-size:12px; }
 .field-label.dim { color:#8a8a88; font-size:11px; }
@@ -1162,26 +1452,26 @@ row-field { border-bottom:1px solid rgba(255,255,255,0.06); padding:9px 2px; min
 entry.field { background:rgba(0,0,0,0.30); border:1px solid rgba(255,255,255,0.10);
   border-radius:4px; padding:4px 9px; color:#f4f4f2; min-width:190px; }
 entry.mono { font-family:monospace; font-size:12px; }
-entry.field:focus { border-color:#E95420; background:rgba(0,0,0,0.45); }
+entry.field:focus { border-color:#2A9BF4; background:rgba(0,0,0,0.45); }
 .card { background:rgba(255,255,255,0.055); border:1px solid rgba(255,255,255,0.08);
   border-radius:6px; padding:16px; margin-bottom:14px; }
 .override-card { background:rgba(255,255,255,0.035); border:1px solid rgba(255,255,255,0.06);
   border-radius:6px; padding:13px 15px; margin-bottom:12px; }
-.override-class { font-family:monospace; font-weight:600; color:#F89B57; font-size:13px; }
+.override-class { font-family:monospace; font-weight:600; color:#6CC4FF; font-size:13px; }
 .key-capture { background:rgba(0,0,0,0.30); border:1px solid rgba(255,255,255,0.10);
   border-radius:4px; padding:4px 12px; font-family:monospace; font-size:11px; color:#f4f4f2; }
-.key-capture.listening { background:rgba(233,84,32,.16); border-color:#E95420; color:#F89B57; }
+.key-capture.listening { background:rgba(42,155,244,.16); border-color:#2A9BF4; color:#6CC4FF; }
 .nav-item { background:transparent; border:none; border-radius:4px; padding:8px 15px; }
 .nav-item label { color:#d2d2d0; font-size:9.5px; font-weight:700; }
 .nav-item:hover { background:rgba(255,255,255,0.09); }
-.nav-item.active { background:rgba(233,84,32,0.24);
-  box-shadow: inset 0 -2px 0 #E95420; }
-.nav-item.active label { color:#ffd9c4; }
+.nav-item.active { background:rgba(42,155,244,0.24);
+  border-bottom:2px solid #2A9BF4; }
+.nav-item.active label { color:#cfeaff; }
 .preview-caption { color:#8f8f8d; font-size:10.5px; margin-top:5px; }
 .chip { background:rgba(255,255,255,0.055); border:1px solid rgba(255,255,255,0.12);
   border-radius:4px; padding:8px 15px; font-weight:600; font-size:12px; color:#f0f0ee; }
-.chip:hover { border-color:#E95420; background:rgba(233,84,32,0.10); }
-.chip:active { background:rgba(233,84,32,0.22); }
+.chip:hover { border-color:#2A9BF4; background:rgba(42,155,244,0.10); }
+.chip:active { background:rgba(42,155,244,0.22); }
 /* Placeholder tiles: quiet, flat, consistent with the panel's cards.
    The button is the widget's real footprint; content is centred. */
 .chip-ph { padding:0; min-width:0; min-height:0;
@@ -1191,13 +1481,13 @@ entry.field:focus { border-color:#E95420; background:rgba(0,0,0,0.45); }
   color:#ececea; }
 .chip-ph label { font-size:11px; font-weight:600; padding:0 4px; }
 .chip-ph:hover { background:rgba(255,255,255,0.12);
-  border-color:rgba(233,84,32,0.65); }
-.chip-ph:active { background:rgba(233,84,32,0.20); }
+  border-color:rgba(42,155,244,0.65); }
+.chip-ph:active { background:rgba(42,155,244,0.20); }
 .conn-ok { color:#8fd48f; font-size:12px; font-weight:600; }
-.conn-err { color:#F89B57; font-size:12px; font-weight:600; }
+.conn-err { color:#ff8a8a; font-size:12px; font-weight:600; }
 .cl-hint { color:#8f8f8d; font-size:11px; }
-.drag-ghost { background:rgba(25,25,27,0.95); border:1px solid #E95420;
-  border-radius:5px; padding:5px 12px; color:#F89B57; font-weight:700; font-size:12px; }
+.drag-ghost { background:rgba(25,25,27,0.95); border:1px solid #2A9BF4;
+  border-radius:5px; padding:5px 12px; color:#6CC4FF; font-weight:700; font-size:12px; }
 .empty-state { color:#b8b8b6; font-size:13px; padding:40px 20px; }
 popover.bubble { background:rgba(25,25,27,0.97); border:1px solid rgba(255,255,255,0.10);
   border-radius:8px; padding:0; }
@@ -1206,12 +1496,12 @@ popover.bubble list row:hover { background:rgba(255,255,255,0.08); }
 combobox button { background:rgba(0,0,0,0.30); color:#f4f4f2;
   border:1px solid rgba(255,255,255,0.10); border-radius:4px; padding:3px 8px; }
 combobox entry { background:rgba(0,0,0,0.30); color:#f4f4f2; }
-button:focus { outline: 2px solid #F89B57; outline-offset: -2px; }
-.nav-item:focus { outline-color: #F89B57; background: rgba(255,255,255,0.09); }
+button:focus { outline: 2px solid #6CC4FF; outline-offset: -2px; }
+.nav-item:focus { outline-color: #6CC4FF; background: rgba(255,255,255,0.09); }
 .chip:focus, .key-capture:focus, button.win-close:focus, button.danger:focus {
-  outline: 2px solid #F89B57; outline-offset: -2px; }
+  outline: 2px solid #6CC4FF; outline-offset: -2px; }
 checkbutton:focus, switch:focus, spinbutton:focus, scale:focus {
-  outline: 2px solid #F89B57; outline-offset: -2px; }
+  outline: 2px solid #6CC4FF; outline-offset: -2px; }
 """
 
 
@@ -1293,6 +1583,8 @@ class ConfigGUI:
         self.cl_state = {'widgets': [], 'dirty': False, 'bar_w': 2008.0}
         self.cl_slot = None          # CL tab widgets when open
         self.icon_cache = {}
+        self.compositor_blur = False  # True when compositor-side blur is active
+        self._blur_warned = False
 
         ensure_config_exists(self.paths)
         self.state = read_config(self.paths.config_path, self.paths.blueprint_path)
@@ -1303,38 +1595,90 @@ class ConfigGUI:
         self.bridge_ok = None
         self._dnd_state = None
 
+        self.compositor_blur = False
+        self._wl_blur = None
         self.win = Gtk.Window()
         self.win.set_title('Touch Bar Config')
         self.win.set_default_size(1280, 700)
 
-        if not os.environ.get('CONFIG_GUI_DESKTOP'):
+        # Compositor capabilities that decide the rendering path. All probing
+        # is guarded so a plain X11 or GNOME-50 session stays on a working path.
+        ext_blur = False
+        if (_CT is not None and os.environ.get('WAYLAND_DISPLAY')
+                and not os.environ.get('GDK_BACKEND')
+                and not os.environ.get('CONFIG_GUI_DESKTOP')):
             try:
-                GtkLayerShell.init_for_window(self.win)
-                GtkLayerShell.set_layer(self.win, GtkLayerShell.Layer.TOP)
-                GtkLayerShell.set_keyboard_mode(
-                    self.win, GtkLayerShell.KeyboardMode.ON_DEMAND)
-                GtkLayerShell.set_namespace(self.win, 'touchbar-config')
-                for e in (GtkLayerShell.Edge.BOTTOM, GtkLayerShell.Edge.LEFT,
-                          GtkLayerShell.Edge.RIGHT):
-                    GtkLayerShell.set_anchor(self.win, e, True)
-                GtkLayerShell.set_exclusive_zone(self.win, -1)
-                monitor_geo = self._monitor_geometry()
-                panel_h = int(monitor_geo.height * WINDOW_HEIGHT_FRACTION)
-                self.win.set_size_request(-1, panel_h)
-                # Sit flush above the Touch Bar dock strip (preview app or
-                # the react-drm bar) instead of overlapping it.
-                mon_w = getattr(monitor_geo, 'width', 0) or 1920
-                strip_h = os.environ.get('CONFIG_GUI_BOTTOM_MARGIN')
-                if strip_h is None:
-                    import subprocess as _sp
-                    running = _sp.run(['pgrep', '-f', 'gtk_layer_app.py'],
-                                      capture_output=True).returncode == 0
-                    strip_h = str(int(round(
-                        (mon_w - 2 * 10) / (2008 / 60)) + 6) if running else 0)
-                GtkLayerShell.set_margin(self.win, GtkLayerShell.Edge.BOTTOM,
-                                         int(strip_h))
-            except Exception as e:
-                print('layer-shell unavailable:', e)
+                self._wl_blur = _WaylandBlur()
+                ext_blur = self._wl_blur.probe_available()
+            except Exception:
+                self._wl_blur = None
+                ext_blur = False
+        self.compositor_blur = ensure_compositor_blur() or ext_blur
+        self._panel_w = None
+        self._panel_h = None
+
+        if not os.environ.get('CONFIG_GUI_DESKTOP'):
+            layer_ok = False
+            if GtkLayerShell is not None:
+                try:
+                    if not GtkLayerShell.is_supported():
+                        raise RuntimeError('Layer Shell not supported')
+                    GtkLayerShell.init_for_window(self.win)
+                    GtkLayerShell.set_layer(self.win, GtkLayerShell.Layer.TOP)
+                    GtkLayerShell.set_keyboard_mode(
+                        self.win, GtkLayerShell.KeyboardMode.ON_DEMAND)
+                    GtkLayerShell.set_namespace(self.win, 'touchbar-config')
+                    for e in (GtkLayerShell.Edge.BOTTOM, GtkLayerShell.Edge.LEFT,
+                              GtkLayerShell.Edge.RIGHT):
+                        GtkLayerShell.set_anchor(self.win, e, True)
+                    GtkLayerShell.set_exclusive_zone(self.win, -1)
+                    monitor_geo = self._monitor_geometry()
+                    panel_h = int(monitor_geo.height * WINDOW_HEIGHT_FRACTION)
+                    self.win.set_size_request(-1, panel_h)
+                    mon_w = getattr(monitor_geo, 'width', 0) or 1920
+                    strip_h = os.environ.get('CONFIG_GUI_BOTTOM_MARGIN')
+                    if strip_h is None:
+                        import subprocess as _sp
+                        running = _sp.run(['pgrep', '-f', 'gtk_layer_app.py'],
+                                          capture_output=True).returncode == 0
+                        strip_h = str(int(round(
+                            (mon_w - 2 * 10) / (2008 / 60)) + 6) if running else 0)
+                    GtkLayerShell.set_margin(self.win, GtkLayerShell.Edge.BOTTOM,
+                                             int(strip_h))
+                    layer_ok = True
+                    self._panel_w, self._panel_h = mon_w, panel_h
+                    if ext_blur:
+                        self.win.connect(
+                            'realize',
+                            lambda w: self._wl_blur.apply_to_window(
+                                w, (self._panel_w or 1280), (self._panel_h or 700)))
+                except Exception as e:
+                    print('layer-shell unavailable:', e)
+            if not layer_ok:
+                if ext_blur:
+                    # GNOME 51 / KDE / COSMIC: no layer-shell, but real blur is
+                    # available on a normal Wayland toplevel. Blur matters more
+                    # than pixel-perfect placement, so stay native Wayland.
+                    try:
+                        self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
+                    except Exception:
+                        pass
+                    monitor_geo = self._monitor_geometry()
+                    self._panel_w = getattr(monitor_geo, 'width', 0) or 1920
+                    self._panel_h = int(monitor_geo.height * WINDOW_HEIGHT_FRACTION)
+                    self.win.set_default_size(self._panel_w, self._panel_h)
+                    self.win.connect(
+                        'realize',
+                        lambda w: self._wl_blur.apply_to_window(
+                            w, self._panel_w, self._panel_h))
+                else:
+                    # No blur path at all (GNOME 50, plain X11): move to XWayland
+                    # where move()/keep_above actually position the panel.
+                    if (os.environ.get('WAYLAND_DISPLAY')
+                            and not os.environ.get('GDK_BACKEND')):
+                        os.environ['GDK_BACKEND'] = 'x11'
+                        os.execv(sys.executable, [sys.executable] + sys.argv)
+                    self._x11_fallback()
 
         # Translucency: pick the screen's RGBA visual so alpha in the CSS is
         # honoured by the compositor (same recipe as preview-app).
@@ -1350,7 +1694,10 @@ class ConfigGUI:
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        root.get_style_context().add_class('root')
+        self._frost_ctx = root.get_style_context()
+        self._frost_ctx.add_class('root')
+        if not self.compositor_blur:
+            self._frost_ctx.add_class('frost')
 
         root.pack_start(self._build_header(), False, False, 0)
         root.pack_start(self._build_content(), True, True, 0)
@@ -1387,14 +1734,54 @@ class ConfigGUI:
         mon = disp.get_monitor_at_window(self.win.get_window()) if self.win.get_window() else disp.get_primary_monitor()
         return mon.get_geometry() if mon else type('G', (), {'height': 1080})()
 
+    def _x11_fallback(self):
+        """X11 / XWayland path: pin the panel to the bottom edge and keep it
+        above all other windows (move()/keep_above are honoured here)."""
+        try:
+            self.win.set_type_hint(Gdk.WindowTypeHint.DOCK)
+            self.win.set_keep_above(True)
+            monitor_geo = self._monitor_geometry()
+            panel_h = int(monitor_geo.height * WINDOW_HEIGHT_FRACTION)
+            mon_w = getattr(monitor_geo, 'width', 0) or 1920
+            self.win.set_default_size(mon_w, panel_h)
+
+            def _reposition(*_a):
+                x = getattr(monitor_geo, 'x', 0)
+                y = getattr(monitor_geo, 'y', 0) + monitor_geo.height - panel_h
+                self.win.move(x, y)
+                self.win.present()
+                return False
+            self.win.connect('realize', lambda w: GLib.idle_add(_reposition))
+        except Exception:
+            pass
+
     # ── header ──
+    def _load_logo(self):
+        """Load the app logo (logo.png beside this script) scaled to fit the
+        header height. Returns a Gtk.Image or None if missing/unreadable."""
+        try:
+            from gi.repository import GdkPixbuf
+            here = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(here, 'logo.png')
+            if not os.path.exists(path):
+                return None
+            scaled = GdkPixbuf.Pixbuf.new_from_file_at_size(path, -1, 24)
+            image = Gtk.Image.new_from_pixbuf(scaled)
+            return image
+        except Exception:
+            return None
+
     def _build_header(self):
         hb = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         hb.get_style_context().add_class('topbar')
 
-        chip = Gtk.Label(label='▁▃▅')
-        chip.get_style_context().add_class('logo-chip')
-        hb.pack_start(chip, False, False, 0)
+        logo = self._load_logo()
+        if logo is not None:
+            hb.pack_start(logo, False, False, 0)
+        else:
+            chip = Gtk.Label(label='▁▃▅')
+            chip.get_style_context().add_class('logo-chip')
+            hb.pack_start(chip, False, False, 0)
 
         title = Gtk.Label(label='Touch Bar Config')
         title.get_style_context().add_class('app-title')
@@ -2522,37 +2909,83 @@ def hf(v):
     return v
 
 
-# ── niri blur layer-rule (compositor-side blur; optional) ────────────────────
+# ── Compositor-side blur (optional, where the compositor supports it) ───────
+# Real content-behind blur can ONLY come from the compositor; GNOME/Mutter and
+# plain X11 expose no such API, so there the panel falls back to a static
+# frosted CSS texture (.frost). On compositors with layer-shell blur (niri,
+# Hyprland, Swayfx, KDE KWin) we auto-install the rule and report True so the
+# fake frost is suppressed and the real glass shows through.
 
 LAYER_RULE_MARKER = '// react-drm config-gui layer rule (auto-installed)'
 
 
-def ensure_niri_layer_rule():
-    if not os.environ.get('NIRI_SOCKET'):
-        return
-    path = os.path.join(home(), '.config/niri/config.kdl')
-    try:
-        with open(path) as f:
-            current = f.read()
-    except OSError:
-        return
-    rule = (f'{LAYER_RULE_MARKER}\nlayer-rule {{\n'
-            f'    match namespace="touchbar-config"\n'
-            f'    background-effect {{ blur true; }}\n}}\n')
-    if LAYER_RULE_MARKER in current:
-        return
-    try:
-        with open(path, 'a') as f:
-            f.write('\n' + rule)
-    except OSError:
-        pass
+def ensure_compositor_blur():
+    """Configure compositor-side blur for this session if supported.
+
+    Returns True when real blur is (or will be) applied to the layer surface,
+    False when the compositor can't blur it (GNOME, X11, most bare WM setups).
+    """
+    desktop = os.environ.get('XDG_CURRENT_DESKTOP', '').lower()
+    # niri
+    if os.environ.get('NIRI_SOCKET'):
+        path = os.path.join(home(), '.config/niri/config.kdl')
+        try:
+            with open(path) as f:
+                current = f.read()
+        except OSError:
+            return False
+        rule = (f'{LAYER_RULE_MARKER}\nlayer-rule {{\n'
+                f'    match namespace="touchbar-config"\n'
+                f'    background-effect {{ blur true; }}\n}}\n')
+        if LAYER_RULE_MARKER not in current:
+            try:
+                with open(path, 'a') as f:
+                    f.write('\n' + rule)
+            except OSError:
+                pass
+        return True
+    # Hyprland (wlroots with blur module enabled)
+    if 'hyprland' in desktop:
+        path = _hypr_config_path()
+        if path:
+            try:
+                with open(path) as f:
+                    current = f.read()
+            except OSError:
+                current = ''
+            if LAYER_RULE_MARKER not in current:
+                rule = (f'{LAYER_RULE_MARKER}\n'
+                        f'layerrule = blur, namespace:touchbar-config\n'
+                        f'layerrule = ignorealpha 0.5, namespace:touchbar-config\n')
+                try:
+                    with open(path, 'a') as f:
+                        f.write('\n' + rule)
+                except OSError:
+                    pass
+        return True
+    # Swayfx / river / KWin: blur IS possible but needs per-user setup that we
+    # can't safely auto-write for all of them — report True only if the user has
+    # already wired it (detected via an env opt-in) to avoid clashing with the
+    # fake frost. Default them to False (use the static frost).
+    return False
+
+
+def _hypr_config_path():
+    env = os.environ.get('HYPRLAND_CONFIG_PATH')
+    if env:
+        return env
+    for cand in (os.path.join(home(), '.config/hypr/hyprland.conf'),
+                 os.path.join(home(), '.config/hypr/hyprland.conf'),
+                 '/etc/hypr/hyprland.conf'):
+        if os.path.exists(cand):
+            return cand
+    return None
 
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
 
 def main():
-    ensure_niri_layer_rule()
     gui = ConfigGUI(default_repo_dir())
     Gtk.main()
 
