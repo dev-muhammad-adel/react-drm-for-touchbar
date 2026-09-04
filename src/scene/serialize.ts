@@ -351,10 +351,10 @@ function emitNode(node: SceneNode, cmds: DrawCommand[], layout: ReadonlyMap<Scen
   } else if (node.type === 'text') {
     const rawLb = layout.get(node) ?? { x: node.x ?? 0, y: node.y ?? 0, w: 0, h: 0 };
     const lb = offsetX ? { ...rawLb, x: rawLb.x - offsetX } : rawLb;
-    const [r, g, b, ca] = parseColor(node.style?.color ?? node.color);
+    const [r, g, b, ca] = parseColor(node._inherited?.color ?? node.style?.color ?? node.color);
     const a = ca * (node.style?.opacity ?? 1);
-    const size   = node.style?.fontSize   ?? node.fontSize;
-    const family = node.style?.fontFamily ?? node.fontFamily;
+    const size   = node._inherited?.fontSize   ?? node.style?.fontSize   ?? node.fontSize;
+    const family = node._inherited?.fontFamily ?? node.style?.fontFamily ?? node.fontFamily;
     const fw         = node.style?.fontWeight;
     const bold       = fw === 'bold' || (fw !== undefined && parseInt(fw, 10) >= 700);
     const italic     = node.style?.fontStyle === 'italic';

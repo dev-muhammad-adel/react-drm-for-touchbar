@@ -7,6 +7,7 @@ import { setRepaint } from './invalidate';
 import { serializeScene, frameSignature, damageRects, toBinaryBuffer } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
+import { resolveInheritance } from '../scene/inherit';
 import { TouchRegistry, TouchRegistryContext } from '../input/touch-registry';
 import { LayoutContext } from '../scene/layout-context';
 import { DisplaySizeContext, NativeDrawContext } from '../scene/display-context';
@@ -863,6 +864,7 @@ export function render(
 
   container._onCommit = (needsLayout = true) => {
     if (!yogaReady()) return; // pre-engine commits are re-rendered once yoga loads
+    resolveInheritance(container);  // CSS-like font/color cascade before layout + draw
     const t0 = PROFILE ? performance.now() : 0;
     if (needsLayout || !layoutValid) {
       layoutRef.current = computeLayoutYoga(container, container.width, container.height);

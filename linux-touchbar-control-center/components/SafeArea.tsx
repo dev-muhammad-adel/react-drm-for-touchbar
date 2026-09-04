@@ -4,10 +4,11 @@ import { Box, SAFE_INSET_X, SAFE_INSET_Y } from 'react-drm';
 interface SafeAreaProps {
   width: number;
   height: number;
+  fontFamily?: string;
   children: (width: number, height: number) => React.ReactNode;
 }
 
-export function SafeArea({ width, height, children }: SafeAreaProps) {
+export function SafeArea({ width, height, fontFamily, children }: SafeAreaProps) {
   return (
     <Box style={{
       paddingTop:    SAFE_INSET_Y,
@@ -16,6 +17,7 @@ export function SafeArea({ width, height, children }: SafeAreaProps) {
       paddingRight:  SAFE_INSET_X,
       // backgroundColor:"white",
       width, height,
+      ...(fontFamily ? { fontFamily } : {}),
     }}>
       {children(width - SAFE_INSET_X * 2, height - SAFE_INSET_Y * 2)}
     </Box>

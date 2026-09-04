@@ -65,6 +65,12 @@ export const LAYER_TRANSITION = {
   inDurationMs:  350, // entering layer — slower so the new layer eases in
 } as const;
 
+// ─── Theme ───────────────────────────────────────────────────────────────────
+
+export const THEME = {
+  fontFamily: 'IosevkaTerm Nerd Font' as string,
+} as const;
+
 // ─── Active window tracking ─────────────────────────────────────────────────
 
 export const ACTIVE_WINDOW = {
@@ -304,6 +310,7 @@ export const FN_LAYER = {
   longMs:   350,   // long-press duration when mode === 'toggle'
   doubleMs: 350,   // max gap between taps when mode === 'double-tap'
 };
+
 
 export interface FnKeyExtra {
   label: string;

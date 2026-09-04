@@ -105,8 +105,34 @@ CODE_TO_KEY_NAME = keymap.CODE_TO_KEY_NAME
 KEY_GROUPS = keymap.KEY_GROUPS
 KEY_DISPLAY = keymap.key_display
 
+
+def list_installed_fonts():
+    """Mono/spaced + UI font families installed on this system (via fontconfig)."""
+    try:
+        out = subprocess.run(['fc-list', ': family'], capture_output=True, text=True, timeout=3)
+        raw = out.stdout
+    except Exception:
+        raw = ''
+    seen, order = set(), []
+    for line in raw.splitlines():
+        # "…/File.ttf: Family,Family 2:style=…"  → grab family list up to ":style=".
+        if ':' not in line:
+            continue
+        body = line.split(':', 1)[1]
+        fams = body.split(':style=')[0]
+        for fam in fams.split(','):
+            key = fam.strip()
+            if not key or any(ch in key for ch in '[]{}') or key in seen:
+                continue
+            seen.add(key)
+            order.append(key)
+    priority = ('mono', 'iosevka', 'fira', 'jetbrains', 'hack', 'source',
+                'cascadia', 'dejavu', 'noto', 'liberation', 'ubuntu', 'cantarell')
+    order.sort(key=lambda f: (1 if not any(p in f.lower() for p in priority) else 0, f.lower()))
+    return order
+
 SECTION_NAMES = [
-    'DISPLAY', 'ESC_KEY', 'SLEEP', 'LAYER_TRANSITION', 'ACTIVE_WINDOW',
+    'DISPLAY', 'ESC_KEY', 'SLEEP', 'LAYER_TRANSITION', 'THEME', 'ACTIVE_WINDOW',
     'SCREENSHOT', 'DOLPHIN', 'KONSOLE', 'SYSTEMBAR', 'CAVA',
     'DEFAULT_BROWSER_KEYS', 'BROWSER_KEY_OVERRIDES',
     'DEFAULT_VSCODE_KEYS', 'VSCODE_KEY_OVERRIDES',
@@ -120,7 +146,8 @@ SECTION_LABELS = {
     'DEFAULT_VSCODE_KEYS': 'VS Code Keys',
     'VSCODE_KEY_OVERRIDES': 'VS Code Overrides',
     'ESC_KEY': 'Esc Key', 'ACTIVE_WINDOW': 'Active Window',
-    'SCREENSHOT': 'Screenshot', 'LAYER_TRANSITION': 'Transitions',
+    'SCREENSHOT': 'Screenshot',     'LAYER_TRANSITION': 'Transitions',
+    'THEME': 'Theme',
     'DOLPHIN': 'Dolphin', 'KONSOLE': 'Konsole', 'SYSTEMBAR': 'System Bar',
     'CAVA': 'Audio Visualizer', 'FN_LAYER': 'Fn Layer', 'FN_KEYS': 'Fn Keys',
     'CUSTOM_LAYER': 'Custom Layer',
@@ -130,6 +157,7 @@ SECTION_DESCS = {
     'DISPLAY': 'Screen timing and brightness',
     'SLEEP': 'Touch Bar behavior around system sleep',
     'LAYER_TRANSITION': 'Timing for switching between layers',
+    'THEME': 'Font and visual style',
     'DOCK': "Pinned apps and the dock's appearance",
     'DEFAULT_BROWSER_KEYS': 'Shortcuts sent to any browser window',
     'BROWSER_KEY_OVERRIDES': 'Per-browser shortcut overrides',
@@ -2139,6 +2167,7 @@ class ConfigGUI:
 
             choices = UNION_FIELDS.get(path)
             is_theme = path == 'DOCK.icons.theme'
+            is_font = path == 'THEME.fontFamily'
             row = self._field_row(humanize(key))
 
             if isinstance(val, bool):
@@ -2146,6 +2175,10 @@ class ConfigGUI:
                 sw.set_valign(Gtk.Align.CENTER)
                 sw.connect('notify::active', lambda sw_, p=path: self._edited(p, sw_.get_active()))
                 row.pack_end(sw, False, False, 0)
+            elif is_font:
+                sel = self._font_selector(scalar(val) or '', lambda v, p=path: self._edited(p, v))
+                sel.set_halign(Gtk.Align.END)
+                row.pack_end(sel, False, False, 0)
             elif choices or is_theme:
                 combo = Gtk.ComboBoxText()
                 items = (['Auto-detect'] + list(dict.fromkeys(
@@ -2470,6 +2503,83 @@ class ConfigGUI:
             if chosen_widget is not None:
                 rows_ll.select_row(chosen_widget)
                 chosen_widget.grab_focus()
+        pop.connect('map', on_shown)
+        return btn
+
+    def _font_selector(self, current, setter):
+        """A fixed-height font selector like the Fn-key key picker.
+
+        A combo-like button that opens a scrollable, bounded-height popover with
+        a search box, listing every installed font family (via fontconfig)."""
+        FIXED_H = 380
+        fonts = list_installed_fonts()
+        if current and current not in fonts:
+            fonts = [current] + fonts
+
+        btn = Gtk.Button(label=current or '(default font)')
+        btn.get_style_context().add_class('key-capture')
+        btn.set_size_request(260, -1)
+
+        pop = Gtk.Popover()
+        pop.get_style_context().add_class('bubble')
+        pop.set_relative_to(btn)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        search = Gtk.SearchEntry()
+        search.set_placeholder_text('Search fonts…')
+        box.pack_start(search, False, False, 0)
+        sc = Gtk.ScrolledWindow()
+        sc.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        sc.set_min_content_width(280)
+        sc.set_min_content_height(FIXED_H)
+        sc.set_max_content_width(280)
+        sc.set_max_content_height(FIXED_H)
+        sc.set_size_request(-1, FIXED_H)
+        rows_ll = Gtk.ListBox()
+        rows_ll.set_selection_mode(Gtk.SelectionMode.NONE)
+        sc.add(rows_ll)
+        box.pack_start(sc, True, True, 0)
+        pop.add(box)
+
+        chosen_widget = None
+
+        def fill(q=''):
+            for ch in rows_ll.get_children():
+                rows_ll.remove(ch)
+            nonlocal chosen_widget
+            chosen_widget = None
+            ql = (q or '').strip().lower()
+            for fam in [f for f in fonts if not ql or ql in f.lower()]:
+                r = Gtk.ListBoxRow()
+                r.get_style_context().add_class('key-opt')
+                lblw = Gtk.Label(label=fam, xalign=0)
+                r._name = fam
+                if fam == current:
+                    chosen_widget = r
+                r.add(lblw)
+                rows_ll.add(r)
+            rows_ll.show_all()
+
+        def on_select(_ll, row):
+            name = getattr(row, '_name', None)
+            if name:
+                btn.set_label(name)
+                if setter:
+                    setter(name)
+            pop.popdown()
+
+        rows_ll.connect('row-activated', on_select)
+        search.connect('search-changed', lambda en: fill(en.get_text()))
+
+        fill('')                       # pre-populate rows before first open
+        box.show_all()                 # show search + scrolled list up-front
+
+        btn.connect('clicked', lambda *_: pop.popup())
+        def on_shown(_p):
+            if search.get_text():
+                fill(search.get_text())
+            if chosen_widget is not None:
+                rows_ll.select_row(chosen_widget)
+            search.grab_focus()
         pop.connect('map', on_shown)
         return btn
 

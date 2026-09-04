@@ -16,6 +16,12 @@ export interface BoxNode {
   scrollX?: number; // set by ScrollBox; serializer shifts children by -scrollX
 }
 
+export interface InheritedStyle {
+  fontFamily: string;
+  fontSize: number;
+  color: Color;
+}
+
 export interface TextNode {
   type: 'text';
   x?: number;
@@ -26,6 +32,8 @@ export interface TextNode {
   text: string;
   style?: Style;
   children: SceneNode[];
+  /** @internal Stamped by resolveInheritance() before layout/serialize. */
+  _inherited?: InheritedStyle;
 }
 
 export interface TextLeafNode {

@@ -53,6 +53,7 @@ export const DOCK = cfg('DOCK');
 export const FN_LAYER = cfg('FN_LAYER');
 export const FN_KEYS = cfg('FN_KEYS');
 export const CUSTOM_LAYER = cfg('CUSTOM_LAYER');
+export const THEME = cfg('THEME');
 
 // Must run before any appIconSource() call anywhere in the app (dock.tsx's
 // module-level ICON_SRC included) — setIconTheme() also clears the lookup

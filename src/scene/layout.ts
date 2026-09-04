@@ -37,8 +37,8 @@ function heuristicWidth(text: string, fontSize: number, fontFamily: string): num
  * caused overlaps. Falls back to the heuristic if the addon can't be loaded.
  */
 export function measureText(tn: TextNode): { w: number; h: number } {
-  const fontSize   = tn.style?.fontSize   ?? tn.fontSize;
-  const fontFamily = tn.style?.fontFamily ?? tn.fontFamily ?? '';
+  const fontSize   = tn._inherited?.fontSize   ?? tn.style?.fontSize   ?? tn.fontSize;
+  const fontFamily = tn._inherited?.fontFamily ?? tn.style?.fontFamily ?? tn.fontFamily ?? '';
   const fw     = tn.style?.fontWeight;
   const bold   = fw === 'bold' || (fw !== undefined && parseInt(fw, 10) >= 700);
   const italic = tn.style?.fontStyle === 'italic';

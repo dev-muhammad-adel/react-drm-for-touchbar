@@ -6,9 +6,9 @@ import { Box, Text, Button, LayoutContext } from 'react-drm';
 import type { BoxNode } from 'react-drm';
 import { MdPlayArrow, MdPause } from 'react-icons/md';
 import { useVlc } from '@/lib/hooks/useVlc';
+import { FONT } from '@/components/launcher/theme';
 
 const ORANGE = '#fb923c';
-const FONT = 'IosevkaTerm Nerd Font';
 
 /** Microseconds → hh:mm:ss (zero-padded hours). */
 function hms(us: number): string {

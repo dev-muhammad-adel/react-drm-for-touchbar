@@ -10,14 +10,13 @@ import {
 import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
 import { useAlbumArt } from '@/lib/hooks/useAlbumArt';
 import { appIconSource } from 'react-drm';
+import { FONT } from '@/components/launcher/theme';
 
 const ACCENT: Record<string, string> = {
   firefox: '#f9731666',
   spotify: '#1db95466',
   chrome:  '#4285f466',
 };
-
-const FONT = '';
 
 // Build the vinyl record as one cached SVG: black disc, a few groove rings, the
 // album art clipped to a circle (when present), a colored center label and the

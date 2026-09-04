@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box } from 'react-drm';
-import { ESC_KEY, DOCK, FN_LAYER, CUSTOM_LAYER } from '@/lib/utils/configLoader';
+import { ESC_KEY, DOCK, FN_LAYER, CUSTOM_LAYER, THEME } from '@/lib/utils/configLoader';
 import { EscKey } from '@/components/EscKey';
 import { SafeArea } from '@/components/SafeArea';
 import { BootScreen } from '@/components/BootScreen';
@@ -49,7 +49,7 @@ export default function RootLayout({ width, height, children }: {
   const showEsc = width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
 
   return (
-    <SafeArea width={width} height={height}>
+    <SafeArea width={width} height={height} fontFamily={THEME.fontFamily}>
       {(w, h) => {
         const layerW = showEsc ? w - ESC_KEY.width - ESC_KEY.gap : w;
         const layerHost = children(layerW, h);

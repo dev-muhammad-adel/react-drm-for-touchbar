@@ -4,7 +4,8 @@
  * cursor. Kept in one place so the pills, the A–Z strip and the filtered menu
  * stay visually coherent.
  */
-export const FONT = 'IosevkaTerm Nerd Font';
+import { THEME } from '@/lib/utils/configLoader';
+export const FONT = THEME.fontFamily;
 
 // Pill / chip surfaces (app rows, close button, captions)
 export const PILL_BG         = 'rgba(255, 255, 255, 0.055)';
