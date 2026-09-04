@@ -118,7 +118,7 @@ export default function BrowserPanel({ width, height }: { width: number; height:
           {confirmClose ? (
             <Box style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <MdCheck style={{ width: 24, height: 24 }} fill="#fff" stroke="none" />
-              <Text color="#fff" fontSize={14} fontFamily="IosevkaTerm Nerd Font">CLOSE?</Text>
+              <Text color="#fff" fontSize={14}>CLOSE?</Text>
             </Box>
           ) : (
             <MdClose style={{ width: ICON_SZ, height: ICON_SZ }} fill={CLOSE_CLR} stroke="none" />

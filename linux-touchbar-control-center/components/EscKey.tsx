@@ -23,7 +23,7 @@ export function EscKey({ width, height }: { width: number; height: number }) {
         }}
         onClick={() => keys.pressKey(KEY.ESC)}
       >
-        <Text  fontSize={22} fontFamily="monospace" style={{ fontWeight: '700' }}>esc</Text>
+        <Text  fontSize={22} style={{ fontWeight: '700' }}>esc</Text>
       </Button>
     </Box>
   );

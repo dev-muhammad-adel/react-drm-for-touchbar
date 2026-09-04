@@ -27,7 +27,7 @@ export default function DolphinPanel({ width, height }: { width: number; height:
     return (
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8, gap: 10 }}>
         <Box style={{ width: 3, height: 34, borderRadius: 10, backgroundColor: ACCENT }} />
-        <Text color={DIM} fontSize={14} fontFamily="IosevkaTerm Nerd Font">
+        <Text color={DIM} fontSize={14}>
           Dolphin — waiting for D-Bus…
         </Text>
       </Box>
@@ -108,7 +108,7 @@ export default function DolphinPanel({ width, height }: { width: number; height:
           onClick={() => openDir(p.path)}
         >
           <MdFolder style={{ width: 18, height: 18 }} fill={ACCENT} stroke="none" />
-          <Text color="#cccccc" fontSize={13} fontFamily="IosevkaTerm Nerd Font">{p.title}</Text>
+          <Text color="#cccccc" fontSize={13}>{p.title}</Text>
         </Button>
       ))}
 

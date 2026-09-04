@@ -46,7 +46,7 @@ export default function KonsolePanel({ width, height }: { width: number; height:
   if (!connected) {
     return (
       <Box style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color={DIM} fontSize={12} fontFamily="IosevkaTerm Nerd Font">
+        <Text color={DIM} fontSize={12}>
           Konsole not running
         </Text>
       </Box>
@@ -66,7 +66,7 @@ export default function KonsolePanel({ width, height }: { width: number; height:
         <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={GREEN} stroke="none" />
       </Btn>
       <Box style={{ width: 40, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color="#fff" fontSize={11} fontFamily="IosevkaTerm Nerd Font">
+        <Text color="#fff" fontSize={11}>
           {tabCount > 0 ? `${activeTabIdx + 1}/${tabCount}` : '–'}
         </Text>
       </Box>
@@ -80,7 +80,7 @@ export default function KonsolePanel({ width, height }: { width: number; height:
       {suggestions.length > 0 ? (
         <Box style={{ width: middleW, overflow: 'scroll', flexDirection: 'row'}}>
           <Box style={{ width: ICON_BOX_W, alignItems: 'center', justifyContent: 'center' }}>
-            <Text color={PURPLE} fontSize={11} fontFamily="IosevkaTerm Nerd Font">❯</Text>
+            <Text color={PURPLE} fontSize={11}>❯</Text>
           </Box>
           {suggestions.map((s, i) => {
             const accent = s.execute ? PURPLE : GREEN;
@@ -92,7 +92,7 @@ export default function KonsolePanel({ width, height }: { width: number; height:
                 style={{ width: CHIP_RENDER_W, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: CHIP_GAP }}
                 onClick={() => sendSuggestion(s)}
               >
-                <Text color={accent} fontSize={10} fontFamily="IosevkaTerm Nerd Font">
+                <Text color={accent} fontSize={10}>
                   {s.cmd.length > 20 ? s.cmd.slice(0, 20) + '…' : s.cmd}
                 </Text>
               </Button>
@@ -102,7 +102,7 @@ export default function KonsolePanel({ width, height }: { width: number; height:
       ) : (
         <Box style={{ width: middleW, flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 8 }}>
           <Box style={{ width: DOT_SZ, height: DOT_SZ, borderRadius: DOT_SZ / 2, backgroundColor: dotColor }} />
-          <Text color={dotColor} fontSize={12} fontFamily="IosevkaTerm Nerd Font">
+          <Text color={dotColor} fontSize={12}>
             {statusText || '…'}
           </Text>
         </Box>

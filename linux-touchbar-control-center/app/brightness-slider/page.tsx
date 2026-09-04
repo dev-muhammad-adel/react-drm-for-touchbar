@@ -65,7 +65,7 @@ function BrightnessControl({
         <SliderTrack fill={value} width={TRACK_W} icon={icon} />
       </Button>
 
-      <Text style={{ width: 52, fontSize: 18, color: '#94a3b8', fontFamily: 'IosevkaTerm Nerd Font' }}>
+      <Text style={{ width: 52, fontSize: 18, color: '#94a3b8' }}>
         {`${Math.round(value * 100)}%`}
       </Text>
     </Box>

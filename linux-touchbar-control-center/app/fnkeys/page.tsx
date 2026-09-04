@@ -33,7 +33,7 @@ function HeldKey({ label, keyCode }: { label: string; keyCode: number }) {
       style={keyStyle}
       {...handlers}
     >
-      <Text fontSize={24} fontFamily="monospace" style={{ fontWeight: '700' }}>{label}</Text>
+      <Text fontSize={24} style={{ fontWeight: '700' }}>{label}</Text>
     </Button>
   );
 }

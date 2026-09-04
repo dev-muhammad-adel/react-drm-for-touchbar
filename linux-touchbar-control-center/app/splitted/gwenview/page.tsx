@@ -124,7 +124,7 @@ export default function GwenviewPanel({ width, height }: { width: number; height
           {confirmTrash ? (
             <Box style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
               <MdCheck style={{ width: 24, height: 24 }} fill="#fff" stroke="none" />
-              <Text color="#fff" fontSize={14} fontFamily="IosevkaTerm Nerd Font">TRASH?</Text>
+              <Text color="#fff" fontSize={14}>TRASH?</Text>
             </Box>
           ) : (
             <MdDelete style={{ width: ICON_SZ, height: ICON_SZ }} fill={TRASH_CLR} stroke="none" />
@@ -134,7 +134,7 @@ export default function GwenviewPanel({ width, height }: { width: number; height
 
       {/* Status: current filename */}
       <Box style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 8 }}>
-        <Text color={DIM} fontSize={12} fontFamily="IosevkaTerm Nerd Font">
+        <Text color={DIM} fontSize={12}>
           {filename || '…'}
         </Text>
       </Box>

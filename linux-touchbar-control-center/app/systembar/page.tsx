@@ -218,12 +218,12 @@ function Sep() {
 
 // Accent label (the small dim prefix like "CPU", "MEM")
 function Label({ children }: { children: string }) {
-  return <Text style={{ color: '#cccccc', fontSize: 17, fontFamily: 'FiraCode Nerd Font Mono' }}>{children}</Text>;
+  return <Text style={{ color: '#cccccc', fontSize: 17 }}>{children}</Text>;
 }
 
 // Main value text
 function Val({ children, color = '#cccccc' }: { children:string; color?: string }) {
-  return <Text style={{ color, fontSize: 22, fontFamily: 'FiraCode Nerd Font Mono' }}>{children}</Text>;
+  return <Text style={{ color, fontSize: 22 }}>{children}</Text>;
 }
 
 // Thin inline bar (polybar ramp-like)
@@ -257,7 +257,7 @@ function StatTile({ icon: Icon, value, color }: {
       justifyContent: 'center',
     }}>
       <Icon style={{ width: 26, height: 26 }} fill={color} stroke="none" />
-      <Text style={{ color, fontSize: 22, fontFamily: 'FiraCode Nerd Font Mono' }}>{value}</Text>
+      <Text style={{ color, fontSize: 22 }}>{value}</Text>
     </Box>
   );
 }
@@ -321,12 +321,12 @@ function NetMod({ rx, tx, iface, rxHist, txHist }: { rx: number; tx: number; ifa
       <Box style={{ gap: 1,flexDirection:"column" }}>
         <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <MdArrowDownward style={{ width: 14, height: 14 }} fill="#7dd3fc" stroke="none" />
-          <Text style={{ color: '#7dd3fc', fontSize: 15, fontFamily: 'FiraCode Nerd Font Mono' }}>{fmtRate(rxValue)}</Text>
+          <Text style={{ color: '#7dd3fc', fontSize: 15 }}>{fmtRate(rxValue)}</Text>
 
         </Box>
         <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
           <MdArrowUpward style={{ width: 14, height: 14 }} fill="#fdba74" stroke="none" />
-          <Text style={{ color: '#fdba74', fontSize: 15, fontFamily: 'FiraCode Nerd Font Mono' }}>{fmtRate(txValue)}</Text>
+          <Text style={{ color: '#fdba74', fontSize: 15 }}>{fmtRate(txValue)}</Text>
         </Box>
       </Box>
     </Box>
@@ -464,8 +464,8 @@ function ClockMod({ time }: { time: Date }) {
       gap: 6,
  
     }}>
-      <Text style={{ color: '#fde68a', fontSize: 20, fontFamily: 'IosevkaTerm Nerd Font' }}>{hh}</Text>
-      <Text style={{ color: '#94a3b8', fontSize: 14, fontFamily: 'IosevkaTerm Nerd Font' }}>{dd}</Text>
+      <Text style={{ color: '#fde68a', fontSize: 20 }}>{hh}</Text>
+      <Text style={{ color: '#94a3b8', fontSize: 14 }}>{dd}</Text>
     </Box>
   );
 }
@@ -615,8 +615,8 @@ function PomodoroSection() {
             transform="rotate(-90 19 19)"
           />
         </svg>
-      <Text style={{ fontSize: 28, color: timeColor, fontFamily: 'IosevkaTerm Nerd Font' }}>{display}</Text>
-      <Text style={{ fontSize: 18, color: labelColor, fontFamily: 'IosevkaTerm Nerd Font' }}>{label}</Text>
+      <Text style={{ fontSize: 28, color: timeColor }}>{display}</Text>
+      <Text style={{ fontSize: 18, color: labelColor }}>{label}</Text>
       </Button>
       {/* <Box style={{ flexDirection: 'row', gap: 5 }}>
         {([0,1,2,3] as const).map(i => (

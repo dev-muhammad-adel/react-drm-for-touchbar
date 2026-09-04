@@ -10,7 +10,7 @@ export function Clock({ x }: { x: number }) {
   }, []);
 
   return (
-    <Text x={x} y={12} color="#facc15" fontSize={34} fontFamily="monospace">
+    <Text x={x} y={12} color="#facc15" fontSize={34}>
       {time}
     </Text>
   );

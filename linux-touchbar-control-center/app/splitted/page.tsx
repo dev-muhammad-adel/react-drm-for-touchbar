@@ -61,7 +61,7 @@ export default function ActiveWindowPanel({ width, height }: { width: number; he
   
           {/* <Box  style={{height:20 }}>
 
-          <Text  color={color} fontSize={16} fontFamily="IosevkaTerm Nerd Font">
+          <Text  color={color} fontSize={16}>
             {(cls || 'desktop').toUpperCase()}
           </Text>
        
