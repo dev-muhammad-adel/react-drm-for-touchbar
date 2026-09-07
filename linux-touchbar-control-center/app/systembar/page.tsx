@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useAtom } from 'jotai';
+import { useBattery, type BatteryInfo } from '@/lib/hooks/useBattery';
 import {
   POMO_SESSION,
   pomoElapsedAtom, pomoRunningAtom, pomoSessionsAtom, pomoFlashAtom,
@@ -34,15 +35,6 @@ function tempColor(c: number) {
   if (c < 65) return '#4ade80';
   if (c < 82) return '#fde047';
   return '#f87171';
-}
-type BatteryState = 'Charging' | 'Discharging' | 'Full' | 'Unknown';
-interface BatteryInfo { pct: number; state: BatteryState; }
-
-function batteryState(raw: string): BatteryState {
-  if (raw === 'Charging') return 'Charging';
-  if (raw === 'Discharging') return 'Discharging';
-  if (raw === 'Full') return 'Full';
-  return 'Unknown';
 }
 
 function batteryRange(pct: number): 'critical' | 'low' | 'medium' | 'high' | 'full' {
@@ -170,16 +162,7 @@ function tickNet(): NetSample {
   }
   return { iface: activeIface(counters), counters };
 }
-function readBattery(): BatteryInfo | null {
-  for (const b of ['/sys/class/power_supply/BAT0', '/sys/class/power_supply/BAT1']) {
-    try {
-      const pct = parseInt(readFileSync(`${b}/capacity`, 'utf8').trim());
-      const state = batteryState(readFileSync(`${b}/status`, 'utf8').trim());
-      return { pct, state };
-    } catch { /**/ }
-  }
-  return null;
-}
+
 function readHostname() { try { return readFileSync('/etc/hostname', 'utf8').trim(); } catch { return 'localhost'; } }
 function readUptime() {
   try {
@@ -189,9 +172,7 @@ function readUptime() {
   } catch { return ''; }
 }
 
-const HOSTNAME  = readHostname();
-const INIT_BAT  = readBattery();
-const HAS_BAT   = INIT_BAT !== null;
+const HOSTNAME = readHostname();
 const NUM_CORES = tickCpu().length;
 
 // ── Polybar primitives ────────────────────────────────────────────────────────
@@ -639,18 +620,19 @@ interface State {
   cores: number[]; mem: { used: number; total: number }; temp: number | null;
   netRx: number; netTx: number; iface: string;
   rxHist: number[]; txHist: number[];
-  uptime: string; bat: BatteryInfo | null; time: Date;
+  uptime: string; time: Date;
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function SystemBar({ width, height }: { width: number; height: number }) {
   const { go } = useLayers();
+  const battery = useBattery();
 
   const [s, setS] = useState<State>({
     cores: new Array(NUM_CORES).fill(0), mem: readMem(), temp: readTemp(),
     netRx: 0, netTx: 0, iface: '',
     rxHist: new Array(HIST_LEN).fill(0), txHist: new Array(HIST_LEN).fill(0),
-    uptime: readUptime(), bat: INIT_BAT, time: new Date(),
+    uptime: readUptime(), time: new Date(),
   });
 
   useEffect(() => {
@@ -673,7 +655,7 @@ export default function SystemBar({ width, height }: { width: number; height: nu
         setS({
           cores: calcUsage(prevCpu, nextCpu), mem: readMem(), temp: readTemp(),
           netRx, netTx, iface: nextNet.iface, rxHist, txHist,
-          uptime: readUptime(), bat: readBattery(), time: new Date(),
+          uptime: readUptime(), time: new Date(),
         });
         prevCpu = nextCpu; prevNet = nextNet; prevTime = now;
       } catch { /**/ }
@@ -709,8 +691,8 @@ export default function SystemBar({ width, height }: { width: number; height: nu
       <NetMod  rx={s.netRx} tx={s.netTx} iface={s.iface} rxHist={s.rxHist} txHist={s.txHist} />
       {/* <Sep /> */}
       {/* <HostMod uptime={s.uptime} /> */}
-      {HAS_BAT && <Sep />}
-      {HAS_BAT && <BatMod bat={s.bat} />}
+      {battery && <Sep />}
+      {battery && <BatMod bat={battery} />}
 
        <Sep /> 
       <ClockMod time={s.time} />
