@@ -157,10 +157,6 @@ function ClusterBtn({ btn, leftRound, rightRound , width }: {width?:number; btn:
         flexGrow:width?undefined:1,
         alignItems: 'center',
         justifyContent: 'center',
-        // borderTopLeftRadius: leftRound ? 10 : 0,
-        // borderBottomLeftRadius: leftRound ? 10 : 0,
-        // borderTopRightRadius: rightRound ? 10 : 0,
-        // borderBottomRightRadius: rightRound ? 10 : 0,
       }}
     >
       {btn.icon}
@@ -223,7 +219,6 @@ export default function SplittedLayout({ width, height, children, path }: {
   const { setBrightness } = useDisplayBrightnessControl();
   const setAudioTrackAnchor = useSetAtom(audioTrackAnchorAtom);
   const [isAnimating,setIsAnimating] = useState(false)
-  const [isAnimatingMedia,setIsAnimatingMedia] = useState(false)
   // Long-press-and-drag on the volume/brightness buttons: the touch never
   // leaves the button's registered gesture (layer swaps don't retarget an
   // in-progress touch), so the whole hold-then-slide-left/right gesture is
@@ -358,13 +353,7 @@ export default function SplittedLayout({ width, height, children, path }: {
   const wrapperPad = SELECTED_THEME.borderWidth;
   const rightW = wrapperPad * 2 + mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 2;
   const leftW = width - rightW - 20;
-  // const expandedLeftW  = 0; // left panel gives up its whole width to the tools
-  // const leftW =  collapsedLeftW;
-  // Shared spring physics: the right panel, its expanding tools overlay and
-  // the growing volume button all spring at the same pace.
-  const PANEL_TRANSITION = { duration: 8000, delay: 1000 };
-  const PANEL_TRANSITION_BTN = mediaExpanded ? { duration: 8000, ease: easings.easeOutQuad} : { tension: 400, friction: 28 };
-  const expandedPanelW = width - 0; // fills the whole row when open
+
 
   const leftTargetRef = useRef<SplittedLeftLayerName | null>(null);
   useEffect(() => {
@@ -405,8 +394,6 @@ export default function SplittedLayout({ width, height, children, path }: {
     setIsMediaMprisListPinned(false);
   }, [showMedia, mediaLoading, isMediaMprisListPinned]);
 
-  // Auto-return is now handled inside the peek box's animation itself
-  // (keyframes width: [width/1.7, 0] — a single animation that ends at 0).
 
   const btnByKey = (key: string) => mediaBtns.find(b => b.key === key);
 
@@ -422,16 +409,8 @@ export default function SplittedLayout({ width, height, children, path }: {
              width: mediaExpanded ? width  :width/1.7,
               justifyContent: 'flex-end'
             }}
-        // initial={{borderWidth: SELECTED_THEME.borderWidth}}
-        // animate={{ width: mediaExpanded ? expandedPanelW : rightW  ,
-
-           
-        // }}
-        // transition={ { duration: 1000 }}
-
       >
            <motion.Box
-          //  initial={{width:0 , opacity:1  }}
           initial={{width:0}}
            animate={{ width: mediaExpanded ? [0,(width/1.7),width]  :[width,(width/1.7) ,0 ]  }} 
 
