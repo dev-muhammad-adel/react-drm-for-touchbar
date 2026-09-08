@@ -80,7 +80,7 @@ export default function VsCodePanel({ width, height }: { width: number; height: 
   }
 
   return (
-    <Box style={{ flex: 1, flexDirection: 'row', gap: GROUP_GAP }}>
+    <Box style={{ flex: 1, flexDirection: 'row', gap: GROUP_GAP  }}>
       {/* Run/Debug */}
       <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={run} group="run" color={START_CLR.color} activeColor={START_CLR.activeColor} radiusLeft>
