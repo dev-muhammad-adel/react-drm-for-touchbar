@@ -13,20 +13,20 @@ import { SPRING } from './motion-presets';
 // something you'd animate toward, so it's intentionally left out here rather
 // than accepted and silently snapped.
 export interface MotionValues {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
+  x?: number | number[];
+  y?: number | number[];
+  width?: number | number[];
+  height?: number | number[];
   color?: string;
   borderColor?: string;
-  borderWidth?: number;
-  opacity?: number;
-  borderRadius?: number;
-  rotate?: number;
-  top?: number;
-  left?: number;
-  right?: number;
-  bottom?: number;
+  borderWidth?: number | number[];
+  opacity?: number | number[];
+  borderRadius?: number | number[];
+  rotate?: number | number[];
+  top?: number | number[];
+  left?: number | number[];
+  right?: number | number[];
+  bottom?: number | number[];
 }
 
 // Same shape as Motion's own transition prop: a spring preset plus optional
@@ -35,6 +35,7 @@ export interface MotionValues {
 // use for a looping animation, expressed purely through animate/transition
 // rather than a hand-driven value. (No 'mirror' — react-spring's `loop` has
 // no equivalent, and nothing here needs it.)
+export type Easing = (t: number) => number;
 export interface MotionTransition {
   // Spring physics (SpringPreset's shape, but optional here — a transition
   // may specify `duration` instead, so it can't require tension/friction the
@@ -45,9 +46,17 @@ export interface MotionTransition {
   /** Switches this transition from spring physics to a fixed-duration tween
    *  (ms) — matches Motion's own type: 'tween' vs type: 'spring' split,
    *  determined the same way: which fields you set. Takes priority over
-   *  tension/friction/mass when present. */
-  duration?: number;
-  ease?: (t: number) => number;
+   *  tension/friction/mass when present. May be an ARRAY aligned to keyframe
+   *  count (animate={{ width: [a, b, c] }}) to give each segment its own
+   *  duration — same as Motion's transition duration arrays. */
+  duration?: number | number[];
+  /** Tween easing. May be an array aligned to keyframe count, like Motion's
+   *  ease arrays (ease: [easeOutQuad, easeInOutQuad]). */
+  ease?: Easing | Easing[];
+  /** Delay (ms) before the animation starts. Ignored while `repeat` is set —
+   *  loops use `repeatDelay` instead. Applies to the whole animation, not
+   *  per key. */
+  delay?: number;
   repeat?: number;
   repeatType?: 'loop' | 'reverse';
   repeatDelay?: number;
@@ -55,17 +64,68 @@ export interface MotionTransition {
 
 // Either one transition for every animated key, or a per-key map (Motion's
 // own shape: transition={{ opacity: {...}, default: {...} }}) — 'default'
-// covers any key not explicitly listed.
-export type MotionTransitionProp = MotionTransition | (Partial<Record<keyof MotionValues, MotionTransition>> & { default?: MotionTransition });
+// covers any key not explicitly listed. An ARRAY form is also allowed: one
+// transition per keyframe segment (animate={{ width: [a, b] }} pairs with
+// transition={[{ ... }, { ... }]}), so each segment can have its own spring
+// physics or tween — the array is clamped to the last element once exhausted.
+export type MotionTransitionProp = MotionTransition | MotionTransition[] | (Partial<Record<keyof MotionValues, MotionTransition>> & { default?: MotionTransition });
 
+// A per-key transition map has object values ({ width: {...}, default: {...} });
+// a single transition holds only primitives — numbers for tension/friction/
+// duration/mass, a function for ease. Detecting it by value shape (rather than
+// "no tension AND no friction") means a plain `{ duration, ease }` tween is not
+// mistaken for a per-key map and silently dropped. Arrays (keyframe-aligned
+// duration/ease) are deliberately excluded — `typeof [] === 'object'` would
+// otherwise misclassify such a single transition.
 function isPerKeyTransition(t: MotionTransitionProp): t is Partial<Record<keyof MotionValues, MotionTransition>> & { default?: MotionTransition } {
-  return !('tension' in t) && !('friction' in t);
+  if (Array.isArray(t)) return false; // array form = one transition per keyframe segment
+  return Object.values(t as Record<string, unknown>).some(v => v !== null && typeof v === 'object' && !Array.isArray(v));
 }
 
 function resolveTransition(t: MotionTransitionProp | undefined, key: string): MotionTransition {
   if (!t) return SPRING.snappy;
+  // Array form never reaches here (configFor indexes it by step) — defensive.
+  if (Array.isArray(t)) return t[t.length - 1];
   if (!isPerKeyTransition(t)) return t;
   return (t as Record<string, MotionTransition>)[key] ?? t.default ?? SPRING.snappy;
+}
+
+// The "single" transition for whole-animation settings (delay/repeat): the
+// plain transition, or the LAST element of the array form (an array is clamped
+// to its final element once keyframes run out). Per-key maps have no single
+// representative → undefined.
+function singleTransition(t: MotionTransitionProp | undefined): MotionTransition | undefined {
+  if (!t || isPerKeyTransition(t)) return undefined;
+  return Array.isArray(t) ? t[t.length - 1] : t;
+}
+
+// Keyframe-aligned fields (duration/ease arrays) flattened to a single value.
+// `step` selects an array element by KEYFRAME INDEX (clamping to the last for
+// exhausted arrays); omit it (or it's -1) to take the final element — the
+// resting state a spring settles into when no sequence is running.
+function scalarize(t: MotionTransition, step = -1): MotionTransition {
+  const at = <T,>(v: T | T[] | undefined): T | undefined =>
+    Array.isArray(v) ? v[step === -1 ? Math.max(0, v.length - 1) : Math.min(step, v.length - 1)] : v;
+  return { ...t, duration: at(t.duration), ease: at(t.ease) };
+}
+
+function transitionToSpringConfig(t: MotionTransition) {
+  return t.duration !== undefined
+    ? { duration: t.duration, easing: t.ease }
+    : { tension: t.tension, friction: t.friction, mass: t.mass };
+}
+
+// Resolves a transition to a per-spring react-spring config. `step` is only
+// meaningful inside a keyframe sequence — the array form indexes THAT segment
+// (clamped to the last element); single/per-key transitions step their inline
+// duration/ease arrays instead. Outside a sequence (-1) everything rests on
+// its final element.
+function configFor(transition: MotionTransitionProp | undefined, key: string, step = -1) {
+  if (Array.isArray(transition)) {
+    const idx = step === -1 ? Math.max(0, transition.length - 1) : Math.min(step, transition.length - 1);
+    return transitionToSpringConfig(transition[idx]);
+  }
+  return transitionToSpringConfig(scalarize(resolveTransition(transition, key), step));
 }
 
 const BOX_KEYS = ['x', 'y', 'width', 'height', 'color', 'borderColor', 'borderWidth'] as const;
@@ -91,7 +151,8 @@ function splitSpringStyle(values: Record<string, unknown>) {
 // value every "cycle", which is a no-op. Only the top-level/default repeat
 // config drives looping; per-key repeat overrides aren't supported.
 function resolveLoop(transition: MotionTransitionProp | undefined) {
-  const t = transition && !isPerKeyTransition(transition) ? transition : transition?.default;
+  const t = singleTransition(transition)
+    ?? (transition && isPerKeyTransition(transition) ? transition.default : undefined);
   if (!t?.repeat) return undefined;
   return t.repeatType === 'reverse' ? { reverse: true } : true;
 }
@@ -100,14 +161,14 @@ function useMotionSpring(
   animate: MotionValues | undefined,
   initial: MotionValues | undefined,
   transition: MotionTransitionProp | undefined,
+  onAnimationStart?: () => void,
   onAnimationComplete?: () => void,
+  animateOnMount?: boolean,
+  onKeyframeComplete?: (frameIndex: number) => void,
 ) {
-  const configFn = (key: string) => {
-    const t = resolveTransition(transition, key);
-    return t.duration !== undefined
-      ? { duration: t.duration, easing: t.ease }
-      : { tension: t.tension, friction: t.friction, mass: t.mass };
-  };
+  // Per-key react-spring config: array duration/ease fields flatten to their
+  // resting (last) elements whenever a sequence isn't running.
+  const springConfig = (key: string) => configFor(transition, key);
   const loop = resolveLoop(transition);
   // react-spring's Controller requires every key to be present in the very
   // first useSpring() call — touching a key later via .set()/.start() that
@@ -118,8 +179,31 @@ function useMotionSpring(
   // mount effect below immediately overwrites them via set()/start(); only
   // their presence as known keys does.
   const seedKeys = { ...animate, ...initial };
-  const [springValues, api] = useSpring(() => ({ ...seedKeys, config: configFn }));
-  const mounted = useRef(false);
+  // An array value anywhere in `animate` marks a keyframe sequence (Motion's
+  // keyframes: animate={{ width: [w/1.7, 0] }}) — played as one chained
+  // animation, settling on the LAST element. Shorter/exact arrays per key are
+  // padded by holding each key's final element once it's exhausted.
+  const isKeyframes = Object.values(animate ?? {}).some(v => Array.isArray(v));
+  const keyframeLen = isKeyframes
+    ? Math.max(1, ...Object.values(animate!).map(v => Array.isArray(v) ? v.length : 1))
+    : 1;
+  type MotionValuesExpanded = Record<string, number | number[] | string | undefined>;
+  function buildFrames(v: MotionValues): Record<string, number | string>[] {
+    const source = v as unknown as MotionValuesExpanded;
+    const frames: Record<string, number | string>[] = [];
+    for (let i = 0; i < keyframeLen; i++) {
+      const frame: Record<string, number | string> = {};
+      for (const k of Object.keys(source)) {
+        const val = source[k];
+        if (val === undefined) continue;
+        frame[k] = Array.isArray(val) ? (val[Math.min(i, val.length - 1)] as number) : val;
+      }
+      frames.push(frame);
+    }
+    return frames;
+  }
+  const springSeed = isKeyframes ? buildFrames(animate!)[keyframeLen - 1] : seedKeys;
+  const [springValues, api] = useSpring(() => ({ ...springSeed, config: springConfig }));
 
   // No `animate` target means this instance is purely static — settle once
   // to `initial` and never move again, rather than treating it as "nothing
@@ -133,6 +217,12 @@ function useMotionSpring(
   // would re-trigger the spring on every render.
   const targetKey = JSON.stringify(target);
   const transitionKey = JSON.stringify(transition);
+  // `animate` targets may equal what the instance already sits at on the
+  // FIRST mount (e.g. a collapsed panel whose `animate` defaults to 0 while
+  // it should visibly hold its `initial` width until the caller flips a
+  // target). Defer the mount animation in that case — paint `initial` and
+  // only animate once `animate` actually CHANGES.
+  const mountedRef = useRef(false);
   useEffect(() => {
     if (!target) return;
     if (isStatic) {
@@ -142,23 +232,81 @@ function useMotionSpring(
       // spring treats "start to the value it's already at" as a no-op and
       // skips the notification entirely, so a purely static instance would
       // never paint at all (verified empirically — this is not a hypothetical).
+      onAnimationStart?.();
       api.set(target);
+      onAnimationComplete?.();
       return;
     }
-    api.start({
-      ...target,
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      if (!animateOnMount && initial) {
+        onAnimationStart?.();
+        api.set(initial);
+        onAnimationComplete?.();
+        return;
+      }
+    }
+    // react-spring's own onStart/onRest drive the callbacks: onStart only
+    // fires when a real animation actually begins moving (a start() toward
+    // the value a spring is already settled at is a `noop` — no onStart), and
+    // onRest fires on completion, cancellation AND noop. Only report
+    // "complete" when it finished (`result.finished`), so a cancelled or
+    // never-started animation can't falsely flip an isAnimating flag off.
+    const base: Record<string, unknown> = {
       // A reverse loop needs an explicit `from` to bounce back to — without
       // it react-spring has nowhere to return to and just settles once.
       // `initial` is that other endpoint (mirrors how the seed above works).
       from: loop && initial ? initial : undefined,
-      config: configFn,
+      config: springConfig,
       loop,
-      delay: loop && transition && !isPerKeyTransition(transition) ? transition.repeatDelay : undefined,
-      onRest: mounted.current ? onAnimationComplete : undefined,
-    });
-    mounted.current = true;
+      delay: loop
+        ? singleTransition(transition)?.repeatDelay
+        : singleTransition(transition)?.delay,
+      onStart: onAnimationStart,
+      onRest: (result: { finished?: boolean }) => { if (result.finished) onAnimationComplete?.(); },
+    };
+    // Keyframe sequences (`to` array) are chained into ONE animation that
+    // settles on the last frame — the caller's `animate={{ width: [w/1.7, 0] }}`
+    // becomes "widen, then shrink, then rest at 0". Per-key arrays of unequal
+    // length hold each key's last value once exhausted (buildFrames padding).
+    // React-spring applies configs per chained frame, so each segment gets the
+    // transition resolved at ITS index — keyframe-aligned duration/ease arrays
+    // (transition={{ duration: [200, 800] }}) shape each segment individually.
+    if (isKeyframes) {
+      const frames = buildFrames(target);
+      const withConfig = frames.map((frame, step) => {
+        const keys = Object.keys(target as MotionValues);
+        // A chained frame carries ONE config for the whole step; when keys
+        // resolve to differing transitions the first animated key wins (the
+        // per-key + per-frame nesting isn't expressible in a single spring).
+        const cfg = configFor(transition, keys[0] ?? '', step);
+        return {
+          ...frame,
+          config: cfg,
+          // Each to-frame is started as its own spring step, so a frame-level
+          // onRest fires exactly when THAT segment settles — giving callers a
+          // per-frame callback (onKeyframeComplete) before the final
+          // whole-sequence onAnimationComplete.
+          onRest: (result: { finished?: boolean }) => {
+            if (result.finished) onKeyframeComplete?.(step);
+          },
+        };
+      });
+      api.start({
+        ...base,
+        to: withConfig as unknown as Record<string, number | string>[],
+      });
+    } else {
+      api.start({
+        ...base,
+        // `target` is a plain MotionValues object; spread it as scalar values.
+        // Overload resolution needs a cast here because MotionValues also
+        // allows keyframe arrays used by the isKeyframes branch above.
+        ...(target as unknown as Record<string, number | string>),
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetKey, transitionKey]);
+  }, [targetKey, transitionKey, isKeyframes]);
 
   return springValues as Record<string, unknown>;
 }
@@ -167,14 +315,29 @@ export interface MotionBoxProps extends Omit<BoxProps, 'x' | 'y' | 'width' | 'he
   initial?: MotionValues;
   animate?: MotionValues;
   transition?: MotionTransitionProp;
+  /** Fires each time an animation (re)starts — i.e. whenever the `animate`
+   *  target changes and the spring begins moving. Use it with
+   *  onAnimationComplete to track a "pending"/in-progress state. */
+  onAnimationStart?: () => void;
+  /** Fires when the animation settles at its target (spring no longer
+   *  moving), mirrored on the `initial` settle for static instances. */
   onAnimationComplete?: () => void;
+  /** Default true. When false, the component holds `initial` on mount and
+   *  plays no animation until the `animate` target CHANGES — useful for
+   *  content that should sit at a natural size until the first interaction
+   *  (e.g. a peek panel that finally collapses to 0 only after expanding). */
+  animateOnMount?: boolean;
+  /** Fires when EACH keyframe segment settles, in order (0-based frame
+   *  index), before the final onAnimationComplete. Only for chained
+   *  keyframes (animate={{ width: [a, b, c] }}). */
+  onKeyframeComplete?: (frameIndex: number) => void;
 }
 
 function MotionBoxImpl(
-  { initial, animate, transition, onAnimationComplete, style, children, ...rest }: MotionBoxProps,
+  { initial, animate, transition, onAnimationStart, onAnimationComplete, animateOnMount, onKeyframeComplete, style, children, ...rest }: MotionBoxProps,
   ref: React.Ref<unknown>,
 ) {
-  const springValues = useMotionSpring(animate, initial, transition, onAnimationComplete);
+  const springValues = useMotionSpring(animate, initial, transition, onAnimationStart, onAnimationComplete, animateOnMount, onKeyframeComplete);
   const { boxProps, style: springStyle } = splitSpringStyle(springValues);
   return React.createElement(
     animated.Box,
