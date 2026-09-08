@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Box, Button, animated, useSpringValue } from 'react-drm';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Box, Button, animated, motion, useSpringValue, KEY, Svg, easings } from 'react-drm';
 import { useAtom, useSetAtom } from 'jotai';
-import { FaChevronLeft } from 'react-icons/fa6';
-import { MdVolumeUp, MdWbSunny } from 'react-icons/md';
+import { FaChevronLeft, FaChevronRight } from 'react-icons/fa6';
+import { MdVolumeUp, MdWbSunny, MdBrightness4, MdBrightness7, MdVolumeDown, MdApps, MdMicOff, MdSearch, MdSkipPrevious, MdPlayArrow, MdSkipNext, MdVolumeOff, MdCancel } from 'react-icons/md';
 import { CiWavePulse1 } from 'react-icons/ci';
 import { BsWindowDock } from 'react-icons/bs';
 import { FaGrip } from 'react-icons/fa6';
@@ -14,9 +14,11 @@ import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, TRACK_W as
 import { audioTrackAnchorAtom, ANCHOR_TRACK_W } from '@/store/audioTrackAnchor';
 import type { LayerConfig, LayoutChildren } from '@/lib/routes/loadRoutes';
 import { DEFAULT_CHILD_NAME } from '@/lib/routes/loadRoutes';
-import { go } from '@/lib/routes/router-registry';
+import { go, routerAt } from '@/lib/routes/router-registry';
 import { CUSTOM_LAYER } from '@/lib/utils/configLoader';
 import { SELECTED_THEME } from '@/lib/theme';
+import { keys } from '@/lib/services/keyInjector';
+import path, { relative } from 'path';
 
 // How splitted itself transitions within the root layer host.
 export const layerConfig: LayerConfig = {
@@ -61,6 +63,66 @@ function resolveLeftSideLayerByClass(activeClass: string): SplittedLeftLayerName
 
 const ICON_SIZE = 32;
 
+// app/splitted/layout.tsx sits two levels under its own root in both trees
+// (linux-touchbar-control-center/app/splitted in dev, dist/app/splitted once
+// built, with assets/ copied alongside dist/ at build time) — same relative
+// depth either way, so one formula covers both instead of a dev/built branch.
+const KBD_ILLUM_DOWN_ICON = path.join(__dirname, '..', '..', 'assets', 'kbd_illum_down.svg');
+const KBD_ILLUM_UP_ICON   = path.join(__dirname, '..', '..', 'assets', 'kbd_illum_up.svg');
+
+// The four tool groups reused from /app/media/page.tsx, rendered inline when
+// the right cluster expands — same look, but as an in-place expanding panel
+// rather than a full-screen page swap.
+function MediaToolBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Button
+      color={SELECTED_THEME.surface}
+      activeColor={SELECTED_THEME.surfaceVariant}
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderColor: SELECTED_THEME.border, borderWidth: SELECTED_THEME.borderWidth }}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
+
+// All the /app/media/page tool buttons, rendered inline with the same surface
+// (bordered rounded tiles, grouped by flexGrow exactly like the media page)
+// when the right cluster expands — same buttons and same look, as an in-place
+// expanding panel rather than a page swap.
+function MediaToolPanel({ iconSize  }: { iconSize: number  }) {
+  const icon = (node: React.ReactNode) => <Box style={{ width: iconSize, height: iconSize, alignItems: 'center', justifyContent: 'center' }}>{node}</Box>;
+  return (
+    <Box style={{ flex: 1, gap: 30 ,backgroundColor:"#000" }}>
+      <Box style={{ flexGrow: 2, gap: 6 }}>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.BRIGHTNESSDOWN)}>{icon(<MdBrightness4 style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.BRIGHTNESSUP)}>{icon(<MdBrightness7 style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+      </Box>
+      <Box style={{ flexGrow: 1 }}>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.MICMUTE)}>{icon(<MdMicOff style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+      </Box>
+      <Box style={{ flexGrow: 1 }}>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.SEARCH)}>{icon(<MdSearch style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+      </Box>
+      <Box style={{ flexGrow: 2, gap: 6 }}>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.KBDILLUMDOWN)}>{icon(<Svg src={KBD_ILLUM_DOWN_ICON} width={iconSize} height={iconSize} />)}</MediaToolBtn>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.KBDILLUMUP)}>{icon(<Svg src={KBD_ILLUM_UP_ICON} width={iconSize} height={iconSize} />)}</MediaToolBtn>
+      </Box>
+      <Box style={{ flexGrow: 3, gap: 6 }}>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.PREVIOUSSONG)}>{icon(<MdSkipPrevious style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.PLAYPAUSE)}>{icon(<MdPlayArrow style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.NEXTSONG)}>{icon(<MdSkipNext style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+      </Box>
+      <Box style={{ flexGrow: 3, gap: 6 }}>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.MUTE)}>{icon(<MdVolumeOff style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.VOLUMEDOWN)}>{icon(<MdVolumeDown style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+        <MediaToolBtn onClick={() => keys.pressKey(KEY.VOLUMEUP)}>{icon(<MdVolumeUp style={{ width: iconSize, height: iconSize }} fill={SELECTED_THEME.textPrimary} stroke="none" />)}</MediaToolBtn>
+      </Box>
+      
+    </Box>
+  );
+}
+
 interface RightBtn {
   key: string;
   icon: React.ReactElement;
@@ -72,6 +134,38 @@ interface RightBtn {
   onTouchStart?: (x: number, y: number) => void;
   onTouchMove?: (x: number, y: number) => void;
   onTouchEnd?: (x: number, y: number) => void;
+}
+
+/** Thin vertical divider between collapsed cluster buttons. */
+function Separator() {
+  return <Box style={{ width: 2, backgroundColor: SELECTED_THEME.divider }} />;
+}
+
+/** A single collapsed-cluster button, with selectable rounded corners. */
+function ClusterBtn({ btn, leftRound, rightRound , width }: {width?:number; btn: RightBtn; leftRound?: boolean; rightRound?: boolean }) {
+  return (
+    <Button
+      width={width}
+      color={btn.color}
+      activeColor={btn.activeColor}
+      onClick={btn.onClick}
+      onLongPress={btn.onLongPress}
+      onTouchStart={btn.onTouchStart}
+      onTouchMove={btn.onTouchMove}
+      onTouchEnd={btn.onTouchEnd}
+      style={{
+        flexGrow:width?undefined:1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        // borderTopLeftRadius: leftRound ? 10 : 0,
+        // borderBottomLeftRadius: leftRound ? 10 : 0,
+        // borderTopRightRadius: rightRound ? 10 : 0,
+        // borderBottomRightRadius: rightRound ? 10 : 0,
+      }}
+    >
+      {btn.icon}
+    </Button>
+  );
 }
 
 const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
@@ -128,6 +222,8 @@ export default function SplittedLayout({ width, height, children, path }: {
   const { setVolume, syncVolume } = useVolumeControl();
   const { setBrightness } = useDisplayBrightnessControl();
   const setAudioTrackAnchor = useSetAtom(audioTrackAnchorAtom);
+  const [isAnimating,setIsAnimating] = useState(false)
+  const [isAnimatingMedia,setIsAnimatingMedia] = useState(false)
   // Long-press-and-drag on the volume/brightness buttons: the touch never
   // leaves the button's registered gesture (layer swaps don't retarget an
   // in-progress touch), so the whole hold-then-slide-left/right gesture is
@@ -136,11 +232,12 @@ export default function SplittedLayout({ width, height, children, path }: {
   const volTouchXRef = useRef(0);
   const brightDragRef = useRef<{ x: number; v: number } | null>(null);
   const brightTouchXRef = useRef(0);
+  const [mediaExpanded, setMediaExpanded] = useState(false);
   const mediaBtns: RightBtn[] = useMemo(() => {
     // Dispatch each button's action by its key, not its position, so reordering
     // BASE_BTNS can't silently wire a button to the wrong action.
     const actions: Record<string, () => void> = {
-      back:       () => go('media', 'slide-left'),
+      back:       () => setMediaExpanded(e => !e),
       linux:      () => go('systembar', 'slide-up'),
       volume:     () => { setAudioTrackAnchor(null); go('audio-slider', 'fade'); },
       brightness: () => go('brightness-slider', 'fade'),
@@ -256,10 +353,18 @@ export default function SplittedLayout({ width, height, children, path }: {
     return base;
   }, [ showMedia, isMediaMprisListPinned, activeClass, mediaPlaying]);
 
-  // Right panel width depends on the visible buttons + 3px gaps.
+  // Right panel width depends on the visible buttons + 3px gaps. When the media
+  // tools are expanded it springs out to fill whatever the left panel leaves.
   const wrapperPad = SELECTED_THEME.borderWidth;
   const rightW = wrapperPad * 2 + mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 2;
   const leftW = width - rightW - 20;
+  // const expandedLeftW  = 0; // left panel gives up its whole width to the tools
+  // const leftW =  collapsedLeftW;
+  // Shared spring physics: the right panel, its expanding tools overlay and
+  // the growing volume button all spring at the same pace.
+  const PANEL_TRANSITION = { duration: 8000, delay: 1000 };
+  const PANEL_TRANSITION_BTN = mediaExpanded ? { duration: 8000, ease: easings.easeOutQuad} : { tension: 400, friction: 28 };
+  const expandedPanelW = width - 0; // fills the whole row when open
 
   const leftTargetRef = useRef<SplittedLeftLayerName | null>(null);
   useEffect(() => {
@@ -267,6 +372,22 @@ export default function SplittedLayout({ width, height, children, path }: {
     const target = isMediaMprisListPinned
       ? 'mediaMprisList'
       : resolveLeftSideLayerByClass(activeClass);
+
+    // When the media panel finished animating back (isAnimating → false) the
+    // routed left host may have swapped layers behind `children(leftW, height)`
+    // while it was hidden behind the expanded panel — `leftTargetRef` still
+    // matches the intended target, so the guard below would skip navigating.
+    // Reconcile against the host's LIVE current layer: if it drifted from the
+    // target, steer it back. Deferred a tick so the sibling RouteBranch's
+    // re-registration effect (which runs after ours) has re-registered the
+    // fresh host first.
+    if (target === leftTargetRef.current && !isAnimating) {
+      const t = setTimeout(() => {
+        const current = routerAt(path)?.current;
+        if (current && current !== target) go(`${path}/${target}`, 'fade');
+      }, 0);
+      return () => clearTimeout(t);
+    }
     // Skip redundant navigation: while pinned the target stays put across
     // window changes, and two windows of the same kind resolve to one layer.
     if (target === leftTargetRef.current) return;
@@ -275,7 +396,7 @@ export default function SplittedLayout({ width, height, children, path }: {
     // (e.g. this very first run, before splitted's own nested host has
     // registered itself) — no need to wait for it here ourselves.
     go(`${path}/${target}`, 'fade');
-  }, [activeClass, isMediaMprisListPinned, path]);
+  }, [activeClass, isMediaMprisListPinned, path, isAnimating]);
 
   useEffect(() => {
     if (mediaLoading) return;
@@ -284,38 +405,107 @@ export default function SplittedLayout({ width, height, children, path }: {
     setIsMediaMprisListPinned(false);
   }, [showMedia, mediaLoading, isMediaMprisListPinned]);
 
+  // Auto-return is now handled inside the peek box's animation itself
+  // (keyframes width: [width/1.7, 0] — a single animation that ends at 0).
+
+  const btnByKey = (key: string) => mediaBtns.find(b => b.key === key);
+
   return (
-    <Box style={{ justifyContent: 'space-between', flex: 1, gap: 20 }}>
+    <Box style={{ justifyContent: 'space-between', flex: 1, gap: mediaExpanded ? 0 : 0 }}>
       <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 ,flex:1  }}>
         {children(leftW, height)}
       </Box>
 
         <Box
-        style={{padding:SELECTED_THEME.borderWidth, flexDirection: 'row' ,gap:2,width: rightW,backgroundColor: SELECTED_THEME.border  , borderRadius:10, borderColor: SELECTED_THEME.border, borderWidth: 1 , borderStyle:"solid"}}
-      >
-        {mediaBtns.map((btn, idx) => (
-          <Button
-            key={btn.key}
-            width={btn.width}
-               color={ btn.color}
-            activeColor={ btn.activeColor}
-            onClick={btn.onClick}
-            onLongPress={btn.onLongPress}
-            onTouchStart={btn.onTouchStart}
-            onTouchMove={btn.onTouchMove}
-            onTouchEnd={btn.onTouchEnd}
-            style={{
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderTopLeftRadius: idx === 0 ? 10 : 0,
-              borderBottomLeftRadius: idx === 0 ? 10 : 0,
-              borderTopRightRadius: idx === mediaBtns.length - 1 ? 10 : 0,
-              borderBottomRightRadius: idx === mediaBtns.length - 1 ? 10 : 0,
+        style={{ overflow: 'hidden',
+            flexDirection: 'row', 
+             width: mediaExpanded ? width  :width/1.7,
+              justifyContent: 'flex-end'
             }}
-          >
-            {btn.icon}
-          </Button>
-        ))}
+        // initial={{borderWidth: SELECTED_THEME.borderWidth}}
+        // animate={{ width: mediaExpanded ? expandedPanelW : rightW  ,
+
+           
+        // }}
+        // transition={ { duration: 1000 }}
+
+      >
+           <motion.Box
+          //  initial={{width:0 , opacity:1  }}
+          initial={{width:0}}
+           animate={{ width: mediaExpanded ? [0,(width/1.7),width]  :[width,(width/1.7) ,0 ]  }} 
+
+        transition={{ duration: [150,mediaExpanded?150:0,150] }}
+          style={{   backgroundColor:"#000" , height:height , position:"absolute" , right: 2  ,top:0,zIndex:-1
+
+          }}>
+            <Button
+              width={40}
+              color={SELECTED_THEME.surface}
+              activeColor={SELECTED_THEME.surfaceVariant}
+              onClick={() => setMediaExpanded(false)}
+              style={{marginHorizontal:10, alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 10, borderBottomLeftRadius: 10 }}
+            >
+              <MdCancel style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+            </Button>
+            <MediaToolPanel  iconSize={30} />
+          </motion.Box>  
+         {  <motion.Box
+        
+        initial={{width:rightW , opacity:1}}
+        animate={{
+           width:mediaExpanded? [width/1.7, 120 , width/1.7] : [rightW],
+           opacity:mediaExpanded? [0.1, 0] : [1],
+        }}
+        
+        animateOnMount={false}
+        transition={[
+          { tension: 400, friction: 28 },
+          { tension: 400, friction: 28 },
+          { duration: 0 },
+        ]}
+        onAnimationStart={() => setIsAnimating(true)}
+         onAnimationComplete={() => setIsAnimating(false)}
+
+        style={{ 
+          borderWidth:SELECTED_THEME.borderWidth,
+          padding:SELECTED_THEME.borderWidth,
+          borderRadius:10,
+          borderColor:SELECTED_THEME.border,
+          
+          overflow:"hidden",
+          flexDirection: 'row' ,
+          justifyContent:"flex-end",
+            // display:!isAnimating&&mediaExpanded? "none":undefined ,
+             backgroundColor:SELECTED_THEME.surface,
+             ...(mediaExpanded&&!isAnimating?{zIndex:-10,
+          position:"absolute",
+          height,
+          right:2,}:{})
+             
+             }}>
+           {<ClusterBtn width={40} btn={btnByKey('back')!} leftRound />}
+            <Separator />
+            <ClusterBtn btn={btnByKey('volume')!} />
+            <Separator />
+            <ClusterBtn btn={btnByKey('brightness')!} />
+            <Separator />
+            <ClusterBtn btn={btnByKey('linux')!} />
+            <Separator />
+            <ClusterBtn btn={btnByKey('playpause')!} width={mediaExpanded?120:undefined} rightRound={mediaBtns.length === 5} />
+            {btnByKey('media') && (
+              <>
+                <Separator />
+                <ClusterBtn btn={btnByKey('media')!} rightRound={mediaBtns.length === 6} />
+              </>
+            )}
+            {btnByKey('customlayer') && (
+              <>
+                <Separator />
+                <ClusterBtn btn={btnByKey('customlayer')!} rightRound />
+              </>
+            )}
+          </motion.Box>} 
       </Box>
 
     </Box>
