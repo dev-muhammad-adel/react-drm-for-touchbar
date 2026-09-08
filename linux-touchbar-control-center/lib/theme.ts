@@ -53,13 +53,6 @@ function resolve(): ThemeColours {
 /** The active colour palette, resolved from THEME.theme by name. */
 export const SELECTED_THEME: ThemeColours = resolve();
 
-
-
-/**
- * The active dock palette, resolved from THEME.dock by name (falls back to the
- * main theme when `THEME.dock` is unset).
- */
-
 /** Hex `#rrggbb` → `rgba(r, g, b, a)` for translucent fills from a theme slot. */
 export function withAlpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
