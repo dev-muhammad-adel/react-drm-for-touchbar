@@ -18,6 +18,9 @@ const LAYOUT_STYLE_KEYS = new Set([
 
 const LAYOUT_PROP_KEYS = new Set(['x', 'y', 'width', 'height']);
 
+const DEBUG_MOTION = process.env.REACT_DRM_LOG_LEVEL === 'debug';
+const debugLastWidth = new WeakMap<object, number>();
+
 // Node has no requestAnimationFrame — drive react-spring's frame loop with a
 // timer. rafz only schedules while animations are active, so this idles free.
 Globals.assign({
@@ -57,6 +60,13 @@ const host = createHost(
 
       if (style) node.style = { ...(node.style as Style), ...style } as Style;
       for (const [k, v] of Object.entries(rest)) if (v !== undefined) node[k] = v;
+      if (DEBUG_MOTION) {
+        const w = (rest as Record<string, unknown>).width;
+        if (typeof w === 'number' && debugLastWidth.get(node) !== w) {
+          debugLastWidth.set(node, w);
+          console.log(`[motion] t=${performance.now().toFixed(0)} width=${w}`);
+        }
+      }
       invalidate(needsLayout);
       return true;
     },
