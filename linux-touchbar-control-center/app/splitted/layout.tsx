@@ -138,7 +138,7 @@ interface RightBtn {
 
 /** Thin vertical divider between collapsed cluster buttons. */
 function Separator() {
-  return <Box style={{ width: 2, backgroundColor: SELECTED_THEME.divider }} />;
+  return <Box style={{ width: SELECTED_THEME.borderWidth, backgroundColor: SELECTED_THEME.border }} />;
 }
 
 /** A single collapsed-cluster button, with selectable rounded corners. */
@@ -420,10 +420,10 @@ export default function SplittedLayout({ width, height, children, path }: {
           }}>
             <Button
               width={40}
-              color={SELECTED_THEME.surface}
-              activeColor={SELECTED_THEME.surfaceVariant}
+              color={"#000"}
+              activeColor={"#000"}
               onClick={() => setMediaExpanded(false)}
-              style={{marginHorizontal:10, alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 10, borderBottomLeftRadius: 10 }}
+              style={{marginHorizontal:20, alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 10, borderBottomLeftRadius: 10 }}
             >
               <MdCancel style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
             </Button>
