@@ -555,16 +555,16 @@ export function render(
   const touchEnabled = options.touchEnabled ?? true;
   const backlight = new Backlight();
 
-  const registry  = new TouchRegistry();
-  const layoutRef: { current: Map<SceneNode, LayoutBox> } = { current: new Map() };
-  let layoutValid = false;
-
   const container: RootContainer = {
     type: 'root',
     children: [],
     width:  display.width,
     height: display.height,
   };
+
+  const registry  = new TouchRegistry(() => container);
+  const layoutRef: { current: Map<SceneNode, LayoutBox> } = { current: new Map() };
+  let layoutValid = false;
 
   // ── Pixel shift ───────────────────────────────────────────────────────────
   // Same formula/movement as originally shipped — sweepPhase advances by a

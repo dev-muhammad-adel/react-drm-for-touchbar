@@ -69,6 +69,13 @@ export const LAYER_TRANSITION = {
 
 export const THEME = {
   fontFamily: 'IosevkaTerm Nerd Font' as string,
+  /** Active colour theme — must match a palette name in lib/themes.ts. */
+  theme: 'macos' as 'macos' | 'adwaitadark' | 'darkhighcontrast',
+  /**
+   * Active dock palette — must match a palette name in lib/dockthemes.ts.
+   * Falls back to `theme` when unset.
+   */
+  dock: 'macos' as 'macos' | 'adwaitadark' | 'darkhighcontrast',
 } as const;
 
 // ─── Active window tracking ─────────────────────────────────────────────────

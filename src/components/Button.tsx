@@ -59,6 +59,7 @@ export function useButtonGesture({
     registry.registerGesture(key, {
       x: 0, y: 0, width: 0, height: 0,
       hitSlop,
+      node: nodeRef.current ?? undefined,
       // Called at touch time — layout is already current so flex positions are correct.
       // Subtract cumulative scroll offset so hit area matches visual position.
       getBounds: () => {

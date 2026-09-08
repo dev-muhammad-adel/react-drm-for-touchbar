@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box } from 'react-drm';
+import { SELECTED_THEME } from '@/lib/theme';
 
 // Real macOS Touch Bar OSD slider: a thin line with a large gray knob that
 // carries the icon and rides on top of it at all times — not a Control
@@ -34,7 +35,7 @@ export function SliderTrack({ fill, icon, width }: {
           style={{
             position: 'absolute', left: 0, top: (KNOB_D - LINE_FILLED_H) / 2,
             width: filledW, height: LINE_FILLED_H, borderRadius: pillRadius(LINE_FILLED_H),
-            backgroundColor: '#f5f5f7',
+            backgroundColor: SELECTED_THEME.primary,
           }}
         />
       )}
@@ -43,7 +44,7 @@ export function SliderTrack({ fill, icon, width }: {
           style={{
             position: 'absolute', left: emptyX, top: (KNOB_D - LINE_EMPTY_H) / 2,
             width: emptyW, height: LINE_EMPTY_H, borderRadius: pillRadius(LINE_EMPTY_H),
-            backgroundColor: 'rgba(255,255,255,0.22)',
+            backgroundColor: SELECTED_THEME.textDisabled,
           }}
         />
       )}
@@ -51,7 +52,7 @@ export function SliderTrack({ fill, icon, width }: {
         style={{
           position: 'absolute', left: knobX, top: 0,
           width: KNOB_D, height: KNOB_D, borderRadius: pillRadius(KNOB_D),
-          backgroundColor: 'rgba(70,70,74,0.92)',
+          backgroundColor: SELECTED_THEME.surfaceVariant,
           alignItems: 'center', justifyContent: 'center',
           // shadowColor: 'rgba(0,0,0,0.5)', shadowOffsetY: 1, shadowRadius: 4, shadowOpacity: 1,
         }}

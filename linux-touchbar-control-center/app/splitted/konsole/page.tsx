@@ -7,11 +7,12 @@ import {
   MdAdd, MdClose, MdChevronLeft, MdChevronRight,
 } from 'react-icons/md';
 import { useKonsole } from '@/lib/hooks/useKonsole';
+import { SELECTED_THEME } from '@/lib/theme';
 
-const GREEN  = '#22c55e';
-const ORANGE = '#f97316';
-const PURPLE = '#a78bfa';
-const DIM    = '#64748b';
+const PRIMARY  = SELECTED_THEME.primary;
+const ERROR = SELECTED_THEME.error;
+const TEXT_PRIMARY = SELECTED_THEME.textPrimary;
+const DIM    = SELECTED_THEME.textPrimary;
 
 const CHIP_W   = 110;
 const CHIP_GAP = 4;
@@ -29,9 +30,9 @@ export default function KonsolePanel({ width, height }: { width: number; height:
   function Btn({ onClick, children, accent }: { onClick: () => void; children: React.ReactNode; accent?: string }) {
     return (
       <Button
-        color="#373737"
-        activeColor={accent ?? GREEN}
-        style={{ height, alignItems: 'center', justifyContent: 'center', borderRadius: 10, flex: 1 }}
+        color={SELECTED_THEME.surface}
+        activeColor={SELECTED_THEME.surfaceVariant ?? PRIMARY}
+        style={{ height, alignItems: 'center', justifyContent: 'center', borderRadius: 10, flex: 1  , borderColor:SELECTED_THEME.border , borderWidth:SELECTED_THEME.borderWidth}}
         onClick={onClick}
       >
         {children}
@@ -40,7 +41,8 @@ export default function KonsolePanel({ width, height }: { width: number; height:
   }
 
   function Sep() {
-    return <Box style={{ width: 1, height: height - 16, backgroundColor: '#1e293b', marginLeft: 2, marginRight: 2 }} />;
+    return <Box style={{ width: 1, height: height - 16, backgroundColor: 
+    SELECTED_THEME.border, marginLeft: 2, marginRight: 2 }} />;
   }
 
   if (!connected) {
@@ -53,7 +55,7 @@ export default function KonsolePanel({ width, height }: { width: number; height:
     );
   }
 
-  const dotColor   = status.isRunning ? ORANGE : GREEN;
+  const dotColor   = status.isRunning ? ERROR : PRIMARY;
   const statusText = status.isRunning ? status.foregroundCmd : status.cwd;
   const CHIP_RENDER_W = CHIP_W * 3;
   const ICON_BOX_W   = 24;
@@ -63,15 +65,15 @@ export default function KonsolePanel({ width, height }: { width: number; height:
 
       {/* ── Tab navigation ── */}
       <Btn onClick={prevTab}>
-        <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={GREEN} stroke="none" />
+        <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
       </Btn>
       <Box style={{ width: 40, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color="#fff" fontSize={11}>
+        <Text color={DIM} fontSize={11}>
           {tabCount > 0 ? `${activeTabIdx + 1}/${tabCount}` : '–'}
         </Text>
       </Box>
       <Btn onClick={nextTab}>
-        <MdChevronRight style={{ width: ICON_SZ, height: ICON_SZ }} fill={GREEN} stroke="none" />
+        <MdChevronRight style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
       </Btn>
 
       <Sep />
@@ -80,19 +82,18 @@ export default function KonsolePanel({ width, height }: { width: number; height:
       {suggestions.length > 0 ? (
         <Box style={{ width: middleW, overflow: 'scroll', flexDirection: 'row'}}>
           <Box style={{ width: ICON_BOX_W, alignItems: 'center', justifyContent: 'center' }}>
-            <Text color={PURPLE} fontSize={11}>❯</Text>
+            <Text color={TEXT_PRIMARY} fontSize={11}>❯</Text>
           </Box>
           {suggestions.map((s, i) => {
-            const accent = s.execute ? PURPLE : GREEN;
             return (
               <Button
                 key={i}
-                color={s.execute ? '#1e1b2e' : '#122117'}
-                activeColor={accent}
-                style={{ width: CHIP_RENDER_W, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginRight: CHIP_GAP }}
+                color={s.execute ? SELECTED_THEME.surface : SELECTED_THEME.surfaceVariant}
+                activeColor={SELECTED_THEME.surfaceVariant}
+                style={{ width: CHIP_RENDER_W, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: CHIP_GAP , borderColor:SELECTED_THEME.border , borderWidth:SELECTED_THEME.borderWidth }}
                 onClick={() => sendSuggestion(s)}
               >
-                <Text color={accent} fontSize={10}>
+                <Text color={SELECTED_THEME.textPrimary} fontSize={13}>
                   {s.cmd.length > 20 ? s.cmd.slice(0, 20) + '…' : s.cmd}
                 </Text>
               </Button>
@@ -110,11 +111,11 @@ export default function KonsolePanel({ width, height }: { width: number; height:
 
       <Sep />
 
-      <Btn onClick={newTab} accent={GREEN}>
-        <MdAdd style={{ width: ICON_SZ, height: ICON_SZ }} fill="#4ade80" stroke="none" />
+      <Btn onClick={newTab} accent={PRIMARY}>
+        <MdAdd style={{ width: ICON_SZ, height: ICON_SZ }} fill={SELECTED_THEME.success} stroke="none" />
       </Btn>
-      <Btn onClick={closeTab} accent="#f87171">
-        <MdClose style={{ width: ICON_SZ, height: ICON_SZ }} fill="#f87171" stroke="none" />
+      <Btn onClick={closeTab} accent={SELECTED_THEME.error}>
+        <MdClose style={{ width: ICON_SZ, height: ICON_SZ }} fill={SELECTED_THEME.error} stroke="none" />
       </Btn>
 
     </Box>

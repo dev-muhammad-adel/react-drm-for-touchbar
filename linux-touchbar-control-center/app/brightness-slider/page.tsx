@@ -6,6 +6,7 @@ import { SliderTrack } from '@/components/SliderTrack';
 import { useLayers } from '@/layers';
 import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, KEYBOARD_DEVICE } from '@/lib/hooks/useBrightness';
 import { applyBrightness } from '@/lib/services/brightness';
+import { SELECTED_THEME } from '@/lib/theme';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
 export const layerConfig: LayerConfig = {
@@ -65,7 +66,7 @@ function BrightnessControl({
         <SliderTrack fill={value} width={TRACK_W} icon={icon} />
       </Button>
 
-      <Text style={{ width: 52, fontSize: 18, color: '#94a3b8' }}>
+      <Text style={{ width: 52, fontSize: 18, color: SELECTED_THEME.textSecondary }}>
         {`${Math.round(value * 100)}%`}
       </Text>
     </Box>
@@ -141,7 +142,7 @@ export default function BrightnessSliderLayer({ width, height }: { width: number
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
         <BrightnessControl
           value={keyboardBrightness}
-          icon={<MdKeyboard style={{ width: 18, height: 18 }} fill="#f5f5f7" stroke="none" />}
+          icon={<MdKeyboard style={{ width: 18, height: 18 }} fill={SELECTED_THEME.textPrimary} stroke="none" />}
           height={height}
           dragRef={keyboardDrag}
           onChange={updateKeyboard}
@@ -150,7 +151,7 @@ export default function BrightnessSliderLayer({ width, height }: { width: number
         />
         <BrightnessControl
           value={displayBrightness}
-          icon={<DisplayIcon style={{ width: 18, height: 18 }} fill="#f5f5f7" stroke="none" />}
+          icon={<DisplayIcon style={{ width: 18, height: 18 }} fill={SELECTED_THEME.textPrimary} stroke="none" />}
           height={height}
           dragRef={displayDrag}
           onChange={updateDisplay}

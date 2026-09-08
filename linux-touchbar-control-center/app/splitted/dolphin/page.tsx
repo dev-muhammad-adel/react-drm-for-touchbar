@@ -9,11 +9,12 @@ import {
   MdCreateNewFolder, MdTerminal, MdDelete, MdFolder,
 } from 'react-icons/md';
 import { useDolphin } from '@/lib/hooks/useDolphin';
+import { SELECTED_THEME } from '@/lib/theme';
 
-const ACCENT   = '#1d99f3'; // KDE blue
-const DIM      = '#94a3b8';
-const DISABLED = '#475569';
-const DEL_CLR  = '#f87171';
+const ACCENT   = SELECTED_THEME.primary;
+const DIM      = SELECTED_THEME.textPrimary;
+const DISABLED =SELECTED_THEME.textDisabled;
+const DEL_CLR  = SELECTED_THEME.error;
 
 const BTN_W  = 56;
 const CHIP_W = 140;
@@ -34,13 +35,14 @@ export default function DolphinPanel({ width, height }: { width: number; height:
     );
   }
 
-  function Btn({ onClick, enabled = true, children }: { onClick: () => void; enabled?: boolean; children: React.ReactNode }) {
+  function Btn({ onClick, enabled = true, children  }: { onClick: () => void; enabled?: boolean; children: React.ReactNode }) {
     return (
       <Button
         // width={BTN_W}
-        color="#373737"
-        activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
+        
+        color={SELECTED_THEME.surface}
+        activeColor={ SELECTED_THEME.surfaceVariant}
+        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10  , borderColor:SELECTED_THEME.border , borderWidth:SELECTED_THEME.borderWidth}}
         onClick={enabled ? onClick : () => {}}
       >
         {children}
@@ -49,14 +51,14 @@ export default function DolphinPanel({ width, height }: { width: number; height:
   }
 
   function Sep() {
-    return <Box style={{ width: 1, height: height - 16, backgroundColor: '#1e293b', marginLeft: 2, marginRight: 2 }} />;
+    return <Box style={{ width: 1, height: height - 16, backgroundColor: SELECTED_THEME.border, marginLeft: 2, marginRight: 2 }} />;
   }
 
   return (
     <Box style={{ flex: 1, flexDirection: 'row', gap: 4 }}>
 
       {/* Navigation — back/forward dim when there is no history */}
-      <Btn onClick={() => trigger('go_back')} enabled={state.canBack}>
+      <Btn onClick={() => trigger('go_back')} enabled={state.canBack} >
         <MdArrowBack style={{ width: ICON_SZ, height: ICON_SZ }} fill={state.canBack ? ACCENT : DISABLED} stroke="none" />
       </Btn>
       <Btn onClick={() => trigger('go_forward')} enabled={state.canForward}>
@@ -86,7 +88,7 @@ export default function DolphinPanel({ width, height }: { width: number; height:
 
       {/* File ops — trash acts on the current selection */}
       <Btn onClick={() => trigger('create_dir')}>
-        <MdCreateNewFolder style={{ width: ICON_SZ, height: ICON_SZ }} fill="#4ade80" stroke="none" />
+        <MdCreateNewFolder style={{ width: ICON_SZ, height: ICON_SZ }} fill={SELECTED_THEME.success} stroke="none" />
       </Btn>
       {/* <Btn onClick={() => trigger('open_terminal_here')}>
         <MdTerminal style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
@@ -102,13 +104,13 @@ export default function DolphinPanel({ width, height }: { width: number; height:
         <Button
           key={p.path}
           width={CHIP_W}
-          color="#333"
-          activeColor={ACCENT}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8 }}
+          color={SELECTED_THEME.surface}
+          activeColor={SELECTED_THEME.surfaceVariant}
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 8 , borderWidth:SELECTED_THEME.borderWidth , borderColor:SELECTED_THEME.border}}
           onClick={() => openDir(p.path)}
         >
-          <MdFolder style={{ width: 18, height: 18 }} fill={ACCENT} stroke="none" />
-          <Text color="#cccccc" fontSize={13}>{p.title}</Text>
+          <MdFolder style={{ width: 18, height: 18 }} fill={SELECTED_THEME.primary} stroke="none" />
+          <Text color={SELECTED_THEME.textPrimary} fontSize={13}>{p.title}</Text>
         </Button>
       ))}
 

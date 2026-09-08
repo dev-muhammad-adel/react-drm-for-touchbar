@@ -7,8 +7,9 @@ import type { BoxNode } from 'react-drm';
 import { MdPlayArrow, MdPause } from 'react-icons/md';
 import { useVlc } from '@/lib/hooks/useVlc';
 import { FONT } from '@/components/launcher/theme';
+import { SELECTED_THEME } from '@/lib/theme';
 
-const ORANGE = '#fb923c';
+const ACCENT = SELECTED_THEME.primary;
 
 /** Microseconds → hh:mm:ss (zero-padded hours). */
 function hms(us: number): string {
@@ -26,7 +27,7 @@ export default function VlcPanel({ width, height }: { width: number; height: num
   // Fixed widths → the recessed bar + inset shadow can be sized exactly in px
   // (percentage left isn't supported), and the row fills `width` precisely.
   const PLAY_W = 110, TIME_W = 96, GAP = 8;
-  const trackH = Math.max(10, height - 16);   // full height − 16px
+  const trackH = Math.max(10, height - 8);   // full height − 16px
   const radius = 10;                           // small corners
   const barW = Math.max(80, width - PLAY_W - TIME_W * 2 - GAP * 3);
   const fillW = Math.round(barW * pct);
@@ -42,7 +43,6 @@ export default function VlcPanel({ width, height }: { width: number; height: num
     const frac = Math.max(0, Math.min(1, (tx - lb.x) / lb.w));
     seek(frac * lengthUs);
   };
-
   const previewAt = (tx: number) => {
     const lb = barRef.current ? layoutCtx.current.get(barRef.current) : undefined;
     if (!lb || lb.w <= 0 || lengthUs <= 0) return;
@@ -56,6 +56,7 @@ export default function VlcPanel({ width, height }: { width: number; height: num
       setDragUs(null);
       return;
     }
+
     const frac = Math.max(0, Math.min(1, (tx - lb.x) / lb.w));
     const nextUs = Math.round(frac * lengthUs);
     seek(nextUs);
@@ -67,18 +68,18 @@ export default function VlcPanel({ width, height }: { width: number; height: num
       <Button
         width={PLAY_W}
         height={height}
-        color="#373737"
-        activeColor="#474747"
+        color={SELECTED_THEME.surface}
+        activeColor={SELECTED_THEME.surfaceVariant}
         onClick={playPause}
-        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
+        style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 10 , borderColor:SELECTED_THEME.border , borderWidth:SELECTED_THEME.borderWidth }}
       >
         {status === 'Playing'
-          ? <MdPause style={{ width: 32, height: 32 }} fill="#e5e5e5" stroke="none" />
-          : <MdPlayArrow style={{ width: 32, height: 32 }} fill="#e5e5e5" stroke="none" />}
+          ? <MdPause style={{ width: 32, height: 32 }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+          : <MdPlayArrow style={{ width: 32, height: 32 }} fill={SELECTED_THEME.textPrimary} stroke="none" />}
       </Button>
 
       <Box style={{ width: TIME_W, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color="#cbd5e1" fontSize={16} fontFamily={FONT}>{hms(shownUs)}</Text>
+        <Text color={SELECTED_THEME.textPrimary} fontSize={16} fontFamily={FONT}>{hms(shownUs)}</Text>
       </Box>
 
       {/* Recessed track (full height − 16), small corners, real inset shadow
@@ -93,13 +94,13 @@ export default function VlcPanel({ width, height }: { width: number; height: num
         onTouchEnd={(tx) => commitDrag(tx)}
         onTouchCancel={() => setDragUs(null)}
       >
-        <Box ref={barRef} style={{ width: barW, height: trackH, borderRadius: radius, backgroundColor: '#19191c', overflow: 'hidden', shadowColor: '#000000', shadowOpacity: 0.7, shadowRadius: 4, shadowInset: true }}>
-          <Box style={{ position: 'absolute', left: 0, top: 0, width: fillW, height: trackH, borderRadius: radius, backgroundColor: ORANGE }} />
+        <Box ref={barRef} style={{ width: barW, height: trackH, borderRadius: radius, backgroundColor: SELECTED_THEME.surface, overflow: 'hidden' , borderColor:SELECTED_THEME.border, borderWidth:SELECTED_THEME.borderWidth  }}>
+          <Box style={{ position: 'absolute', left: 0, top: 0, width: fillW, height: trackH, borderRadius: radius, backgroundColor: ACCENT }} />
         </Box>
       </Button>
 
       <Box style={{ width: TIME_W, alignItems: 'center', justifyContent: 'center' }}>
-        <Text color="#cbd5e1" fontSize={16} fontFamily={FONT}>{hms(lengthUs)}</Text>
+        <Text color={SELECTED_THEME.textPrimary} fontSize={16} fontFamily={FONT}>{hms(lengthUs)}</Text>
       </Box>
     </Box>
   );

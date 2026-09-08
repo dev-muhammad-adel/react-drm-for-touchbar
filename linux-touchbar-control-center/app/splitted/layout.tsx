@@ -16,6 +16,7 @@ import type { LayerConfig, LayoutChildren } from '@/lib/routes/loadRoutes';
 import { DEFAULT_CHILD_NAME } from '@/lib/routes/loadRoutes';
 import { go } from '@/lib/routes/router-registry';
 import { CUSTOM_LAYER } from '@/lib/utils/configLoader';
+import { SELECTED_THEME } from '@/lib/theme';
 
 // How splitted itself transitions within the root layer host.
 export const layerConfig: LayerConfig = {
@@ -74,11 +75,11 @@ interface RightBtn {
 }
 
 const BASE_BTNS: Omit<RightBtn, 'onClick'>[] = [
-  { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#979797" stroke="none" />, width: 40 ,color:"#373737" , activeColor:"#474747"},
-  { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
-  { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
-  { key: 'linux',      icon: <CiWavePulse1        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
-  { key: 'playpause',  icon: <BsWindowDock    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />, width: 120 , color:"#373737" , activeColor:"#474747"},
+  { key: 'back',       icon: <FaChevronLeft style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />, width: 40 ,color:SELECTED_THEME.surface , activeColor:SELECTED_THEME.surfaceVariant},
+  { key: 'volume',     icon: <MdVolumeUp     style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />, width: 120 , color:SELECTED_THEME.surface , activeColor:SELECTED_THEME.surfaceVariant},
+  { key: 'brightness', icon: <MdWbSunny      style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />, width: 120 , color:SELECTED_THEME.surface , activeColor:SELECTED_THEME.surfaceVariant},
+  { key: 'linux',      icon: <CiWavePulse1        style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />, width: 120 , color:SELECTED_THEME.surface , activeColor:SELECTED_THEME.surfaceVariant},
+  { key: 'playpause',  icon: <BsWindowDock    style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />, width: 120 , color:SELECTED_THEME.surface , activeColor:SELECTED_THEME.surfaceVariant},
 ];
 
 const EQ_BAR_W = 4;
@@ -101,7 +102,7 @@ function EqBar({ h, dur, delay, playing }: { h: number; dur: number; delay: numb
     return () => { op.stop(); };
   }, [playing, op, dur, delay]);
 
-  return <animated.Box style={{ width: EQ_BAR_W, height: h, opacity: op, backgroundColor: '#cccccc', borderRadius: 2 }} />;
+  return <animated.Box style={{ width: EQ_BAR_W, height: h, opacity: op, backgroundColor: SELECTED_THEME.textPrimary, borderRadius: 2 }} />;
 }
 
 function EqualizerIcon({ playing }: { playing: boolean }) {
@@ -233,8 +234,8 @@ export default function SplittedLayout({ width, height, children, path }: {
         key: 'media',
         icon: <EqualizerIcon playing={mediaPlaying} />,
         width: 120,
-        color: isMediaMprisListPinned ? '#262626' : '#373737',
-        activeColor: isMediaMprisListPinned ? '#363636' : '#474747',
+        color: isMediaMprisListPinned ? SELECTED_THEME.overlay : SELECTED_THEME.surface,
+        activeColor: isMediaMprisListPinned ? SELECTED_THEME.surfaceVariant : SELECTED_THEME.surfaceVariant,
         // Just toggle the pin — the navigation effect below reacts to the
         // change and drives the left panel (no manual go() here, which would
         // fire the fade twice).
@@ -244,10 +245,10 @@ export default function SplittedLayout({ width, height, children, path }: {
     if (CUSTOM_LAYER.showButton) {
       base.push({
         key: 'customlayer',
-        icon: <FaGrip style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />,
+        icon: <FaGrip style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />,
         width: 50,
-        color: '#373737',
-        activeColor: '#474747',
+        color: SELECTED_THEME.surface,
+        activeColor: SELECTED_THEME.surfaceVariant,
         onClick: () => go('custom-layer', 'slide-up'),
       });
     }
@@ -256,7 +257,8 @@ export default function SplittedLayout({ width, height, children, path }: {
   }, [ showMedia, isMediaMprisListPinned, activeClass, mediaPlaying]);
 
   // Right panel width depends on the visible buttons + 3px gaps.
-  const rightW = mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 3;
+  const wrapperPad = SELECTED_THEME.borderWidth;
+  const rightW = wrapperPad * 2 + mediaBtns.reduce((sum, b) => sum + b.width, 0) + (mediaBtns.length - 1) * 2;
   const leftW = width - rightW - 20;
 
   const leftTargetRef = useRef<SplittedLeftLayerName | null>(null);
@@ -289,7 +291,7 @@ export default function SplittedLayout({ width, height, children, path }: {
       </Box>
 
         <Box
-        style={{ flexDirection: 'row' ,gap:3,width: rightW,backgroundColor: '#272727'  , borderRadius:10}}
+        style={{padding:SELECTED_THEME.borderWidth, flexDirection: 'row' ,gap:2,width: rightW,backgroundColor: SELECTED_THEME.border  , borderRadius:10, borderColor: SELECTED_THEME.border, borderWidth: 1 , borderStyle:"solid"}}
       >
         {mediaBtns.map((btn, idx) => (
           <Button

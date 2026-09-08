@@ -2167,6 +2167,7 @@ class ConfigGUI:
 
             choices = UNION_FIELDS.get(path)
             is_theme = path == 'DOCK.icons.theme'
+            is_theme_select = path == 'THEME.theme'
             is_font = path == 'THEME.fontFamily'
             row = self._field_row(humanize(key))
 
@@ -2175,6 +2176,18 @@ class ConfigGUI:
                 sw.set_valign(Gtk.Align.CENTER)
                 sw.connect('notify::active', lambda sw_, p=path: self._edited(p, sw_.get_active()))
                 row.pack_end(sw, False, False, 0)
+            elif is_theme_select:
+                combo = Gtk.ComboBoxText()
+                items = ['macos', 'adwaitadark', 'darkhighcontrast']
+                cur = scalar(val)
+                for it in items:
+                    combo.append_text(it)
+                combo.set_active(items.index(cur) if cur in items else 0)
+                def on_tt(c, p=path, its=items):
+                    self._edited(p, c.get_active_text())
+                combo.connect('changed', on_tt)
+                combo.set_halign(Gtk.Align.END)
+                row.pack_end(combo, False, False, 0)
             elif is_font:
                 sel = self._font_selector(scalar(val) or '', lambda v, p=path: self._edited(p, v))
                 sel.set_halign(Gtk.Align.END)

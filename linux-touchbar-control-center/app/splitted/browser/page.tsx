@@ -9,12 +9,11 @@ import {
 } from 'react-icons/md';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { useBrowserKeys } from '@/lib/hooks/useBrowserKeys';
+import { SELECTED_THEME } from '@/lib/theme';
 
-const DIM       = '#cccccc';
-const CLOSE_CLR = '#f87171';
+const DIM       = SELECTED_THEME.textPrimary;
+const CLOSE_CLR = SELECTED_THEME.error;
 const CLOSE_CONFIRM_MS = 3000;
-const BTN_BG = '#373737';
-const BTN_ACTIVE_BG = '#474747';
 const GROUP_GAP = 12;
 const BTN_W = 130;
 
@@ -49,8 +48,8 @@ export default function BrowserPanel({ width, height }: { width: number; height:
   function Btn({
     onClick,
     children,
-    color = BTN_BG,
-    activeColor = BTN_ACTIVE_BG,
+    color = SELECTED_THEME.surface,
+    activeColor = SELECTED_THEME.surfaceVariant,
     radiusLeft = false,
     radiusRight = false,
   }: {
@@ -68,8 +67,11 @@ export default function BrowserPanel({ width, height }: { width: number; height:
         style={{
           alignItems: 'center',
           justifyContent: 'center',
-          width: BTN_W,
-          height: height,
+          width: BTN_W -( SELECTED_THEME.borderWidth *2),
+          height: height -( SELECTED_THEME.borderWidth *2),
+          marginVertical:SELECTED_THEME.borderWidth,
+          marginLeft:radiusLeft?SELECTED_THEME.borderWidth:0,
+          marginRight:radiusRight?SELECTED_THEME.borderWidth:0,
           borderTopLeftRadius: radiusLeft ? 10 : 0,
           borderBottomLeftRadius: radiusLeft ? 10 : 0,
           borderTopRightRadius: radiusRight ? 10 : 0,
@@ -84,7 +86,7 @@ export default function BrowserPanel({ width, height }: { width: number; height:
 
   return (
     <Box style={{ flex: 1, flexDirection: 'row', gap: GROUP_GAP }}>
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={back} radiusLeft>
           <MdArrowBack style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -99,7 +101,7 @@ export default function BrowserPanel({ width, height }: { width: number; height:
         </Btn>
       </Box>
 
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={prevTab} radiusLeft>
           <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -111,14 +113,14 @@ export default function BrowserPanel({ width, height }: { width: number; height:
         </Btn>
         <Btn
           onClick={armClose}
-          color={confirmClose ? '#7f1d1d' : BTN_BG}
-          activeColor={confirmClose ? '#991b1b' : BTN_ACTIVE_BG}
+          color={confirmClose ? '#7f1d1d' : SELECTED_THEME.surface}
+          activeColor={confirmClose ? '#991b1b' : SELECTED_THEME.surfaceVariant}
           radiusRight
         >
           {confirmClose ? (
             <Box style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              <MdCheck style={{ width: 24, height: 24 }} fill="#fff" stroke="none" />
-              <Text color="#fff" fontSize={14}>CLOSE?</Text>
+              <MdCheck style={{ width: 24, height: 24 }} fill={DIM} stroke="none" />
+              <Text color={DIM} fontSize={14}>CLOSE?</Text>
             </Box>
           ) : (
             <MdClose style={{ width: ICON_SZ, height: ICON_SZ }} fill={CLOSE_CLR} stroke="none" />

@@ -11,12 +11,17 @@ import { useMediaPlayers } from '@/lib/hooks/useMediaPlayers';
 import { useAlbumArt } from '@/lib/hooks/useAlbumArt';
 import { appIconSource } from 'react-drm';
 import { FONT } from '@/components/launcher/theme';
+import { SELECTED_THEME, withAlpha } from '@/lib/theme';
+import { BsBorderWidth } from 'react-icons/bs';
 
 const ACCENT: Record<string, string> = {
   firefox: '#f9731666',
   spotify: '#1db95466',
   chrome:  '#4285f466',
 };
+
+// Non-brand fallback accent for unknown players.
+const GENERIC_ACCENT = SELECTED_THEME.border;
 
 // Build the vinyl record as one cached SVG: black disc, a few groove rings, the
 // album art clipped to a circle (when present), a colored center label and the
@@ -79,8 +84,8 @@ function Vinyl({ size, accent, artUrl, spinning }: { size: number; accent: strin
 
 type Player = ReturnType<typeof useMediaPlayers>['players'][number];
 
-const BG_CARD = '#444'; // each accordion item sits on this card background
-const SEP     = '#000000'; // divider between control buttons
+const BG_CARD = SELECTED_THEME.surface; // each accordion item sits on this card background
+const SEP     = SELECTED_THEME.border; // divider between control buttons
 
 // Freedesktop icon name per player, resolved to a renderable <Svg> path once
 // (appIconSource memoises). Falls back to the album-art vinyl when not found.
@@ -103,7 +108,7 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   const w = useSpringValue(isSel ? expandedW : collapsedW, { config: { tension: 280, friction: 30 } });
   useEffect(() => { w.start(isSel ? expandedW : collapsedW); }, [isSel, expandedW, collapsedW, w]);
 
-  const color   = ACCENT[player.name] ?? '#666';
+  const color   = ACCENT[player.name] ?? GENERIC_ACCENT;
   const iconSz  = 38;
   const vinylSz   = Math.round(height * 0.9);
   const iconBox   = Math.round(height*0.8);  // collapsed tile app icon
@@ -140,25 +145,25 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
   };
 
   return (
-    <animated.Box style={{ width: w, height, overflow: 'hidden', borderRadius: 10, backgroundColor: (playing && !isSel) ? color : BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
+    <animated.Box style={{borderWidth:SELECTED_THEME.borderWidth, borderColor:GENERIC_ACCENT ,  width: w, height, overflow: 'hidden', borderRadius: 10, backgroundColor: (playing && !isSel) ? color : BG_CARD, flexDirection: 'row', alignItems: 'center', justifyContent: isSel ? 'flex-start' : 'center', gap: 8, paddingLeft: 6, paddingRight: 6 }}>
       {isSel ? (
         <>
           {/* app icon */}
           {icon && <Svg src={icon} width={appIconSz} height={appIconSz} style={{ width: appIconSz, height: appIconSz }} />}
-          {icon && <Box style={{ width: 2, height: sepH*2, backgroundColor: SEP+"99" }} />}
+          {icon && <Box style={{ width: 2, height: sepH*2, backgroundColor: withAlpha(SEP, 0.6) }} />}
           {/* prev */}
-          <Button width={120} height={48} color="transparent" activeColor="#474747" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
-            <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill="#fff" />
+          <Button width={120} height={48} color="transparent" activeColor={SELECTED_THEME.surfaceVariant} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.previous}>
+            <MdSkipPrevious style={{ width: iconSz, height: iconSz }} fill={SELECTED_THEME.textPrimary} />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
           {/* play/pause (icon tinted with the player accent) */}
-          <Button width={120} height={48} color="transparent" activeColor="#474747" onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
-            <PlayIcon style={{ width: iconSz, height: iconSz }} fill={"#fff"} />
+          <Button width={120} height={48} color="transparent" activeColor={SELECTED_THEME.surfaceVariant} onClick={player.playPause} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+            <PlayIcon style={{ width: iconSz, height: iconSz }} fill={SELECTED_THEME.textPrimary} />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />
           {/* next */}
-          <Button width={120} height={48} color="transparent" activeColor="#474747" style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
-            <MdSkipNext style={{ width: iconSz, height: iconSz }} fill="#fff" />
+          <Button width={120} height={48} color="transparent" activeColor={SELECTED_THEME.surfaceVariant} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }} onClick={player.next}>
+            <MdSkipNext style={{ width: iconSz, height: iconSz }} fill={SELECTED_THEME.textPrimary} />
           </Button>
           <Box style={{ width: 1, height: sepH, backgroundColor: SEP }} />  
           {/* flat progress bar — tap or drag to seek; track text sits inside */}
@@ -181,8 +186,8 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
           </Box>
               {fillW > 0 && <Box style={{ position: 'absolute', left: vinylSz/2, top: 0, width: fillW - (vinylSz/2), height: barH, backgroundColor: color }} />}
               <Box style={{ marginLeft: vinylSz, position: 'absolute', left: 0, top: 0, width: barW - (vinylSz), height: barH, flexDirection: 'column', justifyContent: 'center', paddingLeft: 10, paddingRight: 10,zIndex:-1 }}>
-                <Text  color="#fff" fontSize={15} fontFamily={FONT}>{player.state.title || 'Unknown'}</Text>
-                <Text color="#cbd5e1" fontSize={12} fontFamily={FONT}>{player.state.artist}</Text>
+                <Text style={{ color: SELECTED_THEME.textPrimary, fontSize: 15 }} fontFamily={FONT}>{player.state.title || 'Unknown'}</Text>
+                <Text style={{ color: SELECTED_THEME.textSecondary, fontSize: 12 }} fontFamily={FONT}>{player.state.artist}</Text>
               </Box>
             </Box>
           </Button>
@@ -192,7 +197,7 @@ function AccordionItem({ player, isSel, expandedW, collapsedW, height, onSelect 
         // album-art vinyl when the app icon can't be resolved. When playing, the
         // wrapper above is accent-tinted (full-bleed) so this tile stands out;
         // the button itself stays transparent so that fill shows through.
-        <Button width={collapsedW - 12} height={height} color="transparent" activeColor="#1e293b" onClick={onSelect} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
+        <Button width={collapsedW - 12} height={height} color="transparent" activeColor={SELECTED_THEME.divider} onClick={onSelect} style={{ alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>
           {icon
             ? <Svg src={icon} width={iconBox} height={iconBox} style={{ width: iconBox, height: iconBox }} />
             : <Vinyl size={vinylSz} accent={color} artUrl={player.state.artUrl} spinning={playing} />}
@@ -213,7 +218,7 @@ export default function MediaMprisList({ width, height }: { width: number; heigh
   if (players.length === 0) {
     return (
       <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingLeft: 8 }}>
-        <Text color="#94a3b8" fontSize={14} fontFamily={FONT}>
+        <Text style={{ color: SELECTED_THEME.textSecondary, fontSize: 14 }} fontFamily={FONT}>
           No media players
         </Text>
       </Box>
@@ -227,7 +232,7 @@ export default function MediaMprisList({ width, height }: { width: number; heigh
   const expandedW  = Math.max(160, width - (players.length - 1) * collapsedW - gaps);
 
   return (
-    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+    <Box style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 10 , backgroundColor:"#000" }}>
       {players.map((player) => (
         <AccordionItem
           key={player.service}

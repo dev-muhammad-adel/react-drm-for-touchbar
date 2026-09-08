@@ -8,11 +8,11 @@ import {
   MdRotateLeft, MdRotateRight, MdSlideshow, MdDelete, MdCheck,
 } from 'react-icons/md';
 import { useGwenview } from '@/lib/hooks/useGwenview';
+import { SELECTED_THEME } from '@/lib/theme';
 
-const DIM = '#cccccc';
-const TRASH_CLR = '#f87171'; // matches BrowserPanel's close-button danger color
-const BTN_BG = '#373737';
-const BTN_ACTIVE_BG = '#474747';
+const DIM = SELECTED_THEME.textPrimary;
+const TRASH_CLR = SELECTED_THEME.error
+
 const GROUP_GAP = 12;
 const BTN_W = 100;
 const ICON_SZ = 30;
@@ -49,8 +49,8 @@ export default function GwenviewPanel({ width, height }: { width: number; height
   function Btn({
     onClick,
     children,
-    color,
-    activeColor,
+    color = SELECTED_THEME.surface,
+    activeColor = SELECTED_THEME.surfaceVariant,
     radiusLeft = false,
     radiusRight = false,
   }: {
@@ -63,13 +63,16 @@ export default function GwenviewPanel({ width, height }: { width: number; height
   }) {
     return (
       <Button
-        color={color ?? BTN_BG}
-        activeColor={activeColor ?? BTN_ACTIVE_BG}
+          color={color}
+        activeColor={activeColor}
         style={{
           alignItems: 'center',
           justifyContent: 'center',
-          width: BTN_W,
-          height: height,
+          width: BTN_W -( SELECTED_THEME.borderWidth *2),
+          height: height -( SELECTED_THEME.borderWidth *2),
+          marginVertical:SELECTED_THEME.borderWidth,
+          marginLeft:radiusLeft?SELECTED_THEME.borderWidth:0,
+          marginRight:radiusRight?SELECTED_THEME.borderWidth:0,
           borderTopLeftRadius: radiusLeft ? 10 : 0,
           borderBottomLeftRadius: radiusLeft ? 10 : 0,
           borderTopRightRadius: radiusRight ? 10 : 0,
@@ -85,7 +88,7 @@ export default function GwenviewPanel({ width, height }: { width: number; height
   return (
     <Box style={{ flex: 1, flexDirection: 'row', gap: GROUP_GAP }}>
       {/* Navigation */}
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={prev} radiusLeft>
           <MdChevronLeft style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -95,7 +98,7 @@ export default function GwenviewPanel({ width, height }: { width: number; height
       </Box>
 
       {/* Zoom / rotate */}
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={zoomIn} radiusLeft>
           <MdZoomIn style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -111,7 +114,7 @@ export default function GwenviewPanel({ width, height }: { width: number; height
       </Box>
 
       {/* Slideshow / trash */}
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={slideshow} radiusLeft>
           <MdSlideshow style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -123,8 +126,8 @@ export default function GwenviewPanel({ width, height }: { width: number; height
         >
           {confirmTrash ? (
             <Box style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              <MdCheck style={{ width: 24, height: 24 }} fill="#fff" stroke="none" />
-              <Text color="#fff" fontSize={14}>TRASH?</Text>
+              <MdCheck style={{ width: 24, height: 24 }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+              <Text color={SELECTED_THEME.textPrimary} fontSize={14}>TRASH?</Text>
             </Box>
           ) : (
             <MdDelete style={{ width: ICON_SZ, height: ICON_SZ }} fill={TRASH_CLR} stroke="none" />

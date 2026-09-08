@@ -10,6 +10,7 @@ import { createLogger } from 'react-drm';
 import { useVolumeControl, readVolume, TRACK_W, clampVolume } from '@/lib/hooks/useVolume';
 import { PW_ENV } from '@/lib/services/volume';
 import { audioTrackAnchorAtom, ANCHOR_TRACK_W } from '@/store/audioTrackAnchor';
+import { SELECTED_THEME } from '@/lib/theme';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
 export const layerConfig: LayerConfig = {
@@ -20,7 +21,7 @@ export const layerConfig: LayerConfig = {
 const log = createLogger('audioSlider');
 
 function Sep() {
-  return <Box style={{ width: 1, height: 28, backgroundColor: '#1e293b' }} />;
+  return <Box style={{ width: 1, height: 28, backgroundColor: SELECTED_THEME.divider }} />;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -114,11 +115,11 @@ export default function AudioSliderLayer({ width, height }: { width: number; hei
         <SliderTrack
           fill={vol}
           width={activeTrackW}
-          icon={<VolumeIcon style={{ width: 18, height: 18}} fill="#f5f5f7" stroke="none" />}
+          icon={<VolumeIcon style={{ width: 18, height: 18}} fill={SELECTED_THEME.textPrimary} stroke="none" />}
         />
       </Button>
 
-      <Text style={{ width: PERCENT_W, fontSize: 18, color: '#94a3b8' }}>
+      <Text style={{ width: PERCENT_W, fontSize: 18, color: SELECTED_THEME.textSecondary }}>
         {`${Math.round(vol * 100)}%`}
       </Text>
     </Box>

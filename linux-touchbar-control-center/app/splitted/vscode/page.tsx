@@ -9,8 +9,9 @@ import {
 } from 'react-icons/vsc';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { useVsCodeKeys } from '@/lib/hooks/useVsCodeKeys';
+import { SELECTED_THEME } from '@/lib/theme';
 
-const DIM = '#cccccc';
+const DIM = SELECTED_THEME.textPrimary;
 const GROUP_GAP = 12;
 const BTN_W = 100;
 const ICON_SZ = 30;
@@ -21,15 +22,15 @@ const ICON_SZ = 30;
 // Start/Stop keep their own semantic green/red (not decorative — the same
 // green=go/red=stop convention every IDE's debug toolbar uses); STOP_CLR
 // matches the danger color BrowserPanel already uses for its close button.
-const BTN_BG        = '#373737';
-const BTN_ACTIVE_BG = '#474747';
+const BTN_BG        = SELECTED_THEME.surface;
+const BTN_ACTIVE_BG = SELECTED_THEME.surfaceVariant;
 const GROUPS = {
   run:      { color: BTN_BG, activeColor: BTN_ACTIVE_BG },
   edit:     { color: BTN_BG, activeColor: BTN_ACTIVE_BG },
   commands: { color: BTN_BG, activeColor: BTN_ACTIVE_BG },
 };
-const START_CLR = { color: '#22c55e33', activeColor: '#22c55e66' };
-const STOP_CLR  = { color: '#f8717133', activeColor: '#f8717166' };
+const START_CLR = { color: BTN_BG, activeColor: BTN_ACTIVE_BG };
+const STOP_CLR  = { color: BTN_BG, activeColor: BTN_ACTIVE_BG };
 
 export default function VsCodePanel({ width, height }: { width: number; height: number }) {
   const { class: windowClass } = useActiveWindow();
@@ -61,8 +62,11 @@ export default function VsCodePanel({ width, height }: { width: number; height: 
         style={{
           alignItems: 'center',
           justifyContent: 'center',
-          width: BTN_W,
-          height: height,
+          width: BTN_W -( SELECTED_THEME.borderWidth *2),
+          height: height -( SELECTED_THEME.borderWidth *2),
+          marginVertical:SELECTED_THEME.borderWidth,
+          marginLeft:radiusLeft?SELECTED_THEME.borderWidth:0,
+          marginRight:radiusRight?SELECTED_THEME.borderWidth:0,
           borderTopLeftRadius: radiusLeft ? 10 : 0,
           borderBottomLeftRadius: radiusLeft ? 10 : 0,
           borderTopRightRadius: radiusRight ? 10 : 0,
@@ -78,7 +82,7 @@ export default function VsCodePanel({ width, height }: { width: number; height: 
   return (
     <Box style={{ flex: 1, flexDirection: 'row', gap: GROUP_GAP }}>
       {/* Run/Debug */}
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={run} group="run" color={START_CLR.color} activeColor={START_CLR.activeColor} radiusLeft>
           <VscDebugStart style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -97,7 +101,7 @@ export default function VsCodePanel({ width, height }: { width: number; height: 
       </Box>
 
       {/* Edit */}
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={undo} group="edit" radiusLeft>
           <MdUndo style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>
@@ -110,7 +114,7 @@ export default function VsCodePanel({ width, height }: { width: number; height: 
       </Box>
 
       {/* Commands */}
-      <Box style={{ flexDirection: 'row', gap: 2 }}>
+      <Box style={{ flexDirection: 'row', gap: SELECTED_THEME.borderWidth , backgroundColor:SELECTED_THEME.border  , borderWidth:SELECTED_THEME.borderWidth, borderColor:SELECTED_THEME.border , borderRadius:10}}>
         <Btn onClick={commandPalette} group="commands" radiusLeft>
           <MdKeyboardCommandKey style={{ width: ICON_SZ, height: ICON_SZ }} fill={DIM} stroke="none" />
         </Btn>

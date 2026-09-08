@@ -1,6 +1,7 @@
 import React, { useContext, useMemo } from 'react';
 import { Box, Text, Button, FKEY_CODES, KEY, DisplaySizeContext } from 'react-drm';
 import { BackButton } from '@/components/BackButton';
+import { SELECTED_THEME } from '@/lib/theme';
 import { keys } from '@/lib/services/keyInjector';
 import { createHeldKeyHandlers } from '@/lib/services/heldKey';
 import { ESC_KEY, FN_KEYS } from '@/lib/utils/configLoader';
@@ -21,6 +22,8 @@ const keyStyle = {
   borderBottomLeftRadius:  10,
   borderTopRightRadius:    10,
   borderBottomRightRadius: 10,
+  borderColor: SELECTED_THEME.border,
+  borderWidth: SELECTED_THEME.borderWidth,
 } as const;
 
 function HeldKey({ label, keyCode }: { label: string; keyCode: number }) {
@@ -28,12 +31,12 @@ function HeldKey({ label, keyCode }: { label: string; keyCode: number }) {
 
   return (
     <Button
-      color="#373737"
-      activeColor="#474747"
+      color={SELECTED_THEME.surface}
+      activeColor={SELECTED_THEME.surfaceVariant}
       style={keyStyle}
       {...handlers}
     >
-      <Text fontSize={24} style={{ fontWeight: '700' }}>{label}</Text>
+      <Text fontSize={24} style={{ fontWeight: '700', color: SELECTED_THEME.textPrimary }}>{label}</Text>
     </Button>
   );
 }
@@ -46,7 +49,7 @@ export default function FnKeys({ width, height }: { width: number; height: numbe
   const showEsc = displayWidth >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'fn';
 
   return (
-    <Box style={{ flex: 1, alignItems: 'stretch', gap: 6, paddingHorizontal: 8 , backgroundColor: '#000' }}>
+    <Box style={{ flex: 1, alignItems: 'stretch', gap: 6, paddingHorizontal: 8 }}>
 
       {/* <BackButton /> */}
 

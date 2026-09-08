@@ -13,6 +13,7 @@ import type { IconType } from 'react-icons';
 import { CAVA, SYSTEMBAR } from '@/lib/utils/configLoader';
 import { useLayers } from '@/layers';
 import { BackButton } from '@/components/BackButton';
+import { SELECTED_THEME } from '@/lib/theme';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
 export const layerConfig: LayerConfig = {
@@ -21,19 +22,19 @@ export const layerConfig: LayerConfig = {
 };
 
 // ── Colors ────────────────────────────────────────────────────────────────────
-const BG      = '#0d1117';
-const MOD_BG  = '#111827';   // module background (slightly lighter)
-const SEP_CLR = '#1e293b';   // separator / border color
+const BG      = SELECTED_THEME.background;
+const MOD_BG  = SELECTED_THEME.surface;   // module background (slightly lighter)
+const SEP_CLR = SELECTED_THEME.divider;   // separator / border color
 
 function loadColor(pct: number) {
-  if (pct < 50) return '#4ade80';
-  if (pct < 80) return '#fde047';
-  return '#f87171';
+  if (pct < 80) return SELECTED_THEME.info;
+  if (pct < 95) return SELECTED_THEME.warning;
+  return SELECTED_THEME.error;
 }
 function tempColor(c: number) {
-  if (c < 65) return '#4ade80';
-  if (c < 82) return '#fde047';
-  return '#f87171';
+  if (c < 80) return SELECTED_THEME.info;
+  if (c < 90) return SELECTED_THEME.warning;
+  return SELECTED_THEME.error;
 }
 type BatteryState = 'Charging' | 'Discharging' | 'Full' | 'Unknown';
 interface BatteryInfo { pct: number; state: BatteryState; }
@@ -54,13 +55,10 @@ function batteryRange(pct: number): 'critical' | 'low' | 'medium' | 'high' | 'fu
 }
 
 function batColor(bat: BatteryInfo) {
-  if (bat.state === 'Charging') return '#4ade80';
-  if (bat.state === 'Full') return '#34d399';
   const range = batteryRange(bat.pct);
-  if (range === 'critical') return '#ef4444';
-  if (range === 'low') return '#f87171';
-  if (range === 'medium') return '#fde047';
-  return '#cccccc';
+  if (range === 'critical' || range === 'low') return SELECTED_THEME.error;
+  if (range === 'medium') return SELECTED_THEME.warning;
+  return SELECTED_THEME.info;
 }
 function fmtRate(bps: number) {
   if (bps >= 1e6) return (bps / 1e6).toFixed(1) + 'M';
@@ -218,18 +216,18 @@ function Sep() {
 
 // Accent label (the small dim prefix like "CPU", "MEM")
 function Label({ children }: { children: string }) {
-  return <Text style={{ color: '#cccccc', fontSize: 17 }}>{children}</Text>;
+  return <Text style={{ color: SELECTED_THEME.textSecondary, fontSize: 17 }}>{children}</Text>;
 }
 
 // Main value text
-function Val({ children, color = '#cccccc' }: { children:string; color?: string }) {
+function Val({ children, color = SELECTED_THEME.textPrimary }: { children:string; color?: string }) {
   return <Text style={{ color, fontSize: 22 }}>{children}</Text>;
 }
 
 // Thin inline bar (polybar ramp-like)
 function Bar({ fill, color, width = 60 }: { fill: number; color: string; width?: number }) {
   return (
-    <Box style={{ width, height: 6, backgroundColor: '#1e293b' }}>
+    <Box style={{ width, height: 6, backgroundColor: SELECTED_THEME.divider }}>
       {fill > 0 && <Box style={{ width: Math.round(width * fill), height: 6, backgroundColor: color }} />}
     </Box>
   );
@@ -273,7 +271,7 @@ function MemMod({ used, total }: { used: number; total: number }) {
 }
 
 function TempMod({ temp }: { temp: number | null }) {
-  const color = temp !== null ? tempColor(temp) : '#475569';
+  const color = temp !== null ? tempColor(temp) : SELECTED_THEME.textDisabled;
   return <StatTile icon={MdThermostat} value={temp !== null ? `${temp}°C` : 'N/A'} color={color} />;
 }
 
@@ -309,24 +307,24 @@ function NetMod({ rx, tx, iface, rxHist, txHist }: { rx: number; tx: number; ifa
       alignSelf: 'stretch',
       width: 266,
     }}>
-      <NetIcon x={16} y={4} style={{ width: 18, height: 18 }} fill="#cbd5e1" stroke="none" />
+      <NetIcon x={16} y={4} style={{ width: 18, height: 18 }} fill={SELECTED_THEME.textPrimary} stroke="none" />
       <svg width={chartW} height={chartH} viewBox={`0 0 ${chartW} ${chartH}`}>
-        <rect x={0} y={0} width={chartW} height={chartH} rx={3} fill="#000" />
-        <rect x={0} y={chartH - 5} width={chartW} height={2} rx={1} fill="#1e293b" />
-        {rxFillW > 0 && <rect x={0} y={chartH - 5} width={rxFillW} height={2} rx={1} fill="#7dd3fc" opacity={0.35} />}
-        {txFillW > 0 && <rect x={0} y={chartH - 2} width={txFillW} height={2} rx={1} fill="#fdba74" opacity={0.35} />}
-        <polyline fill="none" stroke="#7dd3fc" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" points={rxPts} />
-        <polyline fill="none" stroke="#fdba74" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" points={txPts} />
+        <rect x={0} y={0} width={chartW} height={chartH} rx={3} fill={SELECTED_THEME.shadow} />
+        <rect x={0} y={chartH - 5} width={chartW} height={2} rx={1} fill={SELECTED_THEME.divider} />
+        {rxFillW > 0 && <rect x={0} y={chartH - 5} width={rxFillW} height={2} rx={1} fill={SELECTED_THEME.info} opacity={0.35} />}
+        {txFillW > 0 && <rect x={0} y={chartH - 2} width={txFillW} height={2} rx={1} fill={SELECTED_THEME.info} opacity={0.35} />}
+        <polyline fill="none" stroke={SELECTED_THEME.info} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" points={rxPts} />
+        <polyline fill="none" stroke={SELECTED_THEME.info} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" points={txPts} />
       </svg>
       <Box style={{ gap: 1,flexDirection:"column" }}>
         <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-          <MdArrowDownward style={{ width: 14, height: 14 }} fill="#7dd3fc" stroke="none" />
-          <Text style={{ color: '#7dd3fc', fontSize: 15 }}>{fmtRate(rxValue)}</Text>
+          <MdArrowDownward style={{ width: 14, height: 14 }} fill={SELECTED_THEME.info} stroke="none" />
+          <Text style={{ color: SELECTED_THEME.info, fontSize: 15 }}>{fmtRate(rxValue)}</Text>
 
         </Box>
         <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-          <MdArrowUpward style={{ width: 14, height: 14 }} fill="#fdba74" stroke="none" />
-          <Text style={{ color: '#fdba74', fontSize: 15 }}>{fmtRate(txValue)}</Text>
+          <MdArrowUpward style={{ width: 14, height: 14 }} fill={SELECTED_THEME.info} stroke="none" />
+          <Text style={{ color: SELECTED_THEME.info, fontSize: 15 }}>{fmtRate(txValue)}</Text>
         </Box>
       </Box>
     </Box>
@@ -336,8 +334,8 @@ function NetMod({ rx, tx, iface, rxHist, txHist }: { rx: number; tx: number; ifa
 function HostMod({ uptime }: { uptime: string }) {
   return (
     <Mod width={240}>
-      <Box style={{ width: 6, height: 6, backgroundColor: '#22c55e' }} />
-      <Val color="#c7d2fe">{HOSTNAME}</Val>
+      <Box style={{ width: 6, height: 6, backgroundColor: SELECTED_THEME.info }} />
+      <Val color={SELECTED_THEME.textPrimary}>{HOSTNAME}</Val>
       {uptime ? <Label>{`↑${uptime}`}</Label> : null}
     </Mod>
   );
@@ -367,9 +365,9 @@ function BatteryIcon({ bat }: { bat: BatteryInfo }) {
         </linearGradient>
       </defs>
 
-      <rect x={35} y={(20 - nubH) / 2} width={nubW} height={nubH} rx={1} fill="#9ca3af" />
-      <rect x={0.8} y={bodyY} width={bodyW} height={bodyH} rx={4.5} fill="#0f141a" stroke="#cbd5e1" strokeOpacity={0.65} strokeWidth={1.6} />
-      <rect x={innerPad + 0.8} y={bodyY + innerPad} width={bodyW - innerPad * 2} height={bodyH - innerPad * 2} rx={2.8} fill="#111827" />
+      <rect x={35} y={(20 - nubH) / 2} width={nubW} height={nubH} rx={1} fill={SELECTED_THEME.textSecondary} />
+      <rect x={0.8} y={bodyY} width={bodyW} height={bodyH} rx={4.5} fill={SELECTED_THEME.shadow} stroke={SELECTED_THEME.textPrimary} strokeOpacity={0.65} strokeWidth={1.6} />
+      <rect x={innerPad + 0.8} y={bodyY + innerPad} width={bodyW - innerPad * 2} height={bodyH - innerPad * 2} rx={2.8} fill={SELECTED_THEME.surface} />
 
       {fillW > 0 && (
         <rect
@@ -389,7 +387,7 @@ function BatteryIcon({ bat }: { bat: BatteryInfo }) {
           width={Math.max(0, fillW - 2)}
           height={Math.max(0, (bodyH - innerPad * 2) / 2 - 1)}
           rx={2}
-          fill="#cccccc"
+          fill={SELECTED_THEME.textPrimary}
           opacity={0.14}
         />
       )}
@@ -397,7 +395,7 @@ function BatteryIcon({ bat }: { bat: BatteryInfo }) {
       {showCharging && (
         <path
           d="M17.6 5.4 L15 10.1 H18.1 L15.9 14.6 L22.2 8.8 H18.9 L21 5.4 Z"
-          fill="#e5e7eb"
+          fill={SELECTED_THEME.textPrimary}
           opacity={0.92}
         />
       )}
@@ -405,7 +403,7 @@ function BatteryIcon({ bat }: { bat: BatteryInfo }) {
       {showFull && (
         <path
           d="M13.8 10.2 L16.5 12.9 L21.4 8"
-          stroke="#e5e7eb"
+          stroke={SELECTED_THEME.textPrimary}
           strokeWidth={1.9}
           fill="none"
           strokeLinecap="round"
@@ -415,8 +413,8 @@ function BatteryIcon({ bat }: { bat: BatteryInfo }) {
 
       {showCritical && (
         <>
-          <rect x={17.2} y={6.4} width={1.8} height={5.1} rx={0.9} fill="#fee2e2" />
-          <rect x={17.2} y={12.5} width={1.8} height={1.8} rx={0.9} fill="#fee2e2" />
+          <rect x={17.2} y={6.4} width={1.8} height={5.1} rx={0.9} fill={SELECTED_THEME.error} />
+          <rect x={17.2} y={12.5} width={1.8} height={1.8} rx={0.9} fill={SELECTED_THEME.error} />
         </>
       )}
 
@@ -464,8 +462,8 @@ function ClockMod({ time }: { time: Date }) {
       gap: 6,
  
     }}>
-      <Text style={{ color: '#fde68a', fontSize: 20 }}>{hh}</Text>
-      <Text style={{ color: '#94a3b8', fontSize: 14 }}>{dd}</Text>
+      <Text style={{ color: SELECTED_THEME.info, fontSize: 20 }}>{hh}</Text>
+      <Text style={{ color: SELECTED_THEME.textSecondary, fontSize: 14 }}>{dd}</Text>
     </Box>
   );
 }
@@ -492,15 +490,8 @@ try {
   ].join('\n'));
 } catch { /**/ }
 
-// orange (bass) → cyan (treble)
-const BAR_COLORS = Array.from({ length: CAVA_BARS }, (_, i) => {
-  const t = i / (CAVA_BARS - 1);
-  const r = Math.round(249 - t * 215);
-  const g = Math.round(115 + t *  96);
-  const b = Math.round( 22 + t * 216);
-  const hex = (v: number) => Math.min(255, Math.max(0, v)).toString(16).padStart(2, '0');
-  return `#${hex(r)}${hex(g)}${hex(b)}`;
-});
+// Single accent color for the audio bars (inactive → divider).
+const BAR_COLORS = Array.from({ length: CAVA_BARS }, () => SELECTED_THEME.info);
 
 const BAR_W = 10;
 const GAP   = 3;
@@ -509,7 +500,7 @@ const hexRgb = (hex: string): [number, number, number] => {
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 };
 const BAR_RGB      = BAR_COLORS.flatMap(hexRgb);                              // flat r,g,b per bar (active)
-const INACTIVE_RGB = Array.from({ length: CAVA_BARS }, () => hexRgb('#1e293b')).flat();
+const INACTIVE_RGB = Array.from({ length: CAVA_BARS }, () => hexRgb(SELECTED_THEME.divider)).flat();
 
 function AudioVisSection() {
   const layoutRef  = useContext(LayoutContext);
@@ -561,7 +552,7 @@ function AudioVisSection() {
     <Box style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: 8, paddingBottom: 8 }}>
       <Box ref={barsRef} style={{ alignItems: 'flex-end', gap: GAP }}>
         {bars.map((h, i) => (
-          <Box key={i} style={{ width: BAR_W, height: h, backgroundColor: isActive ? BAR_COLORS[i] : '#1e293b' }} />
+          <Box key={i} style={{ width: BAR_W, height: h, backgroundColor: isActive ? BAR_COLORS[i] : SELECTED_THEME.divider }} />
         ))}
       </Box>
     </Box>
@@ -590,12 +581,12 @@ function PomodoroSection() {
     ? `${String(totalMins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
     : `${Math.floor(totalMins/60)}:${String(totalMins%60).padStart(2,'0')}`;
 
-  const ringColor = flash ? '#4ade80' : running ? '#f87171' : elapsed > 0 ? '#475569' : '#334155';
-  const timeColor = flash ? '#86efac' : running ? '#fca5a5' : elapsed > 0 ? '#94a3b8' : '#64748b';
+  const ringColor = flash ? SELECTED_THEME.success : running ? SELECTED_THEME.info : elapsed > 0 ? SELECTED_THEME.textSecondary : SELECTED_THEME.divider;
+  const timeColor = flash ? SELECTED_THEME.success : running ? SELECTED_THEME.info : elapsed > 0 ? SELECTED_THEME.textSecondary : SELECTED_THEME.textDisabled;
   const label     = flash ? `session ${sessions} done!`
                   : !running && elapsed === 0 ? 'tap to start'
                   : running ? 'focus' : 'paused';
-  const labelColor = flash ? '#4ade80' : '#475569';
+  const labelColor = flash ? SELECTED_THEME.success : SELECTED_THEME.textSecondary;
 
   // Dots: fill per session within each 4-session cycle; flash shows all 4 filled
   const filledDots = flash && sessions % 4 === 0 && sessions > 0 ? 4 : sessions % 4;
@@ -604,10 +595,10 @@ function PomodoroSection() {
   function reset()  { setElapsed(0); setRunning(false); setSessions(0); setFlash(false); }
   return (
     <Box style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, gap: 8 }}>
-      <Button  onClick={toggle} color="transparent" activeColor="#1e293b"
+      <Button  onClick={toggle} color="transparent" activeColor={SELECTED_THEME.divider}
          style={{ alignItems: 'center', justifyContent: 'center' , gap: 8 }}>
         <svg width={38} height={38} viewBox="0 0 38 38">
-          <circle cx={19} cy={19} r={POMO_R} fill="none" stroke="#1e293b" strokeWidth={3} />
+          <circle cx={19} cy={19} r={POMO_R} fill="none" stroke={SELECTED_THEME.divider} strokeWidth={3} />
           <circle cx={19} cy={19} r={POMO_R} fill="none"
             stroke={ringColor} strokeWidth={3}
             strokeDasharray={`${dash} ${gap}`}
@@ -625,9 +616,9 @@ function PomodoroSection() {
         ))}
       </Box> */}
       {(running || elapsed > 0) && (
-        <Button onClick={reset}  color='transparent' activeColor="#1e293b"
+        <Button onClick={reset}  color='transparent' activeColor={SELECTED_THEME.divider}
           width={38} height={38} style={{ alignItems: 'center', justifyContent: 'center' }}>
-          <MdReplay style={{ width: 38, height: 38 }} fill="#475569" stroke="none" />
+          <MdReplay style={{ width: 38, height: 38 }} fill={SELECTED_THEME.textSecondary} stroke="none" />
         </Button>
       )}
     </Box>

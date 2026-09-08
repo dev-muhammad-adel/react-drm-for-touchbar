@@ -12,6 +12,7 @@ import {
 } from 'react-icons/md';
 import { BackButton } from '@/components/BackButton';
 import { keys } from '@/lib/services/keyInjector';
+import { SELECTED_THEME } from '@/lib/theme';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
 export const layerConfig: LayerConfig = {
@@ -59,8 +60,23 @@ function run(action: Action) {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-const BTN_SIZE  = 60;
 const ICON_SIZE = 30;
+
+function ToolBtn({ onClick, children }: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      color={SELECTED_THEME.surface}
+      activeColor={SELECTED_THEME.surfaceVariant}
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderColor: SELECTED_THEME.border, borderWidth: SELECTED_THEME.borderWidth }}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
 
 export default function MediaScreen({ width, height }: { width: number; height: number }) {
   return (
@@ -72,149 +88,73 @@ export default function MediaScreen({ width, height }: { width: number; height: 
 
       <Box style={{flexGrow:2 , gap:6}} >
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('BrightnessDown')}
-      >
-        <MdBrightness4 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('BrightnessDown')}>
+        <MdBrightness4 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('BrightnessUp')}
-      >
-        <MdBrightness7 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('BrightnessUp')}>
+        <MdBrightness7 style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 </Box>
       <Box style={{flexGrow:1}} >
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('MicMute')}
-      >
-        <MdMicOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('MicMute')}>
+        <MdMicOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 </Box>
       <Box style={{flexGrow:1}} >
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('Search')}
-      >
-        <MdSearch style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('Search')}>
+        <MdSearch style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 </Box>
 
       <Box style={{flexGrow:2 , gap:6}}   >
 
-      <Button
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('IllumDown')}
-      >
+      <ToolBtn onClick={() => run('IllumDown')}>
         <Svg src={KBD_ILLUM_DOWN_ICON} width={ICON_SIZE} height={ICON_SIZE} />
-      </Button>
+      </ToolBtn>
 
-      <Button
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('IllumUp')}
-      >
+      <ToolBtn onClick={() => run('IllumUp')}>
         <Svg src={KBD_ILLUM_UP_ICON} width={ICON_SIZE} height={ICON_SIZE} />
-      </Button>
+      </ToolBtn>
 </Box>
 
       <Box style={{flexGrow:3 , gap:6}} >
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('PreviousSong')}
-      >
-        <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('PreviousSong')}>
+        <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('PlayPause')}
-      >
-        <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('PlayPause')}>
+        <MdPlayArrow style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('NextSong')}
-      >
-        <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('NextSong')}>
+        <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 </Box>
 
       <Box style={{flexGrow:3 , gap:6}} >
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('Mute')}
-      >
-        <MdVolumeOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('Mute')}>
+        <MdVolumeOff style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('VolumeDown')}
-      >
-        <MdVolumeDown style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('VolumeDown')}>
+        <MdVolumeDown style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('VolumeUp')}
-      >
-        <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('VolumeUp')}>
+        <MdVolumeUp style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 </Box>
 
       <Box style={{flexGrow: 1}} >
 
-      <Button
-       
-             color="#373737"
-          activeColor="#474747"
-        style={{flex:1, alignItems: 'center', justifyContent: 'center', borderRadius: 10 }}
-        onClick={() => run('AllApplications')}
-      >
-        <MdApps style={{ width: ICON_SIZE, height: ICON_SIZE }} fill="#cccccc" stroke="none" />
-      </Button>
+      <ToolBtn onClick={() => run('AllApplications')}>
+        <MdApps style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+      </ToolBtn>
 </Box> 
 
     </Box>
