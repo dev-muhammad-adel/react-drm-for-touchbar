@@ -301,7 +301,8 @@ for (const r of regions) {
 function hits(region: GestureRegion, lx: number, ly: number): boolean {
   const b    = region.getBounds?.() ?? region;
   const slop = region.hitSlop ?? 8;
-  return lx >= b.x - slop && lx < b.x + b.width + slop;
+  return lx >= b.x - slop && lx < b.x + b.width + slop &&
+         ly >= b.y - slop && ly < b.y + b.height + slop;
 }
 
 /** Bounds at touch time, tolerating nodes whose layout hasn't been computed yet. */

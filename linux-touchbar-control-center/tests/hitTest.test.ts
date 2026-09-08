@@ -133,3 +133,22 @@ test('regions without a scene node are hit after the whole tree', () => {
   registry.touchStart(100, 95);
   assert.deepEqual(events, ['layer']);
 });
+
+test('zero-height (hidden/display:none) region never wins a tap', () => {
+  // A display:none subtree has no layout box, so Button's getBounds falls
+  // back to its props: width is kept, height is 0. The x-span still covers
+  // most of the bar, so a hit test that ignores y lets a dead button (e.g.
+  // the collapsed cluster's playpause → go('dock')) swallow any tap.
+  const hidden = box();
+  const parent = box(undefined, [hidden]);
+  const root: RootContainer = { type: 'root', children: [parent], width: 400, height: 40 };
+  const registry = new TouchRegistry(() => root);
+  const events: string[] = [];
+  registry.registerGesture(Symbol(), {
+    x: 0, y: 0, width: 0, height: 0, node: hidden,
+    getBounds: () => ({ x: 0, y: 0, width: 120, height: 0 }),
+    onTouchStart: () => events.push('hidden'),
+  });
+  registry.touchStart(30, 20);
+  assert.deepEqual(events, []);
+});
