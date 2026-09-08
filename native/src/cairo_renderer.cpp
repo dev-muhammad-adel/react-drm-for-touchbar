@@ -659,6 +659,11 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
     } else if (type == "draw_svg") {
       double x = numProp(cmd, "x"), y = numProp(cmd, "y");
       double w = numProp(cmd, "w"), h = numProp(cmd, "h");
+      double alpha = 1.0; {
+        auto av = cmd.Get("a");
+        if (av.IsNumber()) alpha = av.As<Napi::Number>().DoubleValue();
+        if (alpha < 0.0) alpha = 1.0; // negative → pre-alpha frames, treat as opaque
+      }
       std::string src = strProp(cmd, "src");
       if (src.empty()) continue;
 
@@ -692,12 +697,16 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
           g_object_unref(handle);
           svgPut(key, bmp); // cache owns the surface (destroyed on evict / dtor)
         } else {
-          // Uncacheable: render straight to the framebuffer, no caching.
+          // Uncacheable: render into a group so the inherited opacity can be
+          // applied to the composited result.
           cairo_save(cr);
+          cairo_push_group(cr);
           RsvgRectangle vp = { x, y, w, h };
           GError *rerr = nullptr;
           rsvg_handle_render_document(handle, cr, &vp, &rerr);
           if (rerr) g_error_free(rerr);
+          cairo_pop_group_to_source(cr);
+          cairo_paint_with_alpha(cr, alpha);
           cairo_restore(cr);
           g_object_unref(handle);
           continue;
@@ -706,10 +715,10 @@ void CairoRenderer::render(Napi::Env env, Napi::Array commands) {
 
       // Composite the cached bitmap at (x, y). The active transform (incl. the
       // rotate90 scanout matrix) applies to the composite just as it would to a
-      // direct render.
+      // direct render; inherited opacity scales the composite.
       cairo_save(cr);
       cairo_set_source_surface(cr, bmp, x, y);
-      cairo_paint(cr);
+      cairo_paint_with_alpha(cr, alpha);
       cairo_restore(cr);
 
     } else if (type == "draw_image") {
@@ -948,6 +957,7 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
 
     } else if (type == CT_DRAW_SVG) {
       double x = c[1], y = c[2], w = c[3], h = c[4];
+      double alpha = c[5]; if (alpha < 0.0) alpha = 1.0; // negative → pre-alpha frames, treat as opaque
       std::string src = getStr((int)c[17]);
       if (src.empty()) continue;
       int iw = (int)lround(w), ih = (int)lround(h);
@@ -974,11 +984,16 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
           g_object_unref(handle);
           svgPut(key, bmp);
         } else {
+          // Uncacheable: render into a group so the inherited opacity can be
+          // applied to the composited result.
           cairo_save(cr);
+          cairo_push_group(cr);
           RsvgRectangle vp = { x, y, w, h };
           GError* rerr = nullptr;
           rsvg_handle_render_document(handle, cr, &vp, &rerr);
           if (rerr) g_error_free(rerr);
+          cairo_pop_group_to_source(cr);
+          cairo_paint_with_alpha(cr, alpha);
           cairo_restore(cr);
           g_object_unref(handle);
           continue;
@@ -986,7 +1001,7 @@ void CairoRenderer::renderBinary(Napi::Env env, Napi::Float32Array data,
       }
       cairo_save(cr);
       cairo_set_source_surface(cr, bmp, x, y);
-      cairo_paint(cr);
+      cairo_paint_with_alpha(cr, alpha);
       cairo_restore(cr);
 
     } else if (type == CT_DRAW_IMAGE) {
