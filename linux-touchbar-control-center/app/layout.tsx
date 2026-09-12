@@ -22,7 +22,7 @@ import { SELECTED_THEME } from '@/lib/theme';
 // straight into the other one.
 const OVERLAYS = ['dock', 'fnkeys', 'custom-layer'];
 const ICON_SIZE = 30;
-
+const TOUCH_ID_WIDTH = 100
 export default function RootLayout({ width, height, children }: {
   width:    number;
   height:   number;
@@ -70,6 +70,7 @@ export default function RootLayout({ width, height, children }: {
   usePomodoroEngine();
 
 useEffect(()=>{
+if(['waiting' , 'matched' , 'retry' , 'failed'].includes(touchIdStatus)){
 
   if(touchIdStatus==='waiting'){
     setUnlockStatus({
@@ -106,6 +107,14 @@ useEffect(()=>{
     })
     
   }
+}else{
+         setUnlockStatus({
+      ...unlockStatus,
+      status:undefined,
+      isActive:false,
+
+    })
+}
 
 },[touchIdStatus])
  
@@ -119,12 +128,12 @@ if(unlockStatus.isActive){
   // Live spring for the touch block's deducted width — bridges the per-frame
   // spring value into React state so children(layerW - <live>, h) can re-lay
   // out mid-animation, not just snap to the final value.
-  const layerWidth = unlockStatus.isActive ? 90 : 0
-  const deductSpring = useSpringValue(layerWidth, { delay: unlockStatus.isActive ? 0 : 1000, config: { duration: 400, easing: easings.easeInBack } });
-  const [liveDeduct, setLiveDeduct] = useState(layerWidth);
+  const TOUCH_BLOCK_WIDTH = unlockStatus.isActive ? TOUCH_ID_WIDTH : 0
+  const deductSpring = useSpringValue(TOUCH_BLOCK_WIDTH, { delay: unlockStatus.isActive ? 0 : 1000, config: { duration: 400, easing: easings.easeInBack } });
+  const [liveDeduct, setLiveDeduct] = useState(TOUCH_BLOCK_WIDTH);
   useEffect(() => {
-    deductSpring.start(layerWidth, { delay:unlockStatus.isActive ? 0:1000 });
-  }, [layerWidth, deductSpring]);
+    deductSpring.start(TOUCH_BLOCK_WIDTH, { delay:unlockStatus.isActive ? 0:1000 });
+  }, [TOUCH_BLOCK_WIDTH, deductSpring]);
   useEffect(() => {
     const obs: { eventObserved(e: FluidEvent<number>): void } = {
       eventObserved(e) {
@@ -142,7 +151,6 @@ if(unlockStatus.isActive){
   // Esc at the far left and inset the layer area by its width. Only in 'all'
   // mode; 'fn' mode renders Esc inside the Fn-key layer instead.
   const showEsc = width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
-  const TOUCH_BLOCK_WIDTH = unlockStatus.isActive  ? 90 : 0
 
   console.log({TOUCH_BLOCK_WIDTH})
   return (
@@ -170,23 +178,15 @@ if(unlockStatus.isActive){
                 setHideMe(true)
               }
             }}
-            onAnimationComplete={()=>{
-              console.log('n mount')
-              // if(unlockStatus.status){
-                // console.log('hi')
 
-                // setTouchBlockVisible(unlockStatus.isActive)
-              // }
-            }}
             transition={{ duration: 800, ease: easings.easeOutCubic,delay:unlockStatus.isActive ? 0:1000 }}
             style={{
               alignSelf:"flex-end",
                height: h, justifyContent: 'flex-end', overflow: 'hidden',
             }}
           >
-            <Box style={{ gap: 2, paddingHorizontal: 5, alignItems: 'center' }}>
+            <Box style={{ gap: 2, paddingHorizontal: 5, alignItems: 'center' ,marginRight:10}}>
               <Box style={{ alignItems: 'center', paddingBottom: 2 }}>
-                {/* <Text style={{ fontSize: 15, opacity: 0.7 }}>Touch </Text> */}
                 <motion.Box
                   key={''+unlockStatus.status + unlockStatus.tries}
                   initial={{ rotate: 0, left: 0 }}
