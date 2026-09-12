@@ -66,5 +66,5 @@ export function RouteBranch({ segments, width, height }: {
   if (!layout) return renderHost(width, height);
 
   const Layout = layout.component;
-  return <Layout width={width} height={height} path={path}>{renderHost}</Layout>;
+  return <Layout width={width} height={height} path={path} current={router?.current ?? ''}>{renderHost}</Layout>;
 }

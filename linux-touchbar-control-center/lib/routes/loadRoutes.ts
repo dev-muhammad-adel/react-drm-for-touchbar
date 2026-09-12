@@ -40,6 +40,9 @@ export interface LoadedLayout {
      *  own children with go(`${path}/${name}`) without hardcoding the name a
      *  second time in the layout file. '' at root. */
     path:     string;
+    /** Currently active child layer name in this branch's LayerHost (e.g.
+     *  'splitted' at root), or '' before the host has mounted. */
+    current:  string;
   }>;
 }
 
