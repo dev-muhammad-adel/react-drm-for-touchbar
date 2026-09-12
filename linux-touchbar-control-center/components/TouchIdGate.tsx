@@ -124,17 +124,17 @@ export function TouchIdGate({ width, height, onDeduct }: {
     </motion.Box>
   ) : null;
 
-  const message = unlockStatus.message ? (
-    <Box style={{ height, width, position: 'absolute', left: 0, display: 'flex', justifyContent: 'center', backgroundColor: '#000000dd', zIndex: 9999999999999, borderRadius: 10 }}>
-      <Text>
-        Touch ID is stuck. Please try again.
-      </Text>
-    </Box>
-  ) : null;
+  // const message = unlockStatus.message ? (
+  //   <Box style={{ height, width, position: 'absolute', left: 0, display: 'flex', justifyContent: 'center', backgroundColor: '#000000dd', zIndex: 9999999999999, borderRadius: 10 }}>
+  //     <Text>
+  //       Touch ID is stuck. Please try again.
+  //     </Text>
+  //   </Box>
+  // ) : null;
 
   return (
     <>
-      {message}
+      {/* {message} */}
       {touchBlock}
     </>
   );
