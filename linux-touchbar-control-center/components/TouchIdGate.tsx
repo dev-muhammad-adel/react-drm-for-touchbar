@@ -99,7 +99,7 @@ export function TouchIdGate({ width, height, onDeduct }: {
         height, justifyContent: 'flex-end', overflow: 'hidden',
       }}
     >
-      <Box style={{ gap: 2, paddingHorizontal: 5, alignItems: 'center', marginRight: 10 }}>
+      <Box style={{ gap: 2, paddingHorizontal: 10, alignItems: 'center' }}>
         <Box style={{ alignItems: 'center', paddingBottom: 2 }}>
           <motion.Box
             key={'' + unlockStatus.status + unlockStatus.tries}
