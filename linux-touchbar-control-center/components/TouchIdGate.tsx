@@ -11,7 +11,7 @@ const FINGER_ICON_SIZE = 45;
 const TOUCH_ID_WIDTH = 100;
 
 const TRANSITION: MotionTransitionProp = { duration: 100, ease: easings.easeInOutQuad, repeatDelay: 10 };
-const LOADING_TRANSITION: MotionTransitionProp = { duration: 500 };
+const LOADING_TRANSITION: MotionTransitionProp = { duration: 500 ,repeat:1 };
 
 const FAIL_UNLOCK_CUSTOMIZE_OF_FINGER: MotionValues = { left: [-5, 0, 5, 0, -5, 0, 5, 0, -5, 0], rotate: [-20, 0, 20, 0, 20, 0, 20, 0, 20, 0] };
 const LOADING_UNLOCK_CUSTOMIZE_OF_FINGER: MotionValues = { opacity: [1, 0, 1, 0, 1, 0, 1] };
