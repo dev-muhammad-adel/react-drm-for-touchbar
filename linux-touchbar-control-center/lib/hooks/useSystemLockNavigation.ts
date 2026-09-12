@@ -42,7 +42,7 @@ export function useSystemLockNavigation(): { isLocked: boolean | null } {
         const back = previous && previous !== LOCK_LAYER ? previous : HOME_LAYER;
         previous = null;
         if (unlockTimer) clearTimeout(unlockTimer);
-        unlockTimer = setTimeout(() => go(back, 'fade'), 1000);
+        unlockTimer = setTimeout(() => go(back, 'fade'), 0);
       }
     };
 

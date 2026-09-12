@@ -63,11 +63,11 @@ export default function RootLayout({ width, height, children, current }: {
         const layerHost = (
           <motion.Box
             initial={{ width: layerW - deduct.blockWidth }}
-            animate={{ width: layerW - deduct.blockWidth }}
-            transition={{ duration: [400, 400], ease: easings.easeInBack, delay: deduct.active ? 0 : 1000 }}
-            style={{ height: h, overflow: 'hidden' }}
+            animate={{ width: layerW -  deduct.blockWidth  }}
+            transition={{ duration: [400, 400], ease: easings.easeInBack, delay: deduct.active ? 0 :isLocked?0: 1000 }}
+            style={{width:isLocked?layerW:undefined, height: h, overflow: 'hidden' }}
           >
-            {children(layerW - deduct.liveDeduct, h)}
+            {children(layerW -(isLocked?0: deduct.liveDeduct), h)}
           </motion.Box>
         );
 
