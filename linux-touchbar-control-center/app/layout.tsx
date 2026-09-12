@@ -215,57 +215,6 @@ if(unlockStatus.isActive){
             <Box style={{ width: w, height: h, alignItems: 'stretch' }}>
               {layerHost}
               {touchBlock}
-              <Box  style={{position:"absolute" ,left:400,height,width:500 , gap:10}}>
-
-                <Button
-  
-  onClick={()=>{
- setUnlockStatus({
-      ...unlockStatus,
-      status:"fail",
-      tries:unlockStatus.tries+1,
-      isActive:true,
-
-    })
-  }}>
-    <Text>
-
-fail
-    </Text>
-  </Button>
-    <Button
-  
-  onClick={()=>{
-     setUnlockStatus({
-      ...unlockStatus,
-      status:'success',
-      isActive:false,
-
-    })
-    
-  }}>
-    <Text>
-
-success 
-    </Text>
-  </Button> 
-      <Button
-  
-  onClick={()=>{
-     setUnlockStatus({
-      ...unlockStatus,
-      status:undefined,
-      isActive:true,
-
-    })
-    
-  }}>
-    <Text>
-
-active
-    </Text>
-  </Button> 
-              </Box>
             </Box>
           );
         }
