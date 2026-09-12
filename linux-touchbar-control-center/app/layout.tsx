@@ -70,9 +70,22 @@ export default function RootLayout({ width, height, children }: {
   usePomodoroEngine();
 
 useEffect(()=>{
-if(['waiting' , 'matched' , 'retry' , 'failed'].includes(touchIdStatus)){
+  if(touchIdStatus==='idle'){
+         setUnlockStatus({
+      ...unlockStatus,
+      status:undefined,
+      isActive:false,
 
+    })
+}else{
   if(touchIdStatus==='waiting'){
+    setUnlockStatus({
+      ...unlockStatus,
+      isActive:true
+    })
+
+  }
+    if(touchIdStatus==='scanning'){
     setUnlockStatus({
       ...unlockStatus,
       isActive:true
@@ -107,13 +120,6 @@ if(['waiting' , 'matched' , 'retry' , 'failed'].includes(touchIdStatus)){
     })
     
   }
-}else{
-         setUnlockStatus({
-      ...unlockStatus,
-      status:undefined,
-      isActive:false,
-
-    })
 }
 
 },[touchIdStatus])
