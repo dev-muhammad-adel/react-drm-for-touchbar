@@ -26,35 +26,69 @@ function normalize(raw: string): TouchIdState {
   return (KNOWN as string[]).includes(raw) ? (raw as TouchIdState) : 'idle';
 }
 
-export function useTouchIdPrompt(): TouchIdState {
-  const [state, setState] = useState<TouchIdState>('idle');
+// One shared D-Bus subscription for every consumer, refcounted so the bus
+// connection is only open while someone is subscribed — mirrors the
+// SystemLockStore pattern so the lock page and the root-layout gate can never
+// drift (each consuming its own bus/subscription would otherwise double-count
+// retry tries in whichever store derived from them).
+class TouchIdStore {
+  private listeners = new Set<(s: TouchIdState) => void>();
+  private current: TouchIdState = 'idle';
+  private bus: MessageBus | null = null;
+  private iface: { on(name: 'Changed', cb: (s: string) => void): void; removeListener(name: 'Changed', cb: (s: string) => void): void } | null = null;
+  private starting = false;
 
-  useEffect(() => {
-    let alive = true;
-    let bus: MessageBus | null = null;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let iface: any = null;
-    const onChanged = (raw: string) => { if (alive) setState(normalize(raw)); };
+  get(): TouchIdState {
+    return this.current;
+  }
 
-    (async () => {
-      try {
-        bus = dbus.systemBus();
-        const obj = await bus.getProxyObject(NAME, PATH, INTROSPECTION);
-        if (!alive) return;
-        iface = obj.getInterface(IFACE);
-        iface.on('Changed', onChanged);
-      } catch {
-        // No bridge or no system bus: the animation simply never plays.
-        if (alive) setState('idle');
-      }
-    })();
-
+  subscribe(listener: (s: TouchIdState) => void): () => void {
+    this.listeners.add(listener);
+    listener(this.current);
+    this.ensureStarted();
     return () => {
-      alive = false;
-      if (iface) iface.removeListener('Changed', onChanged);
-      if (bus) bus.disconnect();
+      this.listeners.delete(listener);
+      if (this.listeners.size === 0) this.stop();
     };
-  }, []);
+  }
 
+  private emit(state: TouchIdState): void {
+    this.current = state;
+    for (const l of this.listeners) {
+      try { l(state); } catch { /* a subscriber must not kill the watcher */ }
+    }
+  }
+
+  private ensureStarted(): void {
+    if (this.iface || this.starting) return;
+    this.starting = true;
+    const bus = dbus.systemBus();
+    this.bus = bus;
+    void bus.getProxyObject(NAME, PATH, INTROSPECTION)
+      .then(obj => {
+        if (!this.bus) return; // stopped mid-start
+        const iface = obj.getInterface(IFACE);
+        this.iface = iface;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (iface as any).on('Changed', (raw: string) => this.emit(normalize(raw)));
+      })
+      .catch(() => { /* No bridge or no system bus: stays idle */ })
+      .finally(() => { this.starting = false; });
+  }
+
+  private stop(): void {
+    if (this.iface) { this.iface.removeListener('Changed', () => {}); this.iface = null; }
+    this.bus?.disconnect();
+    this.bus = null;
+    this.current = 'idle';
+  }
+}
+
+/** Shared instance for every consumer. */
+export const touchIdStore = new TouchIdStore();
+
+export function useTouchIdPrompt(): TouchIdState {
+  const [state, setState] = useState<TouchIdState>(() => touchIdStore.get());
+  useEffect(() => touchIdStore.subscribe(setState), []);
   return state;
 }

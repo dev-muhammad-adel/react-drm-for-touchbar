@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Box, easings, motion, MotionValues, Text, useSpringValue, addFluidObserver, removeFluidObserver } from 'react-drm';
 import type { FluidEvent, MotionTransitionProp } from 'react-drm';
-import { useTouchIdPrompt } from '@/lib/hooks/useTouchIdStatus';
+import { useUnlockStatus } from '@/lib/hooks/useUnlockStatus';
 import { FaArrowRightLong } from 'react-icons/fa6';
 import { MdOutlineFingerprint } from 'react-icons/md';
 import { SELECTED_THEME } from '@/lib/theme';
@@ -16,13 +16,6 @@ const LOADING_TRANSITION: MotionTransitionProp = { duration: 500 };
 const FAIL_UNLOCK_CUSTOMIZE_OF_FINGER: MotionValues = { left: [-5, 0, 5, 0, -5, 0, 5, 0, -5, 0], rotate: [-20, 0, 20, 0, 20, 0, 20, 0, 20, 0] };
 const LOADING_UNLOCK_CUSTOMIZE_OF_FINGER: MotionValues = { opacity: [1, 0, 1, 0, 1, 0, 1] };
 const SUCCESS_UNLOCK_CUSTOMIZE_OF_FINGER: MotionValues = { top: [-8, 1, 3, -3, -1, 2, -1, -1, 1, 0] };
-
-type UnlockStatus = {
-  isActive: boolean;
-  status: 'fail' | 'success' | 'loading' | undefined;
-  tries: number;
-  message: undefined | string;
-};
 
 export interface TouchIdDeductInfo {
   /** true while the fingerprint block is active (deducting width). */
@@ -52,83 +45,14 @@ export function TouchIdGate({ width, height, onDeduct }: {
   height: number;
   onDeduct?: (info: TouchIdDeductInfo) => void;
 }) {
-  const touchIdStatus = useTouchIdPrompt();
-  const [unlockStatus, setUnlockStatus] = useState<UnlockStatus>({
-    isActive: false,
-    status: undefined,
-    tries: 0,
-    message: undefined,
-  });
+  const unlockStatus = useUnlockStatus();
   const [hideMe, setHideMe] = useState(true);
-
-  useEffect(() => {
-    if (touchIdStatus === 'idle') {
-      setUnlockStatus({
-        ...unlockStatus,
-        status: undefined,
-        isActive: false,
-      });
-    } else {
-      if (touchIdStatus === 'waiting') {
-        setUnlockStatus({
-          ...unlockStatus,
-          isActive: true,
-          status: undefined,
-          message: unlockStatus.status === 'loading' ? 'Touch ID is stuck. Please try again.' : undefined,
-        });
-      }
-      if (touchIdStatus === 'scanning') {
-        setUnlockStatus({
-          ...unlockStatus,
-          status: 'loading',
-          isActive: true,
-        });
-      }
-      if (touchIdStatus === 'matched') {
-        setUnlockStatus({
-          ...unlockStatus,
-          status: 'success',
-          isActive: false,
-        });
-      }
-      if (touchIdStatus === 'retry') {
-        setUnlockStatus({
-          ...unlockStatus,
-          isActive: true,
-          status: 'fail',
-          tries: unlockStatus.tries + 1,
-        });
-      }
-      if (touchIdStatus === 'failed') {
-        setUnlockStatus({
-          ...unlockStatus,
-          status: 'fail',
-          isActive: false,
-        });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [touchIdStatus]);
 
   useEffect(() => {
     if (unlockStatus.isActive) {
       setHideMe(false);
     }
   }, [unlockStatus.isActive]);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (unlockStatus.message && !unlockStatus.status) {
-      timer = setTimeout(() => {
-        setUnlockStatus({
-          ...unlockStatus,
-          status: undefined,
-          message: undefined,
-        });
-      }, 6000);
-    }
-    return () => clearTimeout(timer);
-  }, [unlockStatus.message]);
 
   // Live spring for the touch block's deducted width — bridges the per-frame
   // spring value up to onDeduct so the layout's children column can re-lay

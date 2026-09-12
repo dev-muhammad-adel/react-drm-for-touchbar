@@ -33,7 +33,7 @@ import { HiArrowCircleDown } from 'react-icons/hi';
 import { FaArrowRight, FaArrowRightLong, FaFingerprint } from 'react-icons/fa6';
 import { IoIosArrowRoundForward } from 'react-icons/io';
 import { BiFingerprint } from 'react-icons/bi';
-import { useTouchIdPrompt } from '@/lib/hooks/useTouchIdStatus';
+import { useUnlockStatus } from '@/lib/hooks/useUnlockStatus';
 
 export const layerConfig: LayerConfig = {
   leaving:  { outAnim: 'slide-right' },
@@ -92,46 +92,33 @@ function ToolBtn({ onClick, children }: {
 }
 
 export default function LockScreen({ width, height }: { width: number; height: number }) {
-  const [unlockStatus , setUnlockStatus] = useState<undefined|string>()
-  const touchIdStatus = useTouchIdPrompt()
+  const unlockStatus = useUnlockStatus()
   const TRANSITION ={ duration: 100, ease: easings.easeInOutQuad, repeatDelay: 10 }
  const FAIL_UNLOCK_CUSTOMIZE_OF_FINGER:MotionValues =  { left:[-5,0,5,0,-5,0,5,0,-5,0],rotate:[-20,0,20,0,20,0,20,0,20,0] }
  const SUCCESS_UNLOCK_CUSTOMIZE_OF_FINGER:MotionValues =  {  top: [-8, 1, 3, -3, -1, 2, -1, -1, 1, 0]}
- function CustomizeMap (status?:"success"|string){
+ function CustomizeMap (status?:"success"|"fail"|"loading"|undefined){
   if(status === "success") 
     return {animation:SUCCESS_UNLOCK_CUSTOMIZE_OF_FINGER ,  style :{color:SELECTED_THEME.success}}
-  if(status?.startsWith('fail')){
+  if(status === "fail"){
 
     return {animation : FAIL_UNLOCK_CUSTOMIZE_OF_FINGER , style :{color:SELECTED_THEME.error}}
+  }
+  if(status === "loading"){
+    return {animation : { opacity:[1,0,1,0,1,0,1] } , style :{color:SELECTED_THEME.primary}}
   }
 
     return { style : {color:SELECTED_THEME.textPrimary}}
 }
+  const [hideMe, setHideMe] = useState(true);
 
-
-useEffect(()=>{
-
-  if(touchIdStatus==="matched"){
-    setUnlockStatus('success')
-  }
-  if(touchIdStatus==="failed" || touchIdStatus==="retry"){
-
- if(unlockStatus?.startsWith('fail')){
-      const currCount = +(unlockStatus?.split('-')[1])+1
-      const currStatus = unlockStatus?.split('-')[0]
-      console.log(`${currStatus}-${currCount}` , currCount)
-      setUnlockStatus(`${currStatus}-${currCount}` as 'fail')
-      return ;
-    }
-    setUnlockStatus('fail-0')
-  }
-
-},[touchIdStatus])
- 
+   useEffect(() => {
+     if (unlockStatus.isActive) {
+       setHideMe(false);
+     }
+   }, [unlockStatus.isActive]);
   return (
     <Box style={{ flex: 1,gap: 10 }}>
 
-      {/* <BackButton animation="slide-right" /> */}
 
 <Box style={{flexGrow:1 , gap:24}}>
 
@@ -176,30 +163,19 @@ useEffect(()=>{
 </Box>
       <Box style={{gap:4}} >
 
-      {/* <ToolBtn onClick={() => run('PreviousSong')}>
-        <MdSkipPrevious style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
-      </ToolBtn> */}
+
 
       <ToolBtn onClick={() => run('PlayPause')}>
         
         <HiMiniPlayPause style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
       </ToolBtn>
-{/* 
-      <ToolBtn onClick={() => run('NextSong')}>
-        <MdSkipNext style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
-      </ToolBtn> */}
+
 </Box>
   {/* <ToolBtn
-  
+
   onClick={()=>{
-    if(unlockStatus?.startsWith('fail')){
-      const currCount = +(unlockStatus?.split('-')[1])+1
-      const currStatus = unlockStatus?.split('-')[0]
-      console.log(`${currStatus}-${currCount}` , currCount)
-      setUnlockStatus(`${currStatus}-${currCount}` as 'fail')
-      return ;
-    }
-    setUnlockStatus('fail-0')
+    const { tries } = unlockStatus;
+    unlockStatus.setStatus({ isActive: true, status: 'fail', tries: tries + 1 });
   }}>
     <Text>
 
@@ -207,31 +183,55 @@ fail
     </Text>
   </ToolBtn>
     <ToolBtn
-  
+
   onClick={()=>{
-    console.log(unlockStatus)
-    setUnlockStatus('success')
+    unlockStatus.setStatus({ status: 'success', isActive: false });
   }}>
     <Text>
 
 success
     </Text>
-  </ToolBtn> */}
+  </ToolBtn>
+    <ToolBtn
 
+  onClick={()=>{
+    unlockStatus.setStatus({ status: 'loading', isActive: true });
+  }}>
+    <Text>
+
+scan
+    </Text>
+  </ToolBtn>
+    <ToolBtn
+
+  onClick={()=>{
+    unlockStatus.setStatus({ status: undefined, isActive: true });
+  }}>
+    <Text>
+
+waiting
+    </Text>
+  </ToolBtn> */}
+  
 </Box>
-{touchIdStatus!=="idle" &&<Box style={{flexGrow:1,justifyContent:"flex-end"}}>
+{!hideMe&&<Box style={{flexGrow:1,justifyContent:"flex-end"}}>
   <Box style={{gap:8,paddingHorizontal:20 , alignItems:"center"}}>
 <Box style={{alignItems:"center",paddingBottom:2}}>
   <Text style={{fontSize:15, opacity:0.7 }}>Touch </Text>
         <motion.Box
-        key={unlockStatus}
+            key={'' + unlockStatus.status + unlockStatus.tries}
         initial={{rotate:0,left:0}}
-         animate={CustomizeMap(unlockStatus).animation}
-         
+         animate={CustomizeMap(unlockStatus.status).animation}
+      onKeyframeComplete={(index) => {
+        // console.log(index)
+        if (!unlockStatus.isActive&& index===9) {
+          setHideMe(true);
+        }
+      }}
          animateOnMount={true}
           transition={TRANSITION}
         style={{position:"relative",width: ICON_SIZE, height: ICON_SIZE}}>
-            <MdOutlineFingerprint style={{ width: ICON_SIZE, height: ICON_SIZE , opacity:0.7}} fill={CustomizeMap(unlockStatus).style.color} stroke="none" />
+            <MdOutlineFingerprint style={{ width: ICON_SIZE, height: ICON_SIZE , opacity:0.7}} fill={CustomizeMap(unlockStatus.status).style.color} stroke="none" />
           </motion.Box>
 
 
