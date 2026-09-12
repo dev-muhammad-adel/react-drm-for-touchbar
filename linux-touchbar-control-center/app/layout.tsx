@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Button, easings, motion, MotionValues, Text, useSpringValue, addFluidObserver, removeFluidObserver } from 'react-drm';
-import type { FluidEvent } from 'react-drm';
+import type { FluidEvent, MotionTransitionProp } from 'react-drm';
 import { ESC_KEY, DOCK, FN_LAYER, CUSTOM_LAYER, THEME } from '@/lib/utils/configLoader';
 import { EscKey } from '@/components/EscKey';
 import { SafeArea } from '@/components/SafeArea';
@@ -22,6 +22,7 @@ import { SELECTED_THEME } from '@/lib/theme';
 // straight into the other one.
 const OVERLAYS = ['dock', 'fnkeys', 'custom-layer'];
 const ICON_SIZE = 30;
+const FINGER_ICON_SIZE = 45;
 const TOUCH_ID_WIDTH = 100
 export default function RootLayout({ width, height, children }: {
   width:    number;
@@ -44,26 +45,33 @@ export default function RootLayout({ width, height, children }: {
   const touchIdStatus = useTouchIdPrompt()
   const [unlockStatus , setUnlockStatus] = useState<{
     isActive : boolean;
-    status:'fail'|'success'|undefined;
+    status:'fail'|'success'|'loading'|undefined;
     tries : number;
+    message:undefined|string;
   }>({
     isActive:false,
     status:undefined,
-    tries:0
+    tries:0,
+    message:undefined
 
   })
   const [hideMe, setHideMe] = useState(true)
-  const TRANSITION ={ duration: 100, ease: easings.easeInOutQuad, repeatDelay: 10 }
+  const TRANSITION :MotionTransitionProp={ duration: 100, ease: easings.easeInOutQuad, repeatDelay: 10 }
+  const LOAdIN_TRANSITION :MotionTransitionProp={ duration:500 }
  const FAIL_UNLOCK_CUSTOMIZE_OF_FINGER:MotionValues =  { left:[-5,0,5,0,-5,0,5,0,-5,0],rotate:[-20,0,20,0,20,0,20,0,20,0] }
+ const LOADING_UNLOCK_CUSTOMIZE_OF_FINGER:MotionValues =  { opacity:[1,0,1,0,1,0,1] }
  const SUCCESS_UNLOCK_CUSTOMIZE_OF_FINGER:MotionValues =  {  top: [-8, 1, 3, -3, -1, 2, -1, -1, 1, 0]}
- function CustomizeMap (status?:"success"|'fail'|undefined){
+ function CustomizeMap (status?:"success"|'fail'|'loading'|undefined){
   if(status === "success") 
     return {animation:SUCCESS_UNLOCK_CUSTOMIZE_OF_FINGER ,  style :{color:SELECTED_THEME.success}}
   if(status==='fail'){
 
     return {animation : FAIL_UNLOCK_CUSTOMIZE_OF_FINGER , style :{color:SELECTED_THEME.error}}
   }
+    if(status==='loading'){
 
+    return {animation : LOADING_UNLOCK_CUSTOMIZE_OF_FINGER , style :{color:SELECTED_THEME.primary}}
+  }
     return { style : {color:SELECTED_THEME.textPrimary}}
 }
   const { booted, opacity } = useBootSequence();
@@ -75,19 +83,25 @@ useEffect(()=>{
       ...unlockStatus,
       status:undefined,
       isActive:false,
+      // message:"hi"
 
     })
 }else{
   if(touchIdStatus==='waiting'){
+
     setUnlockStatus({
       ...unlockStatus,
-      isActive:true
+      isActive:true,
+      status:undefined,
+      message:unlockStatus.status==='loading'?'Touch ID is stuck. Please try again.':undefined
     })
 
   }
     if(touchIdStatus==='scanning'){
     setUnlockStatus({
       ...unlockStatus,
+            status:'loading',
+
       isActive:true
     })
 
@@ -130,7 +144,22 @@ if(unlockStatus.isActive){
   setHideMe(false)
 }
 },[unlockStatus.isActive])
+useEffect(()=>{
+  console.log('hioooo')
+let timer:NodeJS.Timeout
+if(unlockStatus.message&&!unlockStatus.status){
+ timer = setTimeout(()=>{
 
+     setUnlockStatus({
+      ...unlockStatus,
+      status:undefined,
+      message:undefined
+    })
+
+  },6000)
+}
+return ()=>{clearTimeout(timer)}
+},[unlockStatus.message])
   // Live spring for the touch block's deducted width — bridges the per-frame
   // spring value into React state so children(layerW - <live>, h) can re-lay
   // out mid-animation, not just snap to the final value.
@@ -158,7 +187,6 @@ if(unlockStatus.isActive){
   // mode; 'fn' mode renders Esc inside the Fn-key layer instead.
   const showEsc = width >= ESC_KEY.minWidth && ESC_KEY.onLayers === 'all';
 
-  console.log({TOUCH_BLOCK_WIDTH})
   return (
     <SafeArea width={width} height={height} fontFamily={THEME.fontFamily}>
       {(w, h) => {
@@ -198,10 +226,10 @@ if(unlockStatus.isActive){
                   initial={{ rotate: 0, left: 0 }}
                   animate={CustomizeMap(unlockStatus.status).animation}
                   animateOnMount={true}
-                  transition={TRANSITION}
-                  style={{ position: 'relative', width: ICON_SIZE, height: ICON_SIZE }}
+                  transition={unlockStatus.status==="loading"?LOAdIN_TRANSITION:TRANSITION}
+                  style={{ position: 'relative', width: FINGER_ICON_SIZE, height: FINGER_ICON_SIZE }}
                 >
-                  <MdOutlineFingerprint style={{ width: ICON_SIZE, height: ICON_SIZE, opacity: 0.7 }} fill={CustomizeMap(unlockStatus.status).style.color} stroke="none" />
+               {<MdOutlineFingerprint style={{ width: FINGER_ICON_SIZE, height: FINGER_ICON_SIZE, opacity: 0.7 }} fill={CustomizeMap(unlockStatus.status).style.color} stroke="none" />}
                 </motion.Box>
                 <Text style={{ fontSize: 15, opacity: 0.7 }}> </Text>
               </Box>
@@ -215,10 +243,15 @@ if(unlockStatus.isActive){
             </Box>
           </motion.Box>
         ):null;
-
+const message =unlockStatus.message ? (<Box style={{height:h,width:w , position:"absolute",left:0, display:"flex", justifyContent:"center" , backgroundColor:"#000000dd",zIndex:9999999999999 , borderRadius:10}}>
+  <Text>
+    Touch ID is stuck. Please try again.
+  </Text>
+</Box>):null
         if (!showEsc) {
           return (
             <Box style={{ width: w, height: h, alignItems: 'stretch' }}>
+              {message}
               {layerHost}
               {touchBlock}
             </Box>
@@ -228,6 +261,7 @@ if(unlockStatus.isActive){
         return (
           <Box style={{ width: w, height: h, alignItems: 'stretch', gap: ESC_KEY.gap }}>
             <EscKey width={ESC_KEY.width} height={h} />
+            {message}
             {layerHost}
             {touchBlock}
           </Box>
