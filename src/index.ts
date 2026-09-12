@@ -56,8 +56,10 @@ export {
   animated,
   useSpring, useSpringValue, useSprings, useTransition,
   springTo, easings, springConfig,
+  addFluidObserver, removeFluidObserver,
 } from './spring';
 export type { SpringValue, Interpolation, TransitionFn } from './spring';
+export type { FluidObserver, FluidEvent } from './spring';
 export { motion } from './motion';
 export type { MotionValues, MotionBoxProps, MotionButtonProps, MotionTransition, MotionTransitionProp } from './motion';
 export { SPRING } from './motion-presets';

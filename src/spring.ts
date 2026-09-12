@@ -94,3 +94,5 @@ export {
   config as springConfig,
 } from '@react-spring/core';
 export type { SpringValue, Interpolation, TransitionFn } from '@react-spring/core';
+export { addFluidObserver, removeFluidObserver } from '@react-spring/shared';
+export type { FluidObserver, FluidEvent } from '@react-spring/shared';

@@ -412,8 +412,7 @@ export default function SplittedLayout({ width, height, children, path }: {
       >
            <motion.Box
           initial={{width:0}}
-           animate={{ width: mediaExpanded ? [0,(width/1.7),width]  :[width,(width/1.7) ,0 ]  }} 
-
+           animate={{ width: mediaExpanded ? [0,(width/1.7),width]  :[ 0 ]  }} 
         transition={{ duration: [150,mediaExpanded?150:0,150] }}
           style={{   backgroundColor:"#000" , height:height , position:"absolute" , right: 2  ,top:0,zIndex:-1
 
@@ -429,6 +428,10 @@ export default function SplittedLayout({ width, height, children, path }: {
             </Button>
             <MediaToolPanel  iconSize={30} />
           </motion.Box>  
+
+
+
+          
          {  <motion.Box
         
         initial={{width:rightW , opacity:1}}
