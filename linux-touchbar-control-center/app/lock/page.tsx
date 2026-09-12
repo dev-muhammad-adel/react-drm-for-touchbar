@@ -36,8 +36,8 @@ import { BiFingerprint } from 'react-icons/bi';
 import { useUnlockStatus } from '@/lib/hooks/useUnlockStatus';
 
 export const layerConfig: LayerConfig = {
-  leaving:  { outAnim: 'slide-right' },
-  entering: { inAnim:  'slide-left' },
+  leaving:  { outAnim: 'fade' },
+  entering: { inAnim:  'fade' },
 };
 
 // app/media/page.tsx sits two levels under its own root in both trees

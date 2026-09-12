@@ -1,5 +1,6 @@
 import type { LayerHostHandle } from '@/layers';
 import type { LayerAnimation, SwitchOptions } from 'react-drm';
+import { getSystemLock } from '@/lib/lock/store';
 
 // Every mounted RouteBranch registers its own nested LayerHost here, keyed by
 // its full segment path ('' for root, 'splitted' for its nested host, and so
@@ -9,6 +10,9 @@ import type { LayerAnimation, SwitchOptions } from 'react-drm';
 // whichever host it happens to own.
 const registry = new Map<string, LayerHostHandle>();
 const waiters = new Map<string, Set<() => void>>();
+
+/** While the system is locked, only these route roots may be navigated to. */
+const ALLOWED_WHEN_LOCKED = new Set(['lock', 'fnkeys']);
 
 export function registerRouter(path: string, router: LayerHostHandle | null): void {
   if (router) {
@@ -44,6 +48,12 @@ function onceRegistered(path: string, cb: () => void): void {
  * first render.
  */
 export function go(path: string, opts?: LayerAnimation | SwitchOptions): void {
+  // While the system is locked, block navigation to anything but the lock
+  // screen itself and the Fn-key layer (volume/backlight shortcuts stay
+  // reachable, everything else is locked down).
+  if (getSystemLock().isLocked && !ALLOWED_WHEN_LOCKED.has(path.split('/')[0])) {
+    return;
+  }
   step('', path.split('/').filter(Boolean), opts);
 }
 

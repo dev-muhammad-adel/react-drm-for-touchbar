@@ -7,8 +7,10 @@ import { BootScreen } from '@/components/BootScreen';
 import { useBootSequence } from '@/lib/hooks/useBootSequence';
 import { usePomodoroEngine } from '@/lib/hooks/usePomodoro';
 import { useLayerToggle } from '@/lib/hooks/useLayerToggle';
+import { useSystemLockNavigation } from '@/lib/hooks/useSystemLockNavigation';
 import type { LayoutChildren } from '@/lib/routes/loadRoutes';
 import { TouchIdGate, type TouchIdDeductInfo } from '@/components/TouchIdGate';
+import { go } from '@/lib/routes/router-registry';
 
 // No layoutConfig/initial here anymore — app/page.tsx (this segment's own
 // sibling page) is root's default automatically, see loadRoutes.ts.
@@ -24,7 +26,6 @@ export default function RootLayout({ width, height, children, current }: {
   path:     string; // '' — unused here, root addresses its own siblings by bare name
   current:  string;
 }) {
-  console.log('active page:', current==='lock')
   useLayerToggle(DOCK.shortcut.key, 'dock', {
     mode: DOCK.shortcut.mode, longMs: DOCK.shortcut.longMs, doubleMs: DOCK.shortcut.doubleMs,
     home: 'splitted', overlays: OVERLAYS,
@@ -39,6 +40,7 @@ export default function RootLayout({ width, height, children, current }: {
   });
   const { booted, opacity } = useBootSequence();
   usePomodoroEngine();
+  const { isLocked } = useSystemLockNavigation();
 
   // Width the Touch ID block currently deducts from the layer area (live while
   // animating out/in) — fed by TouchIdGate via onDeduct so children re-lay out
@@ -69,7 +71,7 @@ export default function RootLayout({ width, height, children, current }: {
           </motion.Box>
         );
 
-        const touchId =current !=='lock'? <TouchIdGate width={w} height={h} onDeduct={setDeduct} />:null;
+        const touchId = !isLocked ? <TouchIdGate width={w} height={h} onDeduct={setDeduct} /> : null;
 
         if (!showEsc) {
           return (
