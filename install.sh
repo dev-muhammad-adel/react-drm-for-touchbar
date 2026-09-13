@@ -342,7 +342,7 @@ detect_required_commands() {
   local cmd
   local privilege_cmd=sudo
   [[ $GUI_MODE -eq 1 ]] && privilege_cmd=pkexec
-  for cmd in "$privilege_cmd" systemctl systemd-analyze udevadm modinfo getent; do command -v "$cmd" >/dev/null 2>&1 || ANALYSIS_MISSING_COMMANDS+=("$cmd"); done
+  for cmd in "$privilege_cmd" systemctl systemd-analyze udevadm modinfo modprobe getent; do command -v "$cmd" >/dev/null 2>&1 || ANALYSIS_MISSING_COMMANDS+=("$cmd"); done
   case "$PKG_MANAGER" in
     dnf) command -v dnf >/dev/null 2>&1 || ANALYSIS_MISSING_COMMANDS+=("dnf") ;;
     apt)
@@ -372,7 +372,7 @@ check_deploy_files() {
   # 99-react-drm.rules is generated (gitignored): this t2linux installer copies
   # its profile rules file into the canonical name the service steps use.
   cp -f "$REPO_ROOT/system/99-react-drm-t2linux.rules" "$REPO_ROOT/system/99-react-drm.rules"
-  for file in package.json package-lock.json system/99-react-drm.rules system/react-drm.service system/react-drm-tb-detach; do
+  for file in package.json package-lock.json system/99-react-drm.rules system/react-drm.service system/react-drm-tb-detach system/react-drm-uinput.conf; do
     [[ -r "$REPO_ROOT/$file" ]] || fail "required deployment file is missing or unreadable: $file"
   done
   [[ -x "$REPO_ROOT/system/react-drm-tb-detach" ]] ||
@@ -570,6 +570,7 @@ print_analysis() {
   analysis_value "Deployment mode" "$DEPLOYMENT_MODE"
   analysis_value "Source operation" "build current repository; no source download"
   analysis_value "User groups to add" "${ANALYSIS_MISSING_USER_GROUPS[*]:-none}"
+  analysis_value "Kernel modules to load" "uinput (persisted via /etc/modules-load.d)"
   analysis_value "Packages to purge" "${ANALYSIS_CONFLICTING_PACKAGES[*]:-none}"
   analysis_value "Units to disable" "${ANALYSIS_CONFLICTING_UNITS[*]:-none}"
   analysis_value "Conflicting processes" "${#ANALYSIS_CONFLICTING_PROCESSES[@]}"
@@ -799,7 +800,14 @@ install_udev_rules() {
   privileged install -m 0644 "$REPO_ROOT/system/99-react-drm.rules" /etc/udev/rules.d/99-react-drm.rules
   privileged udevadm control --reload
   privileged udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
-  privileged udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
+  # uinput has no hardware to bind to, so the kernel never auto-loads it and
+  # this trigger is a no-op against it: replaying "add" only affects devices
+  # the kernel already knows about, and until the module is loaded there is no
+  # such device for udev to apply the GROUP=input,MODE=0660 rule to. Load it
+  # directly instead, which fires the real uevent, and persist it so the
+  # correctly-permissioned device exists again after every reboot.
+  privileged modprobe uinput || fail "failed to load the uinput kernel module (needed for Touch Bar key injection)"
+  privileged install -m 0644 "$REPO_ROOT/system/react-drm-uinput.conf" /etc/modules-load.d/react-drm-uinput.conf
 }
 
 install_user_service() {
