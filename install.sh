@@ -680,6 +680,21 @@ systemd_escape_path() {
   printf '%s' "$value"
 }
 
+# Desktop Entry Specification quoting for a value going inside the double
+# quotes of an Exec= argument: backslash, backtick, dollar and double-quote
+# are backslash-escaped, and '%' is doubled so it isn't read as a field code.
+desktop_escape_path() {
+  local value=$1
+  [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] ||
+    fail "repository paths containing line breaks are not supported"
+  value=${value//\\/\\\\}
+  value=${value//\`/\\\`}
+  value=${value//\$/\\\$}
+  value=${value//\"/\\\"}
+  value=${value//%/%%}
+  printf '%s' "$value"
+}
+
 install_dependencies() {
   info "Installing build and runtime dependencies"
   case "$PKG_MANAGER" in
@@ -735,13 +750,43 @@ build_project() {
   (cd "$REPO_ROOT/linux-touchbar-control-center" && npm run build)
   info "Building the config editor"
   (cd "$REPO_ROOT/config-gui" && npm run build)
+  verify_electron_binary
+}
+
+# electron's own postinstall script downloads the platform binary as part of
+# `npm ci` above; that download can fail (flaky network, a proxy, a slow
+# release CDN) without failing `npm ci` itself, leaving node_modules/.bin/electron
+# on disk but non-functional and the config editor launcher silently not
+# opening. Retry the download once and fail loudly instead of deploying a
+# launcher that appears installed but doesn't work.
+verify_electron_binary() {
+  [[ -x "$REPO_ROOT/node_modules/electron/dist/electron" ]] && return 0
+  warn "electron binary did not download during npm ci; retrying"
+  (cd "$REPO_ROOT" && node node_modules/electron/install.js) ||
+    fail "failed to download the electron binary; check your network connection and re-run the installer"
+  [[ -x "$REPO_ROOT/node_modules/electron/dist/electron" ]] ||
+    fail "electron binary is still missing after retrying the download"
 }
 
 install_config_gui_launcher() {
   info "Installing config editor launcher"
   local apps_dir="$HOME/.local/share/applications"
+  local launcher_file temporary_file electron_q config_gui_q
+  launcher_file="$apps_dir/react-drm-config-gui.desktop"
+  electron_q=$(desktop_escape_path "$REPO_ROOT/node_modules/.bin/electron")
+  config_gui_q=$(desktop_escape_path "$REPO_ROOT/config-gui")
+
   install -d -m 0755 "$apps_dir"
-  install -m 0644 "$REPO_ROOT/system/react-drm-config-gui.desktop" "$apps_dir/react-drm-config-gui.desktop"
+  temporary_file=$(mktemp --suffix=.desktop "$apps_dir/react-drm-config-gui-install.XXXXXX")
+  if ! awk -v exec_line="Exec=\"$electron_q\" \"$config_gui_q\"" '
+    /^Exec=/ { print exec_line; next }
+    { print }
+  ' "$REPO_ROOT/system/react-drm-config-gui.desktop" >"$temporary_file"; then
+    rm -f "$temporary_file"
+    fail "unable to generate the config editor launcher"
+  fi
+  chmod 0644 "$temporary_file"
+  mv -f "$temporary_file" "$launcher_file"
 }
 
 phase_gui_bootstrap() {
@@ -781,6 +826,7 @@ EOF
   (cd "$REPO_ROOT" && npm ci)
   info "Building the graphical installer"
   (cd "$REPO_ROOT/install-gui" && npm run build)
+  verify_electron_binary
   info "Launching the graphical installer"
   REACT_DRM_REPO_DIR="$REPO_ROOT" exec "$REPO_ROOT/node_modules/.bin/electron" "$REPO_ROOT/install-gui" --mode=install
 }
