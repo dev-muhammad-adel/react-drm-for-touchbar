@@ -12,7 +12,7 @@ import { DOM_CODE_TO_KEY_NAME } from './keyNames';
 import { listDesktopApps } from './desktopApps';
 import { listIconThemes } from './iconThemes';
 
-let currentPaths: ConfigPaths = defaultConfigPaths(process.env.REACT_DRM_REPO_DIR);
+let currentPaths: ConfigPaths = defaultConfigPaths();
 
 function findRepoDir(): string | null {
   // install.sh's convention. If it's not there, the user needs to locate it manually.
