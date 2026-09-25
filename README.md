@@ -129,7 +129,15 @@ Install and apply the udev rules:
 sudo install -m 0644 system/99-react-drm.rules /etc/udev/rules.d/99-react-drm.rules
 sudo udevadm control --reload
 sudo udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
-sudo udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
+```
+
+`uinput` has no hardware to bind to, so nothing ever auto-loads it and the
+trigger above cannot apply the udev rule to a device that doesn't exist yet.
+Load the module directly and persist it across reboots:
+
+```sh
+sudo modprobe uinput
+echo uinput | sudo tee /etc/modules-load.d/react-drm-uinput.conf
 ```
 
 Log out of the desktop session and back in before starting react-drm. Opening a

@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import * as os from 'node:os';
 import * as path from 'node:path';
 import { exec } from 'node:child_process';
 import { Project, Node, SyntaxKind } from 'ts-morph';
@@ -22,7 +21,13 @@ export interface ConfigPaths {
   blueprintPath: string;
 }
 
-const DEFAULT_REPO_DIR = path.join(os.homedir(), 'react-drm', 'linux-touchbar-control-center');
+// config-gui always lives at <repo>/config-gui, so this is a safe default for
+// any launch method (npm run dev, a .desktop launcher, …) — mirrors
+// install-gui's own REPO_ROOT default, which the shell scripts that spawn
+// these apps already rely on. REACT_DRM_REPO_DIR still overrides it for a
+// repo checked out somewhere unusual.
+const REPO_ROOT = process.env.REACT_DRM_REPO_DIR ?? path.join(__dirname, '..', '..', '..');
+const DEFAULT_REPO_DIR = path.join(REPO_ROOT, 'linux-touchbar-control-center');
 
 export function defaultConfigPaths(repoDir: string = DEFAULT_REPO_DIR): ConfigPaths {
   return {

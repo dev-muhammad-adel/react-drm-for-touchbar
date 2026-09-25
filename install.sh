@@ -342,7 +342,7 @@ detect_required_commands() {
   local cmd
   local privilege_cmd=sudo
   [[ $GUI_MODE -eq 1 ]] && privilege_cmd=pkexec
-  for cmd in "$privilege_cmd" systemctl systemd-analyze udevadm modinfo getent; do command -v "$cmd" >/dev/null 2>&1 || ANALYSIS_MISSING_COMMANDS+=("$cmd"); done
+  for cmd in "$privilege_cmd" systemctl systemd-analyze udevadm modinfo modprobe getent; do command -v "$cmd" >/dev/null 2>&1 || ANALYSIS_MISSING_COMMANDS+=("$cmd"); done
   case "$PKG_MANAGER" in
     dnf) command -v dnf >/dev/null 2>&1 || ANALYSIS_MISSING_COMMANDS+=("dnf") ;;
     apt)
@@ -372,7 +372,7 @@ check_deploy_files() {
   # 99-react-drm.rules is generated (gitignored): this t2linux installer copies
   # its profile rules file into the canonical name the service steps use.
   cp -f "$REPO_ROOT/system/99-react-drm-t2linux.rules" "$REPO_ROOT/system/99-react-drm.rules"
-  for file in package.json package-lock.json system/99-react-drm.rules system/react-drm.service system/react-drm-tb-detach; do
+  for file in package.json package-lock.json system/99-react-drm.rules system/react-drm.service system/react-drm-tb-detach system/react-drm-uinput.conf; do
     [[ -r "$REPO_ROOT/$file" ]] || fail "required deployment file is missing or unreadable: $file"
   done
   [[ -x "$REPO_ROOT/system/react-drm-tb-detach" ]] ||
@@ -570,6 +570,7 @@ print_analysis() {
   analysis_value "Deployment mode" "$DEPLOYMENT_MODE"
   analysis_value "Source operation" "build current repository; no source download"
   analysis_value "User groups to add" "${ANALYSIS_MISSING_USER_GROUPS[*]:-none}"
+  analysis_value "Kernel modules to load" "uinput (persisted via /etc/modules-load.d)"
   analysis_value "Packages to purge" "${ANALYSIS_CONFLICTING_PACKAGES[*]:-none}"
   analysis_value "Units to disable" "${ANALYSIS_CONFLICTING_UNITS[*]:-none}"
   analysis_value "Conflicting processes" "${#ANALYSIS_CONFLICTING_PROCESSES[@]}"
@@ -679,6 +680,21 @@ systemd_escape_path() {
   printf '%s' "$value"
 }
 
+# Desktop Entry Specification quoting for a value going inside the double
+# quotes of an Exec= argument: backslash, backtick, dollar and double-quote
+# are backslash-escaped, and '%' is doubled so it isn't read as a field code.
+desktop_escape_path() {
+  local value=$1
+  [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] ||
+    fail "repository paths containing line breaks are not supported"
+  value=${value//\\/\\\\}
+  value=${value//\`/\\\`}
+  value=${value//\$/\\\$}
+  value=${value//\"/\\\"}
+  value=${value//%/%%}
+  printf '%s' "$value"
+}
+
 install_dependencies() {
   info "Installing build and runtime dependencies"
   case "$PKG_MANAGER" in
@@ -734,13 +750,43 @@ build_project() {
   (cd "$REPO_ROOT/linux-touchbar-control-center" && npm run build)
   info "Building the config editor"
   (cd "$REPO_ROOT/config-gui" && npm run build)
+  verify_electron_binary
+}
+
+# electron's own postinstall script downloads the platform binary as part of
+# `npm ci` above; that download can fail (flaky network, a proxy, a slow
+# release CDN) without failing `npm ci` itself, leaving node_modules/.bin/electron
+# on disk but non-functional and the config editor launcher silently not
+# opening. Retry the download once and fail loudly instead of deploying a
+# launcher that appears installed but doesn't work.
+verify_electron_binary() {
+  [[ -x "$REPO_ROOT/node_modules/electron/dist/electron" ]] && return 0
+  warn "electron binary did not download during npm ci; retrying"
+  (cd "$REPO_ROOT" && node node_modules/electron/install.js) ||
+    fail "failed to download the electron binary; check your network connection and re-run the installer"
+  [[ -x "$REPO_ROOT/node_modules/electron/dist/electron" ]] ||
+    fail "electron binary is still missing after retrying the download"
 }
 
 install_config_gui_launcher() {
   info "Installing config editor launcher"
   local apps_dir="$HOME/.local/share/applications"
+  local launcher_file temporary_file electron_q config_gui_q
+  launcher_file="$apps_dir/react-drm-config-gui.desktop"
+  electron_q=$(desktop_escape_path "$REPO_ROOT/node_modules/.bin/electron")
+  config_gui_q=$(desktop_escape_path "$REPO_ROOT/config-gui")
+
   install -d -m 0755 "$apps_dir"
-  install -m 0644 "$REPO_ROOT/system/react-drm-config-gui.desktop" "$apps_dir/react-drm-config-gui.desktop"
+  temporary_file=$(mktemp --suffix=.desktop "$apps_dir/react-drm-config-gui-install.XXXXXX")
+  if ! awk -v exec_line="Exec=\"$electron_q\" \"$config_gui_q\"" '
+    /^Exec=/ { print exec_line; next }
+    { print }
+  ' "$REPO_ROOT/system/react-drm-config-gui.desktop" >"$temporary_file"; then
+    rm -f "$temporary_file"
+    fail "unable to generate the config editor launcher"
+  fi
+  chmod 0644 "$temporary_file"
+  mv -f "$temporary_file" "$launcher_file"
 }
 
 phase_gui_bootstrap() {
@@ -780,6 +826,7 @@ EOF
   (cd "$REPO_ROOT" && npm ci)
   info "Building the graphical installer"
   (cd "$REPO_ROOT/install-gui" && npm run build)
+  verify_electron_binary
   info "Launching the graphical installer"
   REACT_DRM_REPO_DIR="$REPO_ROOT" exec "$REPO_ROOT/node_modules/.bin/electron" "$REPO_ROOT/install-gui" --mode=install
 }
@@ -799,7 +846,14 @@ install_udev_rules() {
   privileged install -m 0644 "$REPO_ROOT/system/99-react-drm.rules" /etc/udev/rules.d/99-react-drm.rules
   privileged udevadm control --reload
   privileged udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
-  privileged udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
+  # uinput has no hardware to bind to, so the kernel never auto-loads it and
+  # this trigger is a no-op against it: replaying "add" only affects devices
+  # the kernel already knows about, and until the module is loaded there is no
+  # such device for udev to apply the GROUP=input,MODE=0660 rule to. Load it
+  # directly instead, which fires the real uevent, and persist it so the
+  # correctly-permissioned device exists again after every reboot.
+  privileged modprobe uinput || fail "failed to load the uinput kernel module (needed for Touch Bar key injection)"
+  privileged install -m 0644 "$REPO_ROOT/system/react-drm-uinput.conf" /etc/modules-load.d/react-drm-uinput.conf
 }
 
 install_user_service() {

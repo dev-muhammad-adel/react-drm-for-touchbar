@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SERVICE_FILE="$HOME/.config/systemd/user/react-drm.service"
 UDEV_RULE="/etc/udev/rules.d/99-react-drm.rules"
 LEGACY_UDEV_RULE="/etc/udev/rules.d/99-react-drm-uinput.rules"
+UINPUT_MODULES_LOAD_FILE="/etc/modules-load.d/react-drm-uinput.conf"
 CONFIG_GUI_LAUNCHER="$HOME/.local/share/applications/react-drm-config-gui.desktop"
 
 GUI_MODE=0
@@ -136,6 +137,7 @@ remove_service() {
 remove_udev_rules() {
   info "Removing react-drm udev rules"
   privileged rm -f "$UDEV_RULE" "$LEGACY_UDEV_RULE"
+  privileged rm -f "$UINPUT_MODULES_LOAD_FILE"
   privileged udevadm control --reload
   privileged udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
   privileged udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
