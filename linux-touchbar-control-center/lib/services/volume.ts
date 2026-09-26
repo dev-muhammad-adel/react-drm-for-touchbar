@@ -33,19 +33,34 @@ export function readVolume(): number {
 }
 
 export function applyVolume(pct: number, done: () => void): void {
+  const finish = (err: Error | null) => {
+    if (err) console.error(USE_WPCTL ? '[volume] wpctl:' : '[volume] pactl:', err.message);
+    done();
+  };
+  // Unlike the keyboard volume keys, raw volume setters don't clear the mute
+  // flag, so dragging the slider while muted would be silent. Unmute like the
+  // DE mixer does (a drag to 0 stays mute, matching macOS).
+  if (pct <= 0) {
+    if (USE_WPCTL) {
+      execFile('wpctl', ['set-volume', '@DEFAULT_AUDIO_SINK@', '0'], { env: PW_ENV }, finish);
+    } else {
+      execFile('pactl', ['set-sink-volume', '@DEFAULT_SINK@', '0%'], finish);
+    }
+    return;
+  }
   if (USE_WPCTL) {
     execFile('wpctl', ['set-volume', '@DEFAULT_AUDIO_SINK@', pct.toFixed(4)],
       { env: PW_ENV },
       (err) => {
-        if (err) console.error('[volume] wpctl:', err.message);
-        done();
+        if (err) return finish(err);
+        execFile('wpctl', ['set-mute', '@DEFAULT_AUDIO_SINK@', '0'], { env: PW_ENV }, finish);
       },
     );
   } else {
     execFile('pactl', ['set-sink-volume', '@DEFAULT_SINK@', `${Math.round(pct * 100)}%`],
       (err) => {
-        if (err) console.error('[volume] pactl:', err.message);
-        done();
+        if (err) return finish(err);
+        execFile('pactl', ['set-sink-mute', '@DEFAULT_SINK@', '0'], finish);
       },
     );
   }
