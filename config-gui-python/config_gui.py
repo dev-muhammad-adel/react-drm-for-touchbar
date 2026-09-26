@@ -1684,8 +1684,9 @@ def _probe_ext_blur_safe():
         except Exception:
             queue.put((False, True))
 
-    q = _mp.Queue()
-    p = _mp.Process(target=_child, args=(q,), daemon=True)
+    ctx = _mp.get_context("fork")
+    q = ctx.Queue()
+    p = ctx.Process(target=_child, args=(q,), daemon=True)
     p.start()
     p.join(timeout=3)
     if p.is_alive():
