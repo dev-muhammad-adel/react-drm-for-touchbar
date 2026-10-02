@@ -465,11 +465,10 @@ check_deploy_files() {
 
   [[ -w "$REPO_ROOT" ]] || fail "repository is not writable: $REPO_ROOT"
 
-  # 99-react-drm.rules is generated (gitignored): this t2linux installer copies
+  # 99-react-drm.rules is generated (gitignored): copy the selected profile
+  # rules file into the canonical name the service steps use.
 
-  # its profile rules file into the canonical name the service steps use.
-
-  cp -f "$REPO_ROOT/system/99-react-drm-t2linux.rules" "$REPO_ROOT/system/99-react-drm.rules"
+  cp -f "$REPO_ROOT/system/99-react-drm-${INSTALL_PROFILE}.rules" "$REPO_ROOT/system/99-react-drm.rules"
 
   for file in package.json package-lock.json system/99-react-drm.rules system/react-drm.service system/react-drm-tb-detach system/react-drm-uinput.conf; do
 
@@ -1142,9 +1141,11 @@ seed_user_config() {
 
 # existing .env — the app treats it as user-editable config.
 
+INSTALL_PROFILE="t2linux"
+
 seed_distro_env() {
 
-  local example="$REPO_ROOT/.env.example.t2linux"
+  local example="$REPO_ROOT/.env.example.${INSTALL_PROFILE}"
 
   local live="$REPO_ROOT/.env"
 
@@ -1405,14 +1406,50 @@ phase_deploy() {
 
 
 
+install_kait2en() {
+  local kait2en_root installer
+
+  kait2en_root="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
+  installer="$kait2en_root/scripts/fedora/install-apps.sh"
+
+  [[ -x "$installer" ]] || fail "KaiT2en installer not found: $installer"
+
+  INSTALL_PROFILE="kait2en"
+
+  if [[ -e "$REPO_ROOT/.env" ]]; then
+    info "Keeping existing $REPO_ROOT/.env"
+  else
+    info "Seeding $REPO_ROOT/.env from .env.example.kait2en"
+    cp "$REPO_ROOT/.env.example.kait2en" "$REPO_ROOT/.env"
+  fi
+
+  info "Generating $REPO_ROOT/system/99-react-drm.rules from 99-react-drm-kait2en.rules"
+  cp -f "$REPO_ROOT/system/99-react-drm-kait2en.rules" "$REPO_ROOT/system/99-react-drm.rules"
+
+  if (( EUID == 0 )); then
+    exec "$installer" --react-drm-only
+  fi
+
+  command -v sudo >/dev/null 2>&1 || fail "sudo is required"
+  exec sudo "$installer" --react-drm-only
+}
+
+
+
 main() {
   case "${1:-install}" in
     install)
+      if [[ "${2:-}" == kait2en ]]; then
+        install_kait2en
+      fi
       confirm_installation
       analyze
       confirm_purge
       phase_purge
       phase_deploy
+      ;;
+    kait2en)
+      install_kait2en
       ;;
     analyze)
       analyze
@@ -1424,7 +1461,7 @@ main() {
       phase_purge
       ;;
     *)
-      printf 'usage: %s [install|analyze|purge]\n' "${0##*/}" >&2
+      printf 'usage: %s [install|kait2en|analyze|purge]\n' "${0##*/}" >&2
       return 2
       ;;
   esac
