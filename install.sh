@@ -38,7 +38,9 @@ readonly TOUCHBAR_PRODUCT_ID="8302"
 
 readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus)
 
-readonly REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
+INSTALL_PROFILE="t2linux"
+REQUIRED_KERNEL_MODULES=()
+
 
 readonly COMMON_RUNTIME_PACKAGES=(brightnessctl cava)
 
@@ -402,10 +404,11 @@ detect_touchbar_hardware() {
 
     [[ -e "$card/device/uevent" ]] || continue
 
-    if grep -qi 'DRIVER=appletbdrm' "$card/device/uevent" 2>/dev/null; then
-
+    # The USB VID:PID above is the hardware identity. The DRM driver name
+    # is selected by the active install profile and is not used to prove
+    # that a Touch Bar exists.
+    if grep -q '^DEVTYPE=drm_minor' "$card/device/uevent" 2>/dev/null; then
       ANALYSIS_TOUCHBAR_DRM_CARDS+=("$card")
-
     fi
 
   done
@@ -492,6 +495,23 @@ check_deploy_files() {
 
 }
 
+
+
+configure_install_profile() {
+
+  case "$INSTALL_PROFILE" in
+    t2linux)
+      REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
+      ;;
+    kait2en)
+      REQUIRED_KERNEL_MODULES=(t2bdrm t2tb_backlight)
+      ;;
+    *)
+      fail "unsupported install profile: $INSTALL_PROFILE"
+      ;;
+  esac
+
+}
 
 
 detect_kernel_modules() {
@@ -1133,15 +1153,9 @@ seed_user_config() {
 
 
 
-# This installer is the t2linux (upstream) profile. Seed the per-distro
-
-# hardware profile into the repo-root .env, which the systemd service loads
-
-# via EnvironmentFile (see system/react-drm.service). Never overwrite an
-
+# Seed the selected per-distro hardware profile into the repo-root .env,
+# which the systemd service loads via EnvironmentFile. Never overwrite an
 # existing .env — the app treats it as user-editable config.
-
-INSTALL_PROFILE="t2linux"
 
 seed_distro_env() {
 
@@ -1409,7 +1423,8 @@ phase_deploy() {
 select_install_profile() {
   case "${1:-t2linux}" in
     t2linux|kait2en)
-      INSTALL_PROFILE="$1"
+      INSTALL_PROFILE="${1:-t2linux}"
+      configure_install_profile
       ;;
     *)
       fail "unsupported install profile: $1 (expected t2linux or kait2en)"
