@@ -748,9 +748,7 @@ build_project() {
   seed_distro_env
   info "Building react-drm and the control center"
   (cd "$REPO_ROOT/linux-touchbar-control-center" && npm run build)
-  info "Building the config editor"
-  (cd "$REPO_ROOT/config-gui" && npm run build)
-  verify_electron_binary
+  info "Config editor is Python-based (no build needed)"
 }
 
 # electron's own postinstall script downloads the platform binary as part of
@@ -771,14 +769,13 @@ verify_electron_binary() {
 install_config_gui_launcher() {
   info "Installing config editor launcher"
   local apps_dir="$HOME/.local/share/applications"
-  local launcher_file temporary_file electron_q config_gui_q
+  local launcher_file temporary_file config_gui_py_q
   launcher_file="$apps_dir/react-drm-config-gui.desktop"
-  electron_q=$(desktop_escape_path "$REPO_ROOT/node_modules/.bin/electron")
-  config_gui_q=$(desktop_escape_path "$REPO_ROOT/config-gui")
+  config_gui_py_q=$(desktop_escape_path "$REPO_ROOT/config-gui-python/config_gui.py")
 
   install -d -m 0755 "$apps_dir"
   temporary_file=$(mktemp --suffix=.desktop "$apps_dir/react-drm-config-gui-install.XXXXXX")
-  if ! awk -v exec_line="Exec=\"$electron_q\" \"$config_gui_q\"" '
+  if ! awk -v exec_line="Exec=python3 \"$config_gui_py_q\"" '
     /^Exec=/ { print exec_line; next }
     { print }
   ' "$REPO_ROOT/system/react-drm-config-gui.desktop" >"$temporary_file"; then
@@ -822,13 +819,7 @@ EOF
   sudo -v || fail "unable to acquire administrative privileges"
 
   install_dependencies
-  info "Installing npm dependencies"
-  (cd "$REPO_ROOT" && npm ci)
-  info "Building the graphical installer"
-  (cd "$REPO_ROOT/install-gui" && npm run build)
-  verify_electron_binary
-  info "Launching the graphical installer"
-  REACT_DRM_REPO_DIR="$REPO_ROOT" exec "$REPO_ROOT/node_modules/.bin/electron" "$REPO_ROOT/install-gui" --mode=install
+  fail "Graphical installer has been removed. Use command-line installation instead."
 }
 
 configure_user_groups() {

@@ -16,9 +16,7 @@
     "./package.json": "./package.json"
   },
   "workspaces": [
-    "linux-touchbar-control-center",
-    "config-gui",
-    "install-gui"
+    "linux-touchbar-control-center"
   ],
   "scripts": {
     "build:native": "node-gyp configure build",
