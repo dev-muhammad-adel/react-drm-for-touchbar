@@ -1406,62 +1406,41 @@ phase_deploy() {
 
 
 
-install_kait2en() {
-  local kait2en_root installer
-
-  kait2en_root="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
-  installer="$kait2en_root/scripts/fedora/install-apps.sh"
-
-  [[ -x "$installer" ]] || fail "KaiT2en installer not found: $installer"
-
-  INSTALL_PROFILE="kait2en"
-
-  if [[ -e "$REPO_ROOT/.env" ]]; then
-    info "Keeping existing $REPO_ROOT/.env"
-  else
-    info "Seeding $REPO_ROOT/.env from .env.example.kait2en"
-    cp "$REPO_ROOT/.env.example.kait2en" "$REPO_ROOT/.env"
-  fi
-
-  info "Generating $REPO_ROOT/system/99-react-drm.rules from 99-react-drm-kait2en.rules"
-  cp -f "$REPO_ROOT/system/99-react-drm-kait2en.rules" "$REPO_ROOT/system/99-react-drm.rules"
-
-  if (( EUID == 0 )); then
-    exec "$installer" --react-drm-only
-  fi
-
-  command -v sudo >/dev/null 2>&1 || fail "sudo is required"
-  exec sudo "$installer" --react-drm-only
+select_install_profile() {
+  case "${1:-t2linux}" in
+    t2linux|kait2en)
+      INSTALL_PROFILE="$1"
+      ;;
+    *)
+      fail "unsupported install profile: $1 (expected t2linux or kait2en)"
+      ;;
+  esac
 }
-
 
 
 main() {
   case "${1:-install}" in
     install)
-      if [[ "${2:-}" == kait2en ]]; then
-        install_kait2en
-      fi
+      select_install_profile "${2:-t2linux}"
       confirm_installation
       analyze
       confirm_purge
       phase_purge
       phase_deploy
       ;;
-    kait2en)
-      install_kait2en
-      ;;
     analyze)
+      select_install_profile "${2:-t2linux}"
       analyze
       ;;
     purge)
+      select_install_profile "${2:-t2linux}"
       confirm_installation
       analyze
       confirm_purge
       phase_purge
       ;;
     *)
-      printf 'usage: %s [install|kait2en|analyze|purge]\n' "${0##*/}" >&2
+      printf 'usage: %s [install|analyze|purge] [t2linux|kait2en]\n' "${0##*/}" >&2
       return 2
       ;;
   esac
