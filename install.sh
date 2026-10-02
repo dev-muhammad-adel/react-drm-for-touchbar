@@ -504,7 +504,7 @@ configure_install_profile() {
       REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
       ;;
     kait2en)
-      REQUIRED_KERNEL_MODULES=(t2bdrm t2tb_backlight)
+      REQUIRED_KERNEL_MODULES=(t2bdrm t2touchbar_bl)
       ;;
     *)
       fail "unsupported install profile: $INSTALL_PROFILE"
