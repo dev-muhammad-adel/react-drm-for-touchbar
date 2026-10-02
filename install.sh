@@ -39,6 +39,7 @@ readonly TOUCHBAR_PRODUCT_ID="8302"
 readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus)
 
 INSTALL_PROFILE="t2linux"
+TOUCHBAR_DRM_DRIVER=""
 REQUIRED_KERNEL_MODULES=()
 
 
@@ -404,10 +405,9 @@ detect_touchbar_hardware() {
 
     [[ -e "$card/device/uevent" ]] || continue
 
-    # The USB VID:PID above is the hardware identity. The DRM driver name
-    # is selected by the active install profile and is not used to prove
-    # that a Touch Bar exists.
-    if grep -q '^DEVTYPE=drm_minor' "$card/device/uevent" 2>/dev/null; then
+    # The USB VID:PID above is the hardware identity. The DRM driver is
+    # profile-specific and is used only to identify the Touch Bar DRM card.
+    if grep -qi "^DRIVER=${TOUCHBAR_DRM_DRIVER}$" "$card/device/uevent" 2>/dev/null; then
       ANALYSIS_TOUCHBAR_DRM_CARDS+=("$card")
     fi
 
@@ -501,9 +501,11 @@ configure_install_profile() {
 
   case "$INSTALL_PROFILE" in
     t2linux)
+      TOUCHBAR_DRM_DRIVER="appletbdrm"
       REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
       ;;
     kait2en)
+      TOUCHBAR_DRM_DRIVER="t2bdrm"
       REQUIRED_KERNEL_MODULES=(t2bdrm t2touchbar_bl)
       ;;
     *)
@@ -862,6 +864,8 @@ print_analysis() {
 
   analysis_value "Touch Bar DRM cards" "${#ANALYSIS_TOUCHBAR_DRM_CARDS[@]}"
 
+  analysis_value "Touch Bar DRM driver" "$TOUCHBAR_DRM_DRIVER"
+
   analysis_value "Kernel modules" "${REQUIRED_KERNEL_MODULES[*]}"
 
 
@@ -1051,7 +1055,6 @@ systemd_escape_path() {
 
   value=${value//\"/\\x22}
   value=${value//\'/\\x27}
-  value=${value//\\'/\\\x27}
 
   value=${value//%/%%}
 
@@ -1236,11 +1239,6 @@ install_config_gui_launcher() {
   chmod 0644 "$temporary_file"
 
   mv -f "$temporary_file" "$launcher_file"
-
-}
-
-
-
 
 }
 
