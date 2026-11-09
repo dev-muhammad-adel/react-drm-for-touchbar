@@ -1,4 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import dbus from 'dbus-next';
 import path from 'node:path';
 import { appIconSource } from 'react-drm';
 
@@ -15,7 +17,7 @@ import { appIconSource } from 'react-drm';
 export interface AppInfo {
   id:      string;          // desktop-file id (stable React key, dedupe key)
   name:    string;          // display name, used for alphabet sections + sort
-  iconSrc: string | null;   // resolved theme/path icon, or null → letter avatar
+  iconSrc: string | null;   // resolved SVG/PNG/JPEG/WEBP icon, or null → fallback
   command: string;          // executable to spawn
   args:    string[];        // extra launch arguments
 }
@@ -89,11 +91,9 @@ function readDesktop(data: string): DesktopEntry | null {
   };
 }
 
-/** Icon= may be a freedesktop name (theme lookup) or an absolute path (SVG). */
+/** Icon= may be a freedesktop name or an absolute SVG/PNG/JPEG/WEBP path. */
 function resolveIcon(icon: string | undefined): string | null {
-  if (!icon) return null;
-  if (icon.startsWith('/')) return /\.svg$/i.test(icon) ? icon : null;
-  return appIconSource(icon);
+  return icon ? appIconSource(icon) : null;
 }
 
 // ─── Directories ─────────────────────────────────────────────────────────────
@@ -104,6 +104,7 @@ function appDirs(): string[] {
     `${home}/.local/share/applications`,
     `${home}/.local/share/flatpak/exports/share/applications`,
     '/var/lib/flatpak/exports/share/applications',
+    '/var/lib/snapd/desktop/applications',
     '/usr/local/share/applications',
     '/usr/share/applications',
   ];
@@ -148,4 +149,82 @@ function scanApps(): AppInfo[] {
   return Array.from(byId.values()).sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
   );
+}
+
+export function parseFavoriteApps(output: string): string[] {
+  return Array.from(output.matchAll(/'([^']+\.desktop)'/g), match => match[1]);
+}
+
+/** Ubuntu Dock/GNOME Dash favorites in their visible order, with the complete
+ * installed-app list as fallback on other desktops. */
+export function getLauncherApps(): AppInfo[] {
+  const all = getInstalledApps();
+  try {
+    const output = execFileSync('gsettings', ['get', 'org.gnome.shell', 'favorite-apps'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const favorites = favoriteApps(output, all);
+    if (favorites.length > 0) return favorites;
+  } catch { /* gsettings/GNOME is optional */ }
+  return all;
+}
+
+function favoriteApps(output: string, all: AppInfo[]): AppInfo[] {
+  const byId = new Map(all.map(app => [app.id, app]));
+  const favorites = parseFavoriteApps(output)
+    .map(id => byId.get(id))
+    .filter((app): app is AppInfo => app !== undefined);
+  return Array.from(new Map(favorites.map(app => [app.id, app])).values());
+}
+
+export interface RunningApp {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+/** Applications Shell.AppSystem considers running, including unpinned apps.
+ * Provided by window-monitor-pro because GNOME blocks Shell.Introspection for
+ * ordinary processes. */
+export async function getRunningApps(): Promise<RunningApp[]> {
+  try {
+    const bus = dbus.sessionBus();
+    const obj = await bus.getProxyObject('org.gnome.Shell', '/org/gnome/Shell/Extensions/WindowMonitorPro');
+    const iface = obj.getInterface('org.gnome.Shell.Extensions.WindowMonitorPro');
+    const apps = await iface.RunningApps() as unknown as string;
+    const parsed = JSON.parse(apps) as RunningApp[];
+    bus.disconnect();
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Ubuntu Dock semantics: pinned favorites in visible order, followed by
+ * running unpinned apps in GNOME Shell's running-app order. */
+export async function getDockApps(): Promise<AppInfo[]> {
+  const all = getInstalledApps();
+  let apps = getLauncherApps();
+
+  const running = await getRunningApps();
+  if (running.length > 0) {
+    const byId = new Map(all.map(app => [app.id, app]));
+    const present = new Set(apps.map(app => app.id));
+    for (const app of running) {
+      if (present.has(app.id)) continue;
+      const known = byId.get(app.id);
+      const command = known?.command ?? `gtk-launch ${app.id.replace(/\.desktop$/, '')}`;
+      const item: AppInfo = {
+        id: app.id,
+        name: known?.name ?? app.name,
+        iconSrc: known?.iconSrc ?? appIconSource(app.icon),
+        command,
+        args: known?.args ?? [],
+      };
+      apps = [...apps, item];
+      present.add(app.id);
+    }
+  }
+  return apps;
 }

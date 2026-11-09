@@ -69,6 +69,15 @@ async function main() {
     }
   });
 
+  const isT1 = process.env.REACT_DRM_USB_PRODUCT?.toLowerCase() === '8600';
+  const flushFpsEnv = Number(process.env.REACT_DRM_FLUSH_FPS);
+  const flushFps = Number.isFinite(flushFpsEnv) && flushFpsEnv > 0
+    ? flushFpsEnv
+    : isT1 ? Math.min(DISPLAY.flushFps, 30) : DISPLAY.flushFps;
+  const partialFlush = process.env.REACT_DRM_PARTIAL_FLUSH === undefined
+    ? isT1 || DISPLAY.partialFlush
+    : process.env.REACT_DRM_PARTIAL_FLUSH !== '0';
+
   const result = renderHot(path.resolve(__dirname, 'App'), display, {
     dimSecs:          DISPLAY.dimSecs,
     offSecs:          DISPLAY.offSecs,
@@ -76,8 +85,8 @@ async function main() {
     keyboardReader:   keyboard,
     appProps:         { keyboard },
     activeBrightness: DISPLAY.activeBrightness,
-    flushFps:         DISPLAY.flushFps,
-    partialFlush:     DISPLAY.partialFlush,
+    flushFps,
+    partialFlush,
     touchEnabled:     !isPreview,
     //  adaptiveBrightness: true
   });

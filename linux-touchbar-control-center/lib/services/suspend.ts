@@ -8,6 +8,7 @@ import { SLEEP } from '@/lib/utils/configLoader';
 const log = createLogger('suspend');
 
 const TOUCHBAR_DRM_RE = new RegExp(`DRIVER=(${TOUCHBAR_DRM_DRIVERS.join('|')})`, 'i');
+const IS_T1 = TOUCHBAR_USB_PRODUCT_ID.toLowerCase() === '8600';
 
 /**
  * In-app Touch Bar lifecycle: suspend/resume handling for every run mode
@@ -138,35 +139,37 @@ export async function attachTouchBar(): Promise<void> {
 
   while (readConfigValue(dev) !== '2') {
     // The sysfs device appears the instant the kernel registers it, but udev
-    // applies the rule's GROUP/MODE to the devnode (and the chown on
-    // bConfigurationValue) a beat later — EACCES right after (re-)enumeration
-    // is that race, not a missing rule, so wait for access instead of failing.
+    // applies its permissions a beat later. T1 uses authorized because its
+    // cfgsel driver must choose display mode during enumeration; a live
+    // bConfigurationValue=2 switch is not reliable on that hardware.
     const node = usbDevNode(dev);
-    const cfg = path.join(dev, 'bConfigurationValue');
+    const cfg = path.join(dev, IS_T1 ? 'authorized' : 'bConfigurationValue');
     try {
-      fs.accessSync(node, fs.constants.W_OK);
+      if (!IS_T1) fs.accessSync(node, fs.constants.W_OK);
       fs.accessSync(cfg, fs.constants.W_OK);
     } catch {
-      if (Date.now() > deadline) throw new Error(`no write access to ${node} — install system/99-react-drm.rules and re-trigger`);
+      if (Date.now() > deadline) throw new Error(`no write access to ${cfg} — install system/99-react-drm.rules and re-trigger`);
       await sleep(250);
       continue;
     }
     try {
-      // Reset only when no config is active (fresh wedge or a failed write's
-      // recovery reset) — never on a configured device with bound drivers.
-      // A configured-but-asleep device gets there too: its first write fails,
-      // the kernel's recovery reset deconfigures it, and the next pass resets.
-      if (readConfigValue(dev) === '') usbReset(node);
-      fs.writeFileSync(cfg, '0');
-      fs.writeFileSync(cfg, '2');
+      if (IS_T1) {
+        fs.writeFileSync(cfg, '0');
+        await sleep(500);
+        fs.writeFileSync(cfg, '1');
+      } else {
+        // Reset only when no config is active — never on a configured T2
+        // device with bound drivers.
+        if (readConfigValue(dev) === '') usbReset(node);
+        fs.writeFileSync(cfg, '0');
+        fs.writeFileSync(cfg, '2');
+      }
     } catch (e) {
       log.warn('attach attempt failed, retrying:', e instanceof Error ? e.message : e);
     }
     if (readConfigValue(dev) === '2') break;
     if (Date.now() > deadline) throw new Error('could not switch Touch Bar to config 2');
     await sleep(5000);
-    // A failed config write makes the kernel reset the device; devnum (and
-    // even the sysfs dir) can change — re-resolve before the next try.
     dev = findTouchBarUsb() ?? dev;
   }
 
@@ -182,18 +185,24 @@ export async function attachTouchBar(): Promise<void> {
     if (Date.now() >= nextReprobe) {
       dev = findTouchBarUsb() ?? dev;
       const node = usbDevNode(dev);
-      let cfg = path.join(dev, 'bConfigurationValue');
+      let cfg = path.join(dev, IS_T1 ? 'authorized' : 'bConfigurationValue');
       try {
-        fs.accessSync(node, fs.constants.W_OK);
+        if (!IS_T1) fs.accessSync(node, fs.constants.W_OK);
         fs.accessSync(cfg, fs.constants.W_OK);
         if (readConfigValue(dev) === '2')
           log.warn('config 2 active but no DRM card — reprobe');
-        if (readConfigValue(dev) === '') usbReset(node);
-        fs.writeFileSync(cfg, '0');
-        await sleep(500);
-        dev = findTouchBarUsb() ?? dev;
-        cfg = path.join(dev, 'bConfigurationValue');
-        fs.writeFileSync(cfg, '2');
+        if (IS_T1) {
+          fs.writeFileSync(cfg, '0');
+          await sleep(500);
+          fs.writeFileSync(cfg, '1');
+        } else {
+          if (readConfigValue(dev) === '') usbReset(node);
+          fs.writeFileSync(cfg, '0');
+          await sleep(500);
+          dev = findTouchBarUsb() ?? dev;
+          cfg = path.join(dev, 'bConfigurationValue');
+          fs.writeFileSync(cfg, '2');
+        }
       } catch (e) {
         log.warn('reprobe attempt failed, retrying:', e instanceof Error ? e.message : e);
       }

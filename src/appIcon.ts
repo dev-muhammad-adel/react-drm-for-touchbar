@@ -127,27 +127,35 @@ function findIcon(name: string): string | null {
   return best;
 }
 
-/** Wrap a PNG into an inline-SVG <image> file librsvg can render. */
-function wrapPng(file: string): string {
+/** Wrap a raster icon (PNG/JPEG/WEBP) into an inline-SVG <image> file librsvg can render. */
+function wrapRaster(file: string): string {
+  const mime = /\.jpe?g$/i.test(file) ? 'image/jpeg'
+    : /\.webp$/i.test(file) ? 'image/webp' : 'image/png';
   mkdirSync(TMP_DIR, { recursive: true });
-  const out = join(TMP_DIR, basename(file).replace(/\.png$/i, '') + '.svg');
+  const out = join(TMP_DIR, basename(file).replace(/\.(png|jpe?g|webp)$/i, '') + '.svg');
   if (!existsSync(out)) {
     const b64 = readFileSync(file).toString('base64');
     const svg =
       '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ' +
       'viewBox="0 0 1 1"><image width="1" height="1" preserveAspectRatio="xMidYMid meet" ' +
-      `xlink:href="data:image/png;base64,${b64}"/></svg>`;
+      `xlink:href="data:${mime};base64,${b64}"/></svg>`;
     writeFileSync(out, svg);
   }
   return out;
 }
 
+/** Wrap an absolute .desktop Icon= file into an <Svg>-renderable path. */
+function rasterToSvg(file: string): string | null {
+  return /\.(png|jpe?g|webp)$/i.test(file) ? wrapRaster(file) : null;
+}
+
 /**
- * Resolve an icon name to an <Svg>-renderable file path, or null if not found.
- * Results are memoised, so call freely.
+ * Resolve an icon name or absolute .desktop Icon= path to an <Svg>-renderable
+ * file path, or null if not found. Results are memoised, so call freely.
  */
-export function appIconSource(name: string): string | null {
-  const file = findIcon(name);
+export function appIconSource(icon: string): string | null {
+  if (icon.startsWith('/')) return rasterToSvg(icon);
+  const file = findIcon(icon);
   if (!file) return null;
-  return file.toLowerCase().endsWith('.png') ? wrapPng(file) : file;
+  return file.toLowerCase().endsWith('.png') ? wrapRaster(file) : file;
 }

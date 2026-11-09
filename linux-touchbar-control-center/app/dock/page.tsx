@@ -1,16 +1,30 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Svg, motion } from 'react-drm';
 import { BackButton } from '@/components/BackButton';
 import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { launchApp } from '@/lib/services/launch';
 import { appIconSource } from 'react-drm';
+import { FaCircle } from 'react-icons/fa6';
+import { getDockApps, getLauncherApps, type AppInfo } from '@/lib/services/apps';
 import { DOCK, type DockApp } from '@/lib/utils/configLoader';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
-// Resolve every app's theme icon once at module load (app boot) — not on the
-// first dock switch, which would block the transition while the icon theme is
-// searched. Results are cached, so this is the only filesystem hit.
-const ICON_SRC: (string | null)[] = DOCK.apps.map(a => appIconSource(a.iconName ?? a.command));
+// The front dock mirrors GNOME/Ubuntu Dock semantics: pinned favorites first,
+// then running unpinned apps. Initial state is synchronous so the layer opens
+// without waiting for D-Bus; getDockApps refreshes it in the background.
+const INITIAL_APPS = getLauncherApps();
+
+function toDockApp(app: AppInfo): DockApp {
+  return {
+    id: app.id,
+    label: app.name,
+    icon: FaCircle,
+    color: '#94a3b8',
+    command: app.command,
+    args: app.args,
+    matchClass: [app.command],
+  };
+}
 
 /** Does the focused window class belong to this dock app? Drives the dot. */
 function isRunning(app: DockApp, activeClass: string): boolean {
@@ -130,7 +144,24 @@ export const layerConfig: LayerConfig = {
  */
 export default function DockLayer({ width, height }: { width: number; height: number }) {
   const { class: activeClass } = useActiveWindow();
-  const { apps, gap, panel, indicator, iconSize, lift, slot } = DOCK;
+  const { gap, panel, indicator, iconSize, lift, slot } = DOCK;
+  const [appInfos, setAppInfos] = useState<AppInfo[]>(INITIAL_APPS);
+
+  useEffect(() => {
+    let alive = true;
+    const refresh = async () => {
+      try {
+        const next = await getDockApps();
+        if (alive) setAppInfos(next);
+      } catch { /* keep the current dock until GNOME's app list responds */ }
+    };
+    void refresh();
+    const timer = setInterval(refresh, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, []);
+
+  const apps = appInfos.map(toDockApp);
+  const iconSrc = appInfos.map(app => app.iconSrc ?? appIconSource(app.command));
 
   // The button's own box is `slot` tall (bigger than `height` on purpose —
   // a roomier touch target than the physical display), floating centered
@@ -169,7 +200,7 @@ export default function DockLayer({ width, height }: { width: number; height: nu
           <DockIcon
             key={app.id}
             app={app}
-            iconSrc={ICON_SRC[i]}
+            iconSrc={iconSrc[i]}
             running={isRunning(app, activeClass)}
             slot={slot} iconSize={iconSize} lift={lift} indicator={indicator}
             indicatorBottom={indicatorBottom}

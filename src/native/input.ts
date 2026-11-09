@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { loadAddon } from './load-addon';
 import { createLogger } from '../logger';
 
@@ -102,6 +103,30 @@ const TOUCH_MAX_Y = 127;
 export const DEFAULT_DISPLAY_W = 2008;
 export const DEFAULT_DISPLAY_H = 60;
 
+export function findT1RawTouchDevice(usbRoot = '/sys/bus/usb/devices'): string | null {
+  try {
+    for (const entry of fs.readdirSync(usbRoot)) {
+      if (!entry.endsWith(':2.2')) continue;
+      const interfaceDir = path.join(usbRoot, entry);
+      const deviceDir = path.join(usbRoot, entry.split(':', 1)[0]);
+      try {
+        if (fs.readFileSync(path.join(deviceDir, 'idVendor'), 'utf8').trim() !== '05ac'
+         || fs.readFileSync(path.join(deviceDir, 'idProduct'), 'utf8').trim() !== '8600'
+         || fs.readFileSync(path.join(deviceDir, 'bConfigurationValue'), 'utf8').trim() !== '2') {
+          continue;
+        }
+        for (const driver of fs.readdirSync(interfaceDir).filter(n => n.startsWith('0003:'))) {
+          const hidrawDir = path.join(interfaceDir, driver, 'hidraw');
+          for (const node of fs.readdirSync(hidrawDir)) {
+            if (/^hidraw\d+$/.test(node)) return `/dev/${node}`;
+          }
+        }
+      } catch { /* incomplete device or non-HID interface */ }
+    }
+  } catch { /* no USB sysfs */ }
+  return null;
+}
+
 function resolveTouchDevicePath(devicePath?: string): string {
   if (devicePath) return devicePath;
 
@@ -116,19 +141,21 @@ function resolveTouchDevicePath(devicePath?: string): string {
     //   "Apple Inc. Touch Bar Display Touchpad"  — T2 MacBook Pro 2018-2021
     //   "MacBookPro17,1 Touch Bar"               — M1 MacBook Pro 13" 2020
     //   "Mac14,7 Touch Bar"                      — M2 MacBook Pro 13" 2022
-    // All contain "Touch Bar", so one pattern covers all models.
     for (const block of blocks) {
       if (!/Touch Bar/i.test(block)) continue;
       const match = block.match(/Handlers=.*\b(event\d+)\b/);
       if (match) return `/dev/input/${match[1]}`;
     }
-  } catch (e) {
-    throw new Error(`react-drm: failed to read /proc/bus/input/devices: ${e}`);
-  }
+  } catch { /* the T1 raw-hidraw fallback below does not need evdev */ }
+
+  // An unmodified T1 kernel binds hid-generic, not an evdev multitouch driver.
+  // Its config-2 interface 2 instead exposes 52-byte reports over hidraw.
+  const rawT1 = findT1RawTouchDevice();
+  if (rawT1) return rawT1;
 
   throw new Error(
-    'react-drm: Touch Bar touchpad not found in /proc/bus/input/devices.\n' +
-    'Is appletbdrm loaded? Try: lsmod | grep apple'
+    'react-drm: Touch Bar input not found (evdev or T1 hidraw).\n' +
+    'Is the Touch Bar in display mode and its kernel driver loaded?'
   );
 }
 
