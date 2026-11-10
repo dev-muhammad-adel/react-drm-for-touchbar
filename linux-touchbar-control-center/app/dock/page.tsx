@@ -5,7 +5,7 @@ import { useActiveWindow } from '@/lib/hooks/useActiveWindow';
 import { launchApp } from '@/lib/services/launch';
 import { appIconSource } from 'react-drm';
 import { FaCircle } from 'react-icons/fa6';
-import { getDockApps, getLauncherApps, type AppInfo } from '@/lib/services/apps';
+import { getDockApps, getLauncherApps, onRunningAppsChanged, watchFavoriteApps, type AppInfo } from '@/lib/services/apps';
 import { DOCK, type DockApp } from '@/lib/utils/configLoader';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
@@ -156,8 +156,16 @@ export default function DockLayer({ width, height }: { width: number; height: nu
       } catch { /* keep the current dock until GNOME's app list responds */ }
     };
     void refresh();
-    const timer = setInterval(refresh, 5000);
-    return () => { alive = false; clearInterval(timer); };
+    // Both sources are event-driven: RunningAppsChanged for apps opening or
+    // closing, gsettings monitor for favorites changes (incl. reorders in the
+    // GNOME dock). The 30 s interval is only a safety net if either watcher
+    // is unavailable — no latency on the normal path anymore.
+    const timer = setInterval(refresh, 30000);
+    let unsub: (() => void) | null = null;
+    void onRunningAppsChanged(() => { if (alive) void refresh(); })
+      .then(fn => { if (alive) unsub = fn; else fn(); });
+    const stopFavoritesWatch = watchFavoriteApps(() => { if (alive) void refresh(); });
+    return () => { alive = false; clearInterval(timer); unsub?.(); stopFavoritesWatch(); };
   }, []);
 
   const apps = appInfos.map(toDockApp);
@@ -176,7 +184,7 @@ export default function DockLayer({ width, height }: { width: number; height: nu
     <Box style={{ width, height, justifyContent: 'center', alignItems: 'center' }}>
       {/* Back to the main split layer — kept off-center so the dock stays centered. */}
       <Box style={{ position: 'absolute', left: 6, top: 0 , height, alignItems: 'center' }}>
-        <BackButton to="splitted" animation="slide-down" />
+        <BackButton to="splitted" animation="slide-down" size={iconSize} />
       </Box>
 
       {/* Translucent panel: locked to the full display height so it never

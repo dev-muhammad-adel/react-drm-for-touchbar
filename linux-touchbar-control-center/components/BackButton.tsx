@@ -8,10 +8,14 @@ export function BackButton({
   to = 'splitted',
   animation,
   switchOptions,
+  size = 48,
 }: {
   to?: string;
   animation?: LayerAnimation;
   switchOptions?: SwitchOptions;
+  /** Glyph size — the dock passes its icon size; the default matches it, so
+   * the close circle is equally tall on every layer. */
+  size?: number;
 }) {
   const { go } = useLayers();
   return (
@@ -21,7 +25,7 @@ export function BackButton({
       style={{ alignItems: 'center', justifyContent: 'center' }}
       onClick={() => go(to, switchOptions ?? animation)}
     >
-      <MdCancel style={{ width: 32, height: 32 }} fill="#cccccc" stroke="none" />
+      <MdCancel style={{ width: size, height: size }} fill="#cccccc" stroke="none" />
     </Button>
   );
 }

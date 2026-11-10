@@ -32,7 +32,16 @@ export function readVolume(): number {
   } catch { return 0.5; }
 }
 
+// Timestamp of the last slider write. The pactl-subscribe handler dead-bands
+// against it: PipeWire/PulseAudio emits a sink-change event for our OWN
+// writes, and the tail of a drag's queued write chain lands AFTER onTouchEnd
+// cleared the drag guard — without the settle window the subscribe handler
+// reads the not-yet-final value and snaps the slider back (jump-back bug).
+let volumeLastWriteAt = 0;
+export function getVolumeLastWriteAt(): number { return volumeLastWriteAt; }
+
 export function applyVolume(pct: number, done: () => void): void {
+  volumeLastWriteAt = Date.now();
   const finish = (err: Error | null) => {
     if (err) console.error(USE_WPCTL ? '[volume] wpctl:' : '[volume] pactl:', err.message);
     done();

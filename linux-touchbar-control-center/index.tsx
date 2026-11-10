@@ -75,7 +75,12 @@ async function main() {
     ? flushFpsEnv
     : isT1 ? Math.min(DISPLAY.flushFps, 30) : DISPLAY.flushFps;
   const partialFlush = process.env.REACT_DRM_PARTIAL_FLUSH === undefined
-    ? isT1 || DISPLAY.partialFlush
+    // T1 does NOT opt into partial band blits implicitly: on the 2170×60 panel
+    // a band flush left stale pixels behind after a dock reorder (icons doubled
+    // / gaps when moving an icon from the middle to the end — verified A/B with
+    // REACT_DRM_PARTIAL_FLUSH=0 on 2026-11-10). Full-frame blits at the 30 fps
+    // cap are cheap on this size; T2 still honors DISPLAY.partialFlush.
+    ? DISPLAY.partialFlush
     : process.env.REACT_DRM_PARTIAL_FLUSH !== '0';
 
   const result = renderHot(path.resolve(__dirname, 'App'), display, {

@@ -733,15 +733,18 @@ check_node_version() {
     dnf) return ;;
 
     apt)
-
-      version=$(apt-cache policy nodejs | awk '/Candidate:/ { print $2; exit }')
-
+      # An existing Node.js on PATH (nvm, volta, …) is just as good as the
+      # distro package — nvm users have no apt candidate for nodejs at all
+      # (their node lives outside dpkg). Only insist on the apt candidate
+      # when no node exists yet.
+      if command -v node >/dev/null 2>&1; then
+        version=$(node -p 'process.versions.node' 2>/dev/null || true)
+      else
+        version=$(apt-cache policy nodejs | awk '/Candidate:/ { print $2; exit }')
+      fi
       [[ -n "$version" && "$version" != "(none)" ]] || fail "no Node.js candidate is available"
-
       dpkg --compare-versions "$version" ge 20.19.0 ||
-
         fail "the available Node.js version ($version) is too old; react-drm requires Node.js 20.19.0 or newer"
-
       ;;
 
     pacman)

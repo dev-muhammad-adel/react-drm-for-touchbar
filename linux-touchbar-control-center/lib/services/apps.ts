@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import dbus from 'dbus-next';
 import path from 'node:path';
 import { appIconSource } from 'react-drm';
@@ -186,18 +186,74 @@ export interface RunningApp {
 
 /** Applications Shell.AppSystem considers running, including unpinned apps.
  * Provided by window-monitor-pro because GNOME blocks Shell.Introspection for
- * ordinary processes. */
+ * ordinary processes.
+ *
+ * ONE persistent bus connection, shared by the poll and the signal
+ * subscription — creating a fresh sessionBus per call (the old shape) churns
+ * sockets/reconnect machinery every 5 s while the dock is open. */
+let sharedBus: ReturnType<typeof dbus.sessionBus> | null = null;
+
+/** The extension's D-Bus surface we consume: the RunningApps method plus the
+ * RunningAppsChanged signal subscription. */
+interface RunningAppsIface {
+  RunningApps(): Promise<string>;
+  on(event: 'RunningAppsChanged', cb: () => void): void;
+  removeListener(event: 'RunningAppsChanged', cb: () => void): void;
+}
+let sharedIface: RunningAppsIface | null = null;
+
+async function runningAppsIface(): Promise<RunningAppsIface> {
+  if (sharedIface) return sharedIface;
+  const bus = dbus.sessionBus();
+  const obj = await bus.getProxyObject('org.gnome.Shell', '/org/gnome/Shell/Extensions/WindowMonitorPro');
+  sharedBus = bus;
+  sharedIface = obj.getInterface('org.gnome.Shell.Extensions.WindowMonitorPro') as unknown as RunningAppsIface;
+  bus.on('error', () => {
+    sharedIface = null;
+    try { sharedBus?.disconnect(); } catch { /* already down */ }
+    sharedBus = null;
+  });
+  return sharedIface;
+}
+
 export async function getRunningApps(): Promise<RunningApp[]> {
   try {
-    const bus = dbus.sessionBus();
-    const obj = await bus.getProxyObject('org.gnome.Shell', '/org/gnome/Shell/Extensions/WindowMonitorPro');
-    const iface = obj.getInterface('org.gnome.Shell.Extensions.WindowMonitorPro');
+    const iface = await runningAppsIface();
     const apps = await iface.RunningApps() as unknown as string;
     const parsed = JSON.parse(apps) as RunningApp[];
-    bus.disconnect();
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+/** Subscribe to the extension's RunningAppsChanged signal (fired by Shell's
+ * app-state-changed). Returns an unsubscribe function; a no-op when GNOME is
+ * unavailable (the caller then keeps its safety poll). */
+export async function onRunningAppsChanged(callback: () => void): Promise<() => void> {
+  try {
+    const iface = await runningAppsIface();
+    iface.on('RunningAppsChanged', callback);
+    return () => { try { iface.removeListener('RunningAppsChanged', callback); } catch { /* bus already down */ } };
+  } catch {
+    return () => {};
+  }
+}
+
+/** Event-driven favorites watching: `gsettings monitor` emits a line on every
+ * change of favorite-apps. One long-lived process while the dock is open — a
+ * dock reorder in GNOME lands on the bar immediately instead of at the next
+ * favorites poll tick. Returns a stop function; no-op without gsettings. */
+export function watchFavoriteApps(onChange: () => void): () => void {
+  try {
+    const proc = spawn('gsettings', ['monitor', 'org.gnome.shell', 'favorite-apps'], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    proc.stdout?.on('data', onChange);
+    proc.on('error', () => {}); // gsettings unavailable — caller keeps the poll
+    return () => { proc.kill(); };
+  } catch {
+    return () => {};
   }
 }
 
