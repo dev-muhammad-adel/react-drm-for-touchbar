@@ -23,13 +23,24 @@ const debugLastWidth = new WeakMap<object, number>();
 
 // Node has no requestAnimationFrame — drive react-spring's frame loop with a
 // timer. rafz only schedules while animations are active, so this idles free.
-// 30 fps matches the display's flush-rate cap (MIN_FLUSH_MS in renderer.ts):
-// a 60 fps spring tick computes frames the flush throttle discards anyway —
-// pure waste on continuous animations (EQ bars, the dock's breathing dot).
+// Default 30 fps until the renderer retargets it to the display's flush rate.
 Globals.assign({
   requestAnimationFrame: (cb: (t: number) => void) =>
     setTimeout(() => cb(performance.now()), 33) as unknown as number,
 });
+
+/** Match the spring tick to the display's actual flush rate (renderer.ts calls
+ * this with RenderOptions.flushFps): a faster tick than the flush cap computes
+ * frames that get discarded anyway (wasted CPU on continuous animations), a
+ * slower one would needlessly limit animation smoothness — e.g. T2 flushes at
+ * 60 fps and keeps its 60 fps animations this way, T1 stays at its 30 fps cap. */
+export function setAnimationFrameRate(fps: number): void {
+  const ms = Math.max(8, Math.round(1000 / Math.max(1, fps)));
+  Globals.assign({
+    requestAnimationFrame: (cb: (t: number) => void) =>
+      setTimeout(() => cb(performance.now()), ms) as unknown as number,
+  });
+}
 
 // Animated components write each frame straight into the scene node (the host
 // instance behind the forwarded ref) and request a repaint — no React render.
