@@ -23,9 +23,12 @@ const debugLastWidth = new WeakMap<object, number>();
 
 // Node has no requestAnimationFrame — drive react-spring's frame loop with a
 // timer. rafz only schedules while animations are active, so this idles free.
+// 30 fps matches the display's flush-rate cap (MIN_FLUSH_MS in renderer.ts):
+// a 60 fps spring tick computes frames the flush throttle discards anyway —
+// pure waste on continuous animations (EQ bars, the dock's breathing dot).
 Globals.assign({
   requestAnimationFrame: (cb: (t: number) => void) =>
-    setTimeout(() => cb(performance.now()), 16) as unknown as number,
+    setTimeout(() => cb(performance.now()), 33) as unknown as number,
 });
 
 // Animated components write each frame straight into the scene node (the host
