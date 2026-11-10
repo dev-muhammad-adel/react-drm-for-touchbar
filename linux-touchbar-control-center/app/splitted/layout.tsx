@@ -418,15 +418,16 @@ export default function SplittedLayout({ width, height, children, path }: {
 
           }}>
             <Button
-              width={40}
+              width={60}
               color={"#000"}
               activeColor={"#000"}
               onClick={() => setMediaExpanded(false)}
               style={{marginHorizontal:20, alignItems: 'center', justifyContent: 'center', borderTopLeftRadius: 10, borderBottomLeftRadius: 10 }}
             >
-              <MdCancel style={{ width: ICON_SIZE, height: ICON_SIZE }} fill={SELECTED_THEME.textPrimary} stroke="none" />
+              {/* Same close-circle size as the BackButton everywhere else. */}
+              <MdCancel style={{ width: 48, height: 48 }} fill={SELECTED_THEME.textPrimary} stroke="none" />
             </Button>
-            <MediaToolPanel  iconSize={30} />
+            <MediaToolPanel  iconSize={40} />
           </motion.Box>  
 
 
