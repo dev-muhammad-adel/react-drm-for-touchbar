@@ -1308,6 +1308,27 @@ install_t1_kernel_modules() {
 
 
 
+# dkms only regenerates the initramfs on some setups. An image that still
+# contains apple_ibridge keeps alias-loading it during early boot (before
+# /etc/modprobe.d applies), which restarts the config-1/2 reset loop on the
+# next reboot. Rebuild explicitly so the omit_drivers list takes effect now.
+regenerate_initramfs_t1() {
+  local kver
+  kver="$(uname -r)"
+  if command -v dracut >/dev/null 2>&1 && [[ -d /etc/dracut.conf.d ]]; then
+    info "Rebuilding the dracut initramfs without the config-1 firmware drivers"
+    privileged dracut --force "/boot/initrd.img-$kver" "$kver" ||
+      warn "dracut failed — apple_ibridge may come back at the next boot"
+  elif command -v update-initramfs >/dev/null 2>&1; then
+    privileged update-initramfs -u -k "$kver" ||
+      warn "update-initramfs failed — apple_ibridge may come back at the next boot"
+  else
+    warn "no initramfs generator found — apple_ibridge may come back at the next boot"
+  fi
+}
+
+
+
 install_udev_rules() {
 
   info "Installing udev rules"
@@ -1336,12 +1357,25 @@ install_udev_rules() {
 
   if [[ "$INSTALL_PROFILE" == t1 ]]; then
     info "Configuring the T1 display-mode kernel stack"
+    # These must be in place BEFORE the dkms build: dkms can regenerate the
+    # initramfs, and an image built without them alias-loads apple_ibridge
+    # during early boot, where its config-1 bindings fight cfgsel's
+    # display-mode switch in an endless config-1/2 reset loop.
+    privileged install -m 0644 "$REPO_ROOT/system/react-drm-t1-blacklist.conf" /etc/modprobe.d/react-drm-t1.conf
+    privileged install -d /etc/dracut.conf.d
+    privileged install -m 0644 "$REPO_ROOT/system/react-drm-t1-dracut.conf" /etc/dracut.conf.d/60-react-drm-t1.conf
     install_t1_kernel_modules
     privileged install -m 0644 "$REPO_ROOT/system/react-drm-t1-modules.conf" /etc/modules-load.d/react-drm-t1.conf
-    privileged install -m 0644 "$REPO_ROOT/system/react-drm-t1-blacklist.conf" /etc/modprobe.d/react-drm-t1.conf
+    # Legacy standalone setups loaded the config-1 firmware driver by name at
+    # boot; a name load bypasses the modprobe blacklist above.
+    if [[ -f /etc/modules-load.d/apple-touchbar.conf ]] && grep -qi 'apple-ibridge' /etc/modules-load.d/apple-touchbar.conf 2>/dev/null; then
+      info "Removing legacy apple-ibridge autoload (/etc/modules-load.d/apple-touchbar.conf)"
+      privileged rm -f /etc/modules-load.d/apple-touchbar.conf
+    fi
     privileged modprobe -r apple_touchbar apple_ibridge 2>/dev/null || true
     privileged modprobe -a apple_dfr_cfgsel appletbdrm ||
       fail "failed to load the T1 kernel stack"
+    regenerate_initramfs_t1
   fi
 
 }
