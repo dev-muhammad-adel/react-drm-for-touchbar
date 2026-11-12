@@ -13,6 +13,96 @@ The control center provides:
 - Audio visualization, a focus timer and small games
 - Automatic detach and re-attach during suspend and resume
 
+## Screenshots
+
+Every image below is a real frame produced by the same Cairo renderer that
+draws the physical Touch Bar — captured pixel-exact from the preview server's
+framebuffer (no DOM re-render, no upscaling). Layers were switched live via
+touch input, real window focus and MPRIS on a niri session.
+
+### Home layer
+
+Default panel with the right-side control cluster:
+
+![Home layer](docs/screenshots/home-default.png)
+
+Media playing — progress bar with spinning vinyl album art, transport keys and
+the player's brand accent (Chrome blue):
+
+![Media playing](docs/screenshots/home-media-playing.png)
+
+### Media controls
+
+The full media tool strip (brightness, mic mute, search, keyboard
+backlight, transport, volume, app grid), expanded from the home chevron:
+
+![Media tools](docs/screenshots/media-tools-expanded.png)
+
+Volume slider (tap the volume button, or long-press-and-drag from home for a
+live drag):
+
+![Volume slider](docs/screenshots/volume-slider.png)
+
+Keyboard backlight and display brightness sliders, with auto-hide:
+
+![Brightness sliders](docs/screenshots/brightness-slider.png)
+
+### System bar
+
+Focus timer, RAM, CPU, temperature, network graph, battery and clock with
+live values:
+
+![System bar](docs/screenshots/systembar.png)
+
+### Layers
+
+Fn-key layer (long-press Fn, or hold):
+
+![Fn keys](docs/screenshots/fnkeys.png)
+
+App dock (long-press Right Alt / double-tap, or tap the dock button):
+
+![Dock](docs/screenshots/dock.png)
+
+Launcher — installed apps in a horizontal, alphabet-scrollable row:
+
+![Launcher](docs/screenshots/launcher.png)
+
+Lock screen — quick controls stay reachable while the session is locked:
+
+![Lock screen](docs/screenshots/lock.png)
+
+Custom layer — user widgets (clock, separator, active window, caps lock,
+clipboard) dropped in from the Config GUI:
+
+![Custom layer](docs/screenshots/custom-layer.png)
+
+### Application-aware panels
+
+The left half follows the focused window. A browser:
+
+![Browser panel](docs/screenshots/browser-panel.png)
+
+Konsole — open sessions, tab navigation and command suggestions:
+
+![Konsole panel](docs/screenshots/konsole-panel.png)
+
+Dolphin — navigation, new folder, delete and quick-jump places:
+
+![Dolphin panel](docs/screenshots/dolphin-panel.png)
+
+Gwenview — image navigation, zoom, rotate and delete:
+
+![Gwenview panel](docs/screenshots/gwenview-panel.png)
+
+VS Code — run, debug-stepping, undo/redo and command keys:
+
+![VS Code panel](docs/screenshots/vscode-panel.png)
+
+Unmatched windows fall back to the default panel:
+
+![Default panel](docs/screenshots/app-panel-default.png)
+
 ## Installation
 
 react-drm replaces the existing Touch Bar interface. `tiny-dfr`,
