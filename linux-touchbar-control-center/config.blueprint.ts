@@ -254,9 +254,9 @@ export type DockApp = {
  * the dock falls back to the react-icons `icon` glyph.
  */
 export const DOCK = {
-  iconSize:  48,    // px — icon glyph size
-  slot:      54,    // px — square tap target per app
-  gap:       2,    // px — space between icons
+  iconSize:  48,    // px — visible icon glyph size
+  slot:      70,    // px — square tap target; larger than the glyph for touch
+  gap:       8,    // px — physical space between touch targets
   lift:      10,    // px — how far an icon rises while pressed (Plank bounce)
   icons: {
     // App icon theme resolution (used by the dock, and anything else that
@@ -308,7 +308,9 @@ export const FN_LAYER = {
   //   'hold'       — momentary: the layer shows only while Fn is held (original).
   //   'toggle'     — long-press Fn to switch to it, long-press again to return.
   //   'double-tap' — double-tap Fn to switch to it, double-tap again to return.
-  mode:     'double-tap' as 'hold' | 'toggle' | 'double-tap',
+  // Apple's Fn key emits short down/up pairs on some models; hold is the most
+  // predictable default and matches macOS's direct Fn behavior most closely.
+  mode:     'hold' as 'hold' | 'toggle' | 'double-tap',
   longMs:   350,   // long-press duration when mode === 'toggle'
   doubleMs: 350,   // max gap between taps when mode === 'double-tap'
 };

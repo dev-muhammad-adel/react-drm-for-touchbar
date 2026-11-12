@@ -35,6 +35,14 @@ export function launch(command: string, args: string[] = []): void {
       ['-u', sudoUser, '--', 'env', ...env, command, ...args],
       { detached: true, stdio: 'ignore' },
     );
+  } else if (process.env.INVOCATION_ID) {
+    // Inside the react-drm service, a plain child (even detached) initially
+    // joins its cgroup. systemd then waits for launched GUI apps during
+    // stop/restart. Give them their own transient scope instead.
+    child = spawn('systemd-run', ['--user', '--scope', '--quiet', command, ...args], {
+      detached: true,
+      stdio: 'ignore',
+    });
   } else {
     child = spawn(command, args, { detached: true, stdio: 'ignore' });
   }

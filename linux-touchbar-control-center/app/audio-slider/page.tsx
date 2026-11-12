@@ -8,7 +8,7 @@ import { SliderTrack } from '@/components/SliderTrack';
 import { useLayers } from '@/layers';
 import { createLogger } from 'react-drm';
 import { useVolumeControl, readVolume, TRACK_W, clampVolume } from '@/lib/hooks/useVolume';
-import { PW_ENV } from '@/lib/services/volume';
+import { PW_ENV, getVolumeLastWriteAt } from '@/lib/services/volume';
 import { audioTrackAnchorAtom, ANCHOR_TRACK_W } from '@/store/audioTrackAnchor';
 import { SELECTED_THEME } from '@/lib/theme';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
@@ -63,7 +63,10 @@ export default function AudioSliderLayer({ width, height }: { width: number; hei
     const proc = spawn('pactl', ['subscribe'], { env: PW_ENV });
 
     proc.stdout?.on('data', (chunk: Buffer) => {
-      if (chunk.toString().includes("'change' on sink") && !drag.current) {
+      // Settle guard: don't adopt our own write's readback while the write
+      // chain is still settling (1 s after the last slider write).
+      if (chunk.toString().includes("'change' on sink")
+          && !drag.current && Date.now() - getVolumeLastWriteAt() > 1000) {
         syncVolume(readVolume());
       }
     });

@@ -10,6 +10,7 @@
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 
 const DBUS_IFACE = `
 <node>
@@ -17,6 +18,12 @@ const DBUS_IFACE = `
     <method name="List">
       <arg type="s" direction="out" name="win"/>
     </method>
+    <method name="RunningApps">
+      <arg type="s" direction="out" name="apps"/>
+    </method>
+    <signal name="RunningAppsChanged">
+      <arg type="s" name="apps"/>
+    </signal>
     <method name="FocusTitle">
       <arg type="s" direction="out"/>
     </method>
@@ -53,12 +60,21 @@ export default class WindowMonitorPro {
       'notify::focus-window',
       () => this._emitFocusChanged(),
     );
+    this._appSystem = Shell.AppSystem.get_default();
+    this._appStateChangedId = this._appSystem.connect(
+      'app-state-changed',
+      () => this._emitRunningAppsChanged(),
+    );
   }
 
   disable() {
     if (this._focusChangedId) {
       global.display.disconnect(this._focusChangedId);
       this._focusChangedId = null;
+    }
+    if (this._appSystem && this._appStateChangedId) {
+      this._appSystem.disconnect(this._appStateChangedId);
+      this._appStateChangedId = null;
     }
     this._dbus?.flush();
     this._dbus?.unexport();
@@ -97,6 +113,24 @@ export default class WindowMonitorPro {
       };
     });
     return JSON.stringify(windows);
+  }
+
+  RunningApps() {
+    // Same application source Ubuntu Dock uses: running Shell.App entries,
+    // including unpinned apps that are currently open.
+    const apps = Shell.AppSystem.get_default().get_running().map(app => ({
+      id: app.get_id(),
+      name: app.get_name() || '',
+      icon: app.get_icon_name() || '',
+    }));
+    return JSON.stringify(apps);
+  }
+
+  _emitRunningAppsChanged() {
+    this._dbus.emit_signal(
+      'RunningAppsChanged',
+      new GLib.Variant('(s)', [this.RunningApps()]),
+    );
   }
 
   FocusTitle() {

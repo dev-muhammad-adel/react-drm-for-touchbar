@@ -2,7 +2,7 @@
 
 react-drm provides a React renderer for drawing directly to Linux DRM/KMS
 displays using libdrm and Cairo. This repository includes a control center
-that replaces the standard Touch Bar interface on T2 MacBooks running Linux.
+that replaces the standard Touch Bar interface on T1 and T2 MacBooks running Linux.
 
 The control center provides:
 
@@ -40,6 +40,23 @@ It can also update an existing installation. Update the local source using the
 same method used to obtain it, then run the updated `install.sh` again. The
 installer does not download source updates itself.
 
+The default hardware profile is `t2linux`; `kait2en` selects the KaiT2en T2
+fork. For a T1 MacBook Pro (`05ac:8600`), use:
+
+```sh
+./install.sh install t1
+```
+
+The T1 profile bundles the T1-capable `appletbdrm` and `apple_dfr_cfgsel`
+sources and installs both through DKMS; the unmodified in-tree T2 driver is not
+sufficient. The digitizer works through the stock hidraw interface, without a
+`hid-multitouch` patch. The installer persists both T1 modules and disables the
+incompatible config-1 `apple_ibridge`/`apple_touchbar` drivers until uninstall.
+Since cfgsel owns T1 enumeration, the T1 profile keeps display mode active on
+logout instead of attempting an unsafe late config switch; the last rendered
+frame remains visible. Uninstall removes this module configuration and restores
+the firmware strip.
+
 Supported installer environments:
 
 - Fedora 44 or newer
@@ -75,7 +92,8 @@ Run the separate uninstaller from the repository root:
 ```
 
 It stops and removes the react-drm user service, restores the firmware Touch
-Bar interface and removes the react-drm udev rules. Project files, npm
+Bar interface on T2 and removes the react-drm udev rules. On T1, display mode
+stays active as described above. Project files, npm
 dependencies, system packages and `video`/`input` group memberships are left
 unchanged.
 
@@ -92,8 +110,8 @@ names differ between distributions, so install the equivalents of:
 - systemd/logind and a systemd user session for suspend handling and the
   supplied service
 
-The kernel must provide `appletbdrm` and `hid-appletb-bl`. Verify both before
-continuing:
+For the default T2 profile, the kernel must provide `appletbdrm` and
+`hid-appletb-bl`. Verify both before continuing:
 
 ```sh
 modinfo appletbdrm

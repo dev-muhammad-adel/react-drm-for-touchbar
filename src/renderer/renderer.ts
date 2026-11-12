@@ -4,6 +4,7 @@ import { Worker } from 'worker_threads';
 import React from 'react';
 import { reconciler } from './reconciler';
 import { setRepaint } from './invalidate';
+import { setAnimationFrameRate } from '../spring';
 import { serializeScene, frameSignature, damageRects, toBinaryBuffer } from '../scene/serialize';
 import type { DrawCommand } from '../scene/serialize';
 import { computeLayoutYoga, loadYogaEngine, yogaReady } from '../scene/layout-yoga';
@@ -659,6 +660,10 @@ export function render(
   // single trailing flush, so the latest frame still lands without overrunning
   // the device's handshake.
   const MIN_FLUSH_MS = 1000 / (options.flushFps ?? 30); // flush-rate cap (default 30fps)
+  // Spring ticks follow the same rate: faster ticks would compute frames the
+  // flush cap discards (wasted CPU), slower ones would limit animation
+  // smoothness on hardware that flushes faster (T2 at 60fps).
+  setAnimationFrameRate(options.flushFps ?? 30);
   let lastFlushAt = 0;
   let pendingFlush: ReturnType<typeof setTimeout> | null = null;
 

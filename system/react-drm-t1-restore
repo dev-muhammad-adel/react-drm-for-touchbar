@@ -1,0 +1,14 @@
+#!/bin/sh
+# Root-only uninstall recovery: return a T1 iBridge to the firmware strip.
+set -eu
+modprobe -r apple_dfr_cfgsel appletbdrm 2>/dev/null || true
+for dev in /sys/bus/usb/devices/*; do
+    [ -r "$dev/idVendor" ] && [ -r "$dev/idProduct" ] || continue
+    [ "$(cat "$dev/idVendor")" = 05ac ] || continue
+    [ "$(cat "$dev/idProduct")" = 8600 ] || continue
+    echo 0 > "$dev/authorized"
+    sleep 2
+    echo 1 > "$dev/authorized"
+done
+sleep 2
+modprobe -a apple_ibridge apple_touchbar

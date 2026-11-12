@@ -42,4 +42,4 @@ coverage/
 # Local notes
 NOTES.md
 systembar-suggestions.md
-config-gui-python/__pycache__/
+__pycache__/

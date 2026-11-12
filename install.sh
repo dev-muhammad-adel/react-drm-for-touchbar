@@ -34,9 +34,9 @@ REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || print
 
 readonly TOUCHBAR_VENDOR_ID="05ac"
 
-readonly TOUCHBAR_PRODUCT_ID="8302"
+TOUCHBAR_PRODUCT_ID=""
 
-readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus)
+readonly REQUIRED_TINY_DAEMONS=(tiny-dfr mac-touchbar-plus tbxd touchbarx)
 
 INSTALL_PROFILE="t2linux"
 TOUCHBAR_DRM_DRIVER=""
@@ -399,7 +399,7 @@ detect_touchbar_hardware() {
 
   done
 
-  [[ $found -eq 1 ]] || fail "Touch Bar hardware (05ac:8302) not found"
+  [[ $found -eq 1 ]] || fail "Touch Bar hardware ($TOUCHBAR_VENDOR_ID:$TOUCHBAR_PRODUCT_ID) not found"
 
   for card in /sys/class/drm/card*; do
 
@@ -479,6 +479,12 @@ check_deploy_files() {
 
   done
 
+  if [[ "$INSTALL_PROFILE" == t1 ]]; then
+    for file in system/react-drm-t1.conf system/react-drm-t1-modules.conf system/react-drm-t1-blacklist.conf system/t1-touchbar-display/Makefile system/t1-touchbar-display/dkms.conf system/t1-touchbar-display/appletbdrm.c system/t1-touchbar-display/apple_dfr_cfgsel.c system/t1-touchbar-display/apple_ibridge.c system/t1-touchbar-display/apple-ibridge.h system/t1-touchbar-display/hid-ids.h; do
+      [[ -r "$REPO_ROOT/$file" ]] || fail "required T1 deployment file is missing: $file"
+    done
+  fi
+
   [[ -x "$REPO_ROOT/system/react-drm-tb-detach" ]] ||
 
     fail "required deployment helper is not executable: system/react-drm-tb-detach"
@@ -501,12 +507,19 @@ configure_install_profile() {
 
   case "$INSTALL_PROFILE" in
     t2linux)
+      TOUCHBAR_PRODUCT_ID="8302"
       TOUCHBAR_DRM_DRIVER="appletbdrm"
       REQUIRED_KERNEL_MODULES=(appletbdrm hid-appletb-bl)
       ;;
     kait2en)
+      TOUCHBAR_PRODUCT_ID="8302"
       TOUCHBAR_DRM_DRIVER="t2bdrm"
       REQUIRED_KERNEL_MODULES=(t2bdrm t2touchbar_bl)
+      ;;
+    t1)
+      TOUCHBAR_PRODUCT_ID="8600"
+      TOUCHBAR_DRM_DRIVER="appletbdrm"
+      REQUIRED_KERNEL_MODULES=(appletbdrm)
       ;;
     *)
       fail "unsupported install profile: $INSTALL_PROFILE"
@@ -522,7 +535,8 @@ detect_kernel_modules() {
 
   for module in "${REQUIRED_KERNEL_MODULES[@]}"; do
 
-    modinfo "$module" >/dev/null 2>&1 || ANALYSIS_MISSING_MODULES+=("$module")
+    modinfo "$module" >/dev/null 2>&1 || [[ -d "/sys/module/$module" ]] ||
+      ANALYSIS_MISSING_MODULES+=("$module")
 
   done
 
@@ -660,6 +674,14 @@ detect_package_sets() {
 
   esac
 
+  if [[ "$INSTALL_PROFILE" == t1 ]]; then
+    case "$DISTRO_FAMILY" in
+      fedora) NEEDED_BUILD_PACKAGES+=(dkms kernel-devel kernel-headers) ;;
+      debian) NEEDED_BUILD_PACKAGES+=(dkms "linux-headers-$(uname -r)") ;;
+      arch) NEEDED_BUILD_PACKAGES+=(dkms linux-headers) ;;
+    esac
+  fi
+
   if [[ "$WINDOW_BACKEND" == xorg ]]; then
 
     case "$DISTRO_FAMILY" in
@@ -711,15 +733,18 @@ check_node_version() {
     dnf) return ;;
 
     apt)
-
-      version=$(apt-cache policy nodejs | awk '/Candidate:/ { print $2; exit }')
-
+      # An existing Node.js on PATH (nvm, volta, …) is just as good as the
+      # distro package — nvm users have no apt candidate for nodejs at all
+      # (their node lives outside dpkg). Only insist on the apt candidate
+      # when no node exists yet.
+      if command -v node >/dev/null 2>&1; then
+        version=$(node -p 'process.versions.node' 2>/dev/null || true)
+      else
+        version=$(apt-cache policy nodejs | awk '/Candidate:/ { print $2; exit }')
+      fi
       [[ -n "$version" && "$version" != "(none)" ]] || fail "no Node.js candidate is available"
-
       dpkg --compare-versions "$version" ge 20.19.0 ||
-
         fail "the available Node.js version ($version) is too old; react-drm requires Node.js 20.19.0 or newer"
-
       ;;
 
     pacman)
@@ -959,7 +984,7 @@ analyze() {
 
   detect_kernel_modules
 
-  [[ ${#ANALYSIS_MISSING_MODULES[@]} -eq 0 ]] || fail "missing T2 kernel modules: ${ANALYSIS_MISSING_MODULES[*]}"
+  [[ ${#ANALYSIS_MISSING_MODULES[@]} -eq 0 ]] || fail "missing kernel modules for $INSTALL_PROFILE: ${ANALYSIS_MISSING_MODULES[*]}"
 
   check_deploy_files
 
@@ -1164,6 +1189,10 @@ seed_distro_env() {
 
   local example="$REPO_ROOT/.env.example.${INSTALL_PROFILE}"
 
+  if [[ "$INSTALL_PROFILE" == t1 ]]; then
+    example="$REPO_ROOT/system/react-drm-t1.conf"
+  fi
+
   local live="$REPO_ROOT/.env"
 
   if [[ -e "$live" ]]; then
@@ -1264,6 +1293,21 @@ configure_user_groups() {
 
 
 
+install_t1_kernel_modules() {
+  local src=/usr/src/react-drm-t1-1.0
+
+  info "Building the T1 kernel modules with DKMS"
+  privileged dkms remove -m react-drm-t1 -v 1.0 --all >/dev/null 2>&1 || true
+  privileged install -d "$src"
+  privileged install -m 0644 "$REPO_ROOT/system/t1-touchbar-display/"{Makefile,dkms.conf,appletbdrm.c,apple_dfr_cfgsel.c,apple_ibridge.c,apple-ibridge.h,hid-ids.h} "$src/"
+  privileged dkms add -m react-drm-t1 -v 1.0
+  privileged dkms build -m react-drm-t1 -v 1.0
+  privileged dkms install -m react-drm-t1 -v 1.0
+  privileged depmod -a
+}
+
+
+
 install_udev_rules() {
 
   info "Installing udev rules"
@@ -1289,6 +1333,16 @@ install_udev_rules() {
   privileged modprobe uinput || fail "failed to load the uinput kernel module (needed for Touch Bar key injection)"
 
   privileged install -m 0644 "$REPO_ROOT/system/react-drm-uinput.conf" /etc/modules-load.d/react-drm-uinput.conf
+
+  if [[ "$INSTALL_PROFILE" == t1 ]]; then
+    info "Configuring the T1 display-mode kernel stack"
+    install_t1_kernel_modules
+    privileged install -m 0644 "$REPO_ROOT/system/react-drm-t1-modules.conf" /etc/modules-load.d/react-drm-t1.conf
+    privileged install -m 0644 "$REPO_ROOT/system/react-drm-t1-blacklist.conf" /etc/modprobe.d/react-drm-t1.conf
+    privileged modprobe -r apple_touchbar apple_ibridge 2>/dev/null || true
+    privileged modprobe -a apple_dfr_cfgsel appletbdrm ||
+      fail "failed to load the T1 kernel stack"
+  fi
 
 }
 
@@ -1420,12 +1474,12 @@ phase_deploy() {
 
 select_install_profile() {
   case "${1:-t2linux}" in
-    t2linux|kait2en)
+    t2linux|kait2en|t1)
       INSTALL_PROFILE="${1:-t2linux}"
       configure_install_profile
       ;;
     *)
-      fail "unsupported install profile: $1 (expected t2linux or kait2en)"
+      fail "unsupported install profile: $1 (expected t2linux, kait2en or t1)"
       ;;
   esac
 }
@@ -1453,7 +1507,7 @@ main() {
       phase_purge
       ;;
     *)
-      printf 'usage: %s [install|analyze|purge] [t2linux|kait2en]\n' "${0##*/}" >&2
+      printf 'usage: %s [install|analyze|purge] [t2linux|kait2en|t1]\n' "${0##*/}" >&2
       return 2
       ;;
   esac

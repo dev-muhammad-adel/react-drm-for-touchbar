@@ -1,4 +1,9 @@
 #include "touch_input.h"
+#include <algorithm>
+#include <cerrno>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <fcntl.h>
 #include <poll.h>
 #include <unistd.h>
@@ -25,6 +30,8 @@ TouchReader::TouchReader(const Napi::CallbackInfo& info)
   std::string path = "/dev/input/event7";
   if (info.Length() > 0 && info[0].IsString())
     path = info[0].As<Napi::String>().Utf8Value();
+  // T1 in display mode uses hidraw reports; T2/Apple Silicon use evdev MT.
+  raw_t1_ = path.find("/dev/hidraw") == 0;
   fd_ = open(path.c_str(), O_RDONLY | O_CLOEXEC);
   if (fd_ < 0)
     Napi::Error::New(info.Env(), "Cannot open touch device: " + path)
@@ -113,11 +120,44 @@ void TouchReader::ReadLoop(int fd, int cancel_rfd) {
   bool device_error = false;
 
   while (running_) {
-    int ret = poll(pfds, 2, -1);
-    if (ret <= 0) { device_error = true; break; }
+    // T1 has no explicit lift report: 70 ms without a position report is UP.
+    // This keeps taps responsive without confusing a stationary finger for a
+    // permanent hold. While idle, both protocols sleep without a timeout.
+    int ret = poll(pfds, 2, raw_t1_ && touch_active ? 70 : -1);
+    if (ret < 0) {
+      if (errno == EINTR) continue;
+      device_error = true;
+      break;
+    }
+    if (ret == 0) {
+      touch_active = false;
+      emit(2, cur_x, cur_y);
+      continue;
+    }
     if (pfds[1].revents & POLLIN) break; // cancel pipe triggered by DoStop()
     if (pfds[0].revents & (POLLHUP | POLLERR)) { device_error = true; break; }
     if (!(pfds[0].revents & POLLIN)) continue;
+
+    if (raw_t1_) {
+      uint8_t report[52];
+      ssize_t n = read(fd, report, sizeof(report));
+      if (n < 0 && errno == EINTR) continue;
+      if (n != (ssize_t)sizeof(report)) { device_error = true; break; }
+
+      // T1 config-2 interface 2: little-endian float32 at offset 0, spanning
+      // approximately 0.5..1.0 from the left to the right edge. Normalize to
+      // the same 0..32767 range used by the evdev MT path; Y is centered.
+      float position;
+      std::memcpy(&position, report, sizeof(position));
+      if (!std::isfinite(position)) continue;
+      float normalized = (position - 0.5f) * 2.0f;
+      normalized = std::max(0.0f, std::min(1.0f, normalized));
+      cur_x = (int32_t)std::lround(normalized * 32767.0f);
+      cur_y = 64;
+      emit(touch_active ? 1 : 0, cur_x, cur_y);
+      touch_active = true;
+      continue;
+    }
 
     ssize_t n = read(fd, &ev, sizeof(ev));
     if (n != (ssize_t)sizeof(ev)) { device_error = true; break; }

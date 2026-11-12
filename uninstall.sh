@@ -18,6 +18,8 @@ SERVICE_FILE="$HOME/.config/systemd/user/react-drm.service"
 UDEV_RULE="/etc/udev/rules.d/99-react-drm.rules"
 LEGACY_UDEV_RULE="/etc/udev/rules.d/99-react-drm-uinput.rules"
 UINPUT_MODULES_LOAD_FILE="/etc/modules-load.d/react-drm-uinput.conf"
+T1_MODULES_LOAD_FILE="/etc/modules-load.d/react-drm-t1.conf"
+T1_MODPROBE_FILE="/etc/modprobe.d/react-drm-t1.conf"
 CONFIG_GUI_LAUNCHER="$HOME/.local/share/applications/react-drm-config-gui.desktop"
 
 GUI_MODE=0
@@ -124,7 +126,7 @@ remove_service() {
   control_center_running &&
     fail "a manually started react-drm control center is still running"
 
-  info "Restoring the firmware Touch Bar interface"
+  info "Restoring the firmware Touch Bar interface where supported"
   [[ -x "$SCRIPT_DIR/system/react-drm-tb-detach" ]] ||
     fail "system/react-drm-tb-detach is missing or not executable"
   "$SCRIPT_DIR/system/react-drm-tb-detach" ||
@@ -134,10 +136,21 @@ remove_service() {
   systemctl --user daemon-reload
 }
 
+restore_t1_firmware() {
+  [[ -e "$T1_MODPROBE_FILE" ]] || return 0
+  info "Restoring the T1 firmware Touch Bar interface"
+  [[ -x "$SCRIPT_DIR/system/react-drm-t1-restore" ]] ||
+    fail "system/react-drm-t1-restore is missing or not executable"
+  privileged "$SCRIPT_DIR/system/react-drm-t1-restore"
+  privileged dkms remove -m react-drm-t1 -v 1.0 --all >/dev/null 2>&1 || true
+  privileged rm -rf /usr/src/react-drm-t1-1.0
+  privileged depmod -a
+}
+
 remove_udev_rules() {
   info "Removing react-drm udev rules"
   privileged rm -f "$UDEV_RULE" "$LEGACY_UDEV_RULE"
-  privileged rm -f "$UINPUT_MODULES_LOAD_FILE"
+  privileged rm -f "$UINPUT_MODULES_LOAD_FILE" "$T1_MODULES_LOAD_FILE" "$T1_MODPROBE_FILE"
   privileged udevadm control --reload
   privileged udevadm trigger --action=add --subsystem-match=usb --subsystem-match=backlight
   privileged udevadm trigger --action=add --subsystem-match=misc --sysname-match=uinput
@@ -164,6 +177,7 @@ main() {
       gui_phase uninstall start
       confirm_uninstall
       remove_service
+      restore_t1_firmware
       remove_udev_rules
       remove_config_gui_launcher
       info "Uninstallation completed successfully"

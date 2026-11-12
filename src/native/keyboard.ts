@@ -2,6 +2,7 @@ import { loadAddon } from './load-addon';
 import { createLogger } from '../logger';
 
 const log = createLogger('keyboard');
+const logKeyEvents = process.env.REACT_DRM_LOG_LEVEL === 'debug';
 
 interface KeyboardAddon {
   KeyboardReader: new (devicePath: string) => NativeKeyboardReader;
@@ -101,6 +102,7 @@ export class KeyboardReader {
         this.scheduleReconnect(RECONNECT_DELAY_MS);
         return;
       }
+      if (logKeyEvents) log.debug(`key code=${code} value=${value}`);
       // Guard each listener: this runs inside the native ThreadSafeFunction
       // callback, so an uncaught throw here propagates to native as a fatal
       // uncaught exception and aborts the whole process. Contain + log instead.

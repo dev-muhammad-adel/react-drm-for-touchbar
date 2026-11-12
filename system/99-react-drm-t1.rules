@@ -1,0 +1,19 @@
+# Touch Bar device setup for react-drm — Apple T1/iBridge (05ac:8600).
+# Requires a T1-capable appletbdrm and the apple_dfr_cfgsel module.
+
+# Keep the display and optional evdev digitizer away from the main compositor.
+SUBSYSTEM=="drm", KERNEL=="card*", DRIVERS=="appletbdrm", TAG-="master-of-seat", ENV{ID_SEAT}="seat-touchbar", GROUP="video", MODE="0660"
+SUBSYSTEM=="input", ATTR{name}=="Apple Inc. iBridge Touchpad", ENV{ID_SEAT}="seat-touchbar"
+
+# With hid-generic (the stock T1 setup), the digitizer is a hidraw device on
+# config-2 interface 2 rather than an evdev multitouch device.
+ACTION=="add", SUBSYSTEM=="hidraw", ENV{ID_VENDOR_ID}=="05ac", ENV{ID_MODEL_ID}=="8600", ENV{ID_USB_INTERFACE_NUM}=="02", GROUP="input", MODE="0660"
+
+# The in-app T1 resume path re-authorizes the iBridge so cfgsel can select
+# display mode at enumeration time. Never issue a live 1->2 configuration write.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="05ac", ATTR{idProduct}=="8600", GROUP="video", MODE="0660", RUN+="/bin/chown root:video /sys%p/authorized", RUN+="/bin/chmod g+w /sys%p/authorized", ATTR{power/control}="on"
+
+# Host panel brightness on the 2016/2017 MacBook Pro.
+ACTION=="add", SUBSYSTEM=="backlight", KERNEL=="gmux_backlight", RUN+="/bin/chown root:video /sys/class/backlight/%k/brightness", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
+
+SUBSYSTEM=="misc", KERNEL=="uinput", GROUP="input", MODE="0660"

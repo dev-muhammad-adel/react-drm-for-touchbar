@@ -1,18 +1,18 @@
 #!/bin/sh
-# Release the MacBook Touch Bar Display (05ac:8302) back to its firmware fn
-# strip: return the device to config 1. Dropping out of config 2 destroys the
-# display interface, which unbinds appletbdrm automatically (the module stays
-# loaded but idle) and the firmware repaints the strip (verified 2026-06-12).
-# No root needed: 99-react-drm.rules makes bConfigurationValue group-writable
-# (video). Called from react-drm.service ExecStopPost.
-# The config write can fail with ETIMEDOUT, after which the kernel resets the
-# device and leaves it unconfigured (observed 2026-06-12). A retry once the
-# reset settles succeeds, so keep trying instead of failing the unit.
+# Release the T2 Touch Bar Display (05ac:8302) back to its firmware fn strip.
+# No root needed: 99-react-drm.rules makes bConfigurationValue group-writable.
+# T1 (05ac:8600) deliberately stays in config 2: its apple_dfr_cfgsel driver
+# owns enumeration and a late config switch is unreliable. The last react-drm
+# frame therefore remains visible after logout rather than risking a dark bar.
 set -eu
 for dev in /sys/bus/usb/devices/*; do
     [ -r "$dev/idVendor" ] && [ -r "$dev/idProduct" ] || continue
     [ "$(cat "$dev/idVendor")" = "05ac" ] || continue
-    [ "$(cat "$dev/idProduct")" = "8302" ] || continue
+    case "$(cat "$dev/idProduct")" in
+        8600) continue ;;
+        8302) ;;
+        *) continue ;;
+    esac
     for try in 1 2 3 4 5 6 7 8 9 10; do
         [ "$(cat "$dev/bConfigurationValue" 2>/dev/null)" = "1" ] && break
         { echo 0 > "$dev/bConfigurationValue" &&

@@ -19,6 +19,7 @@ private:
   int               fd_         = -1;
   int               cancel_rfd_ = -1;
   int               cancel_wfd_ = -1;
+  bool              raw_t1_     = false;
   std::atomic<bool> running_    { false };
   std::thread       thread_;
   Napi::ThreadSafeFunction tsfn_;

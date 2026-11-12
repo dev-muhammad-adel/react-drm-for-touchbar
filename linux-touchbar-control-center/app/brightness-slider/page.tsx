@@ -5,7 +5,7 @@ import { BackButton } from '@/components/BackButton';
 import { SliderTrack } from '@/components/SliderTrack';
 import { useLayers } from '@/layers';
 import { useDisplayBrightnessControl, readBrightness, DISPLAY_DEVICE, KEYBOARD_DEVICE } from '@/lib/hooks/useBrightness';
-import { applyBrightness } from '@/lib/services/brightness';
+import { applyBrightness, getLastWriteAt } from '@/lib/services/brightness';
 import { SELECTED_THEME } from '@/lib/theme';
 import type { LayerConfig } from '@/lib/routes/loadRoutes';
 
@@ -110,11 +110,13 @@ export default function BrightnessSliderLayer({ width, height }: { width: number
   useEffect(() => {
     scheduleHide();
     const id = setInterval(() => {
-      if (!displayDrag.current) {
+      // Settle guard: within 1 s of a write the system readback may still
+      // show the pre-drag value — never overwrite the slider with it.
+      if (!displayDrag.current && Date.now() - getLastWriteAt(DISPLAY_DEVICE) > 1000) {
         const current = readBrightness(DISPLAY_DEVICE);
         syncBrightness(previous => Math.abs(previous - current) > 0.01 ? current : previous);
       }
-      if (!keyboardDrag.current) {
+      if (!keyboardDrag.current && Date.now() - getLastWriteAt(KEYBOARD_DEVICE) > 1000) {
         const current = readBrightness(KEYBOARD_DEVICE);
         setKeyboardBrightness(previous => Math.abs(previous - current) > 0.01 ? current : previous);
       }

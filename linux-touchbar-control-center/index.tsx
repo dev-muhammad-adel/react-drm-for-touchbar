@@ -69,6 +69,20 @@ async function main() {
     }
   });
 
+  const isT1 = process.env.REACT_DRM_USB_PRODUCT?.toLowerCase() === '8600';
+  const flushFpsEnv = Number(process.env.REACT_DRM_FLUSH_FPS);
+  const flushFps = Number.isFinite(flushFpsEnv) && flushFpsEnv > 0
+    ? flushFpsEnv
+    : isT1 ? Math.min(DISPLAY.flushFps, 30) : DISPLAY.flushFps;
+  const partialFlush = process.env.REACT_DRM_PARTIAL_FLUSH === undefined
+    // T1 does NOT opt into partial band blits implicitly: on the 2170×60 panel
+    // a band flush left stale pixels behind after a dock reorder (icons doubled
+    // / gaps when moving an icon from the middle to the end — verified A/B with
+    // REACT_DRM_PARTIAL_FLUSH=0 on 2026-11-10). Full-frame blits at the 30 fps
+    // cap are cheap on this size; T2 still honors DISPLAY.partialFlush.
+    ? DISPLAY.partialFlush
+    : process.env.REACT_DRM_PARTIAL_FLUSH !== '0';
+
   const result = renderHot(path.resolve(__dirname, 'App'), display, {
     dimSecs:          DISPLAY.dimSecs,
     offSecs:          DISPLAY.offSecs,
@@ -76,8 +90,8 @@ async function main() {
     keyboardReader:   keyboard,
     appProps:         { keyboard },
     activeBrightness: DISPLAY.activeBrightness,
-    flushFps:         DISPLAY.flushFps,
-    partialFlush:     DISPLAY.partialFlush,
+    flushFps,
+    partialFlush,
     touchEnabled:     !isPreview,
     //  adaptiveBrightness: true
   });

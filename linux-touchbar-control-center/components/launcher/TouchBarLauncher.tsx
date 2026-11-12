@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { Box, Button, Text, motion } from 'react-drm';
-import { getInstalledApps } from '@/lib/services/apps';
+import { getLauncherApps } from '@/lib/services/apps';
 import type { AppInfo } from '@/lib/services/apps';
 import { launch } from '@/lib/services/launch';
 import { ALPHABET, letterForName, letterIndexAt, letterOf } from '@/lib/launcher/alphabet';
@@ -13,17 +13,17 @@ import {
 
 // ─── Metrics (computed once; apps don't change during a run) ─────────────────
 
-const APPS: AppInfo[] = getInstalledApps();
+const APPS: AppInfo[] = getLauncherApps();
 const NAMES = APPS.map(a => a.name);
 
 // Spacing — the bar is ~2000px wide, so rows get real breathing room.
 const PAD      = 16;    // px — gutter on each side of a scrolled row
 const ICON_SM  = 26;    // px — app icon glyph
 const CHAR_W   = 5.9;   // px — estimated per-character width @ 12.5px Iosevka
-const ITEM_PADX = 13;   // px — pill inner horizontal padding
-const ITEM_GAP  = 8;    // px — pill icon↔label gap
+const ITEM_PADX = 16;   // px — pill inner horizontal padding
+const ITEM_GAP  = 10;   // px — pill icon↔label gap
 const ITEM_H_INSET = 6; // px — pill is bar-height minus this
-const ROW_GAP   = 10;   // px — spacing between app pills in a row
+const ROW_GAP   = 22;   // px — physical spacing between touch targets
 
 // Filtered-menu chrome (fixed, doesn't scroll with the apps)
 const CLOSE_SZ   = 30;  // px — circular ✕ chip
@@ -95,8 +95,9 @@ interface TouchState {
 }
 
 /**
- * The launcher layer: every installed app as a horizontal, virtualized row
- * of glass chips, with a Niagara-style "wave alphabet" on top.
+ * The launcher layer: GNOME/Dash favorites (with all installed apps as
+ * fallback) in a horizontal, virtualized row of glass chips, with a
+ * Niagara-style "wave alphabet" on top.
  *
  *  · tap                    → launch the app under your finger.
  *  · hold + swipe           → wave-alphabet mode: the row dims out in place,
