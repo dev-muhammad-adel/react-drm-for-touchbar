@@ -46,6 +46,9 @@ fork. For a T1 MacBook Pro (`05ac:8600`), use:
 ```sh
 ./install.sh install t1
 ```
+```sh
+./install.sh install t2linux
+```
 
 The T1 profile bundles the T1-capable `appletbdrm` and `apple_dfr_cfgsel`
 sources and installs both through DKMS; the unmodified in-tree T2 driver is not
